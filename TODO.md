@@ -21,4 +21,7 @@
 
 ## 참고
 - 기획서 링크: https://github.com/abback-go/yemogame2/blob/claude/magic-school-game-concept-wchpjn/docs/game-design.md
-- 개발 루프(사지방): 기획서 §2 — Claude Code(웹)에서 작성/커밋 → 사지방에서 ZIP 다운로드 → 실행 → 피드백
+- **프로토타입 바로 플레이 (GitHub Pages)**: https://abback-go.github.io/yemogame2/ — 다운로드 불필요, 브라우저에서 링크만 열면 실행
+  - 배포 방식: `gh-pages` 브랜치가 `prototype/index.html`을 미러링 (배포 전용 브랜치 — 개발 금지)
+  - **프로토타입 수정 시 반드시 `gh-pages`의 `index.html`도 같은 내용으로 갱신 푸시할 것** (푸시하면 1분 내 자동 재배포)
+- 개발 루프(사지방): 기획서 §2 — Claude Code(웹)에서 작성/커밋 → 사지방에서 ZIP 다운로드 → 실행 → 피드백 (ZIP은 이제 예비 수단)
