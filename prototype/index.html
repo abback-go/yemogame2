@@ -7,10 +7,15 @@
   html,body{margin:0;padding:0;background:#0b0d12;height:100%;overflow:hidden;font-family:'Malgun Gothic','맑은 고딕',sans-serif;}
   #wrap{display:flex;align-items:center;justify-content:center;height:100%;}
   canvas{background:#0b0d12;image-rendering:pixelated;outline:none;}
+  #focushint{position:fixed;bottom:14px;left:50%;transform:translateX(-50%);
+    background:rgba(20,24,34,.88);color:#cfd8ea;border:1px solid #2a3348;
+    padding:6px 16px;border-radius:999px;font-size:12px;pointer-events:none;
+    opacity:1;transition:opacity .4s;white-space:nowrap;}
 </style>
 </head>
 <body>
 <div id="wrap"><canvas id="cv" width="960" height="540" tabindex="0"></canvas></div>
+<div id="focushint">화면을 한 번 클릭하면 키보드 조작이 연결됩니다 · H: 도움말</div>
 <script>
 "use strict";
 /* ============================================================
@@ -26,6 +31,13 @@ function fitCanvas(){
   cv.style.width=(960*s)+'px'; cv.style.height=(540*s)+'px';
 }
 window.addEventListener('resize',fitCanvas); fitCanvas();
+
+/* 임베드(iframe) 환경 대비: 클릭으로 포커스 연결. 이미 포커스면 힌트 즉시 숨김 */
+const focusHint=document.getElementById('focushint');
+function hideFocusHint(){ if(focusHint) focusHint.style.opacity='0'; }
+window.addEventListener('pointerdown',()=>{ cv.focus(); hideFocusHint(); });
+window.addEventListener('keydown',hideFocusHint,{once:true});
+if(document.hasFocus()) hideFocusHint();
 
 /* ---------- 유틸 ---------- */
 const clamp=(v,a,b)=>v<a?a:(v>b?b:v);
