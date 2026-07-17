@@ -1,0 +1,25 @@
+{
+  "region_id": "kni",
+  "name_kr": "기사단 마을",
+  "element": "없음",
+  "identity": "마법 없는 사람들의 마을 — 검과 규율의 질서. 마법사를 신기해하고, 조금 경계하고, 끝내 존중하는 시선들.",
+  "palette": "무쇠 회색 + 깃발의 진홍 + 연무장의 다진 흙색",
+  "music": "북과 발 구르는 소리의 절제된 행진곡 — 저녁 종 뒤엔 조용해진다",
+  "region_magic": [],
+  "boss_key_story": "보스 없음. 로컬 스토리 — 무너진 서쪽 다리의 수리 탄원: 자재 호위와 측량을 도우면 학교 직통 다리가 개통된다(상태:서쪽 다리 개통).",
+  "region_state_change": "다리 개통 — 학교와 서쪽 세계가 걸어서 이어지고, 마을에 학교 학생들의 왕래가 생긴다.",
+  "unique_enemy": "없음(마을). 외곽 가도의 위협은 옛 가도 지역이 담당.",
+  "local_loops": [
+    "다리 개통으로 월드 루프 ①(학교→광산→가도→기사단 마을→학교)이 닫힌다"
+  ],
+  "rooms": [
+    {"id":"kni_road_west","name_kr":"가도 초소","concept":"창을 든 초병이 여행자를 기록하는 초소 — 마법사 신분증을 신기해하며 오래 들여다본다.","type":"transit","subzone":"외곽","gx":0,"gy":2,"size":"S","flags":[],"exits":[{"to":"roa_knight_gate","gate":"none","dir":"L"},{"to":"kni_yard","gate":"none","dir":"R"}]},
+    {"id":"kni_yard","name_kr":"연무장 마당","concept":"마을의 중심 — 지역 지도 입수처. 목검 소리와 구령이 하루 종일 끊이지 않는다.","type":"town","subzone":"마을","gx":2,"gy":2,"size":"L","flags":["map"],"exits":[{"to":"kni_road_west","gate":"none","dir":"L"},{"to":"kni_forge","gate":"none","dir":"D"},{"to":"kni_hall","gate":"none","dir":"R"},{"to":"kni_watchtower","gate":"none","dir":"U"},{"to":"kni_inn","gate":"none","dir":"D"},{"to":"kni_bridge_east","gate":"none","dir":"R"}]},
+    {"id":"kni_forge","name_kr":"대장간","concept":"마법 없이 벼려낸 강철의 긍지 — 지팡이 손잡이 보강 같은 '비마법' 개조를 맡아 준다.","type":"town","subzone":"마을","gx":1,"gy":3,"size":"S","flags":["shop"],"exits":[{"to":"kni_yard","gate":"none","dir":"U"}]},
+    {"id":"kni_hall","name_kr":"기사단 회관","concept":"다리 수리 탄원서가 걸린 회관 — 로컬 스토리의 심장. 늙은 단장은 마법사를 다리 지지대만큼 믿는다.","type":"event","subzone":"마을","gx":3,"gy":2,"size":"M","flags":[],"exits":[{"to":"kni_yard","gate":"none","dir":"L"}]},
+    {"id":"kni_watchtower","name_kr":"망루","concept":"협곡과 다리 터가 한눈에 보이는 망루 — 초병의 망원경을 빌려 볼 수 있다.","type":"field","subzone":"마을","gx":2,"gy":1,"size":"M","flags":["warm"],"exits":[{"to":"kni_yard","gate":"none","dir":"D"},{"to":"kni_training_wall","gate":"none","dir":"U"}]},
+    {"id":"kni_training_wall","name_kr":"수직 훈련벽","concept":"기사 후보생의 담력 시험 벽 — 벽차기 질주 챌린지 코스로 완벽하다. 완주하면 단원들의 박수.","type":"challenge","subzone":"마을","gx":2,"gy":0,"size":"L","flags":[],"exits":[{"to":"kni_watchtower","gate":"none","dir":"D"}]},
+    {"id":"kni_inn","name_kr":"창끝 여관","concept":"거점 — 은퇴 기사가 여는 여관. 벽난로 위에 부러진 첫 창이 걸려 있다.","type":"bench","subzone":"마을","gx":3,"gy":3,"size":"S","flags":["bench","warm"],"exits":[{"to":"kni_yard","gate":"none","dir":"U"}]},
+    {"id":"kni_bridge_east","name_kr":"서쪽 다리 어귀","concept":"무너진 다리의 마을 쪽 끝 — 수리가 끝나면 협곡 건너 학교 정문 마당까지 곧장 이어진다.","type":"transit","subzone":"외곽","gx":4,"gy":2,"size":"M","flags":[],"exits":[{"to":"kni_yard","gate":"none","dir":"L"},{"to":"sch_west_bridge","gate":"상태:서쪽 다리 개통","dir":"R"}]}
+  ]
+}

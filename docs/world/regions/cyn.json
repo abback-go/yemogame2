@@ -1,0 +1,30 @@
+{
+  "region_id": "cyn",
+  "name_kr": "대협곡",
+  "element": "없음",
+  "identity": "세계의 수직 척추 — 절벽·선반·낡은 사다리로 이어진 연결 조직. 위로는 고원, 아래로는 해가 닿은 적 없는 바닥.",
+  "palette": "회청색 암벽 + 높이에 따라 변하는 빛(위는 금빛, 아래는 남색)",
+  "music": "바람 소리 그 자체가 음악 — 높이에 따라 화음이 변한다",
+  "region_magic": [],
+  "boss_key_story": "보스 없음 — 통로 지역. 대신 수직 왕복 자체가 시험이다.",
+  "region_state_change": "곤돌라 간이역이 수리되면(의뢰) 협곡 중단이 패스트트래블로 열린다.",
+  "unique_enemy": "절벽 틈의 바람매 — 상승기류를 타고 급습해 오는 비행형.",
+  "local_loops": [
+    "낙하 수직굴로 한 번에 내려가고, 벽차기 질주로 벽 하부에서 되올라오는 수직 루프",
+    "간이 곤돌라역 개통 후: 중단↔학교/마을 패스트트래블 루프"
+  ],
+  "rooms": [
+    {"id":"cyn_east_rim","name_kr":"동쪽 벼랑 끝","concept":"협곡 동쪽 가장자리. 고원의 바람이 밀려 내려오고, 건너편엔 폐교가 마주 서 있다.","type":"transit","subzone":"협곡 상부","gx":8,"gy":0,"size":"M","flags":[],"exits":[{"to":"cyn_rim_path","gate":"none","dir":"L"},{"to":"lig_west_gate","gate":"바람 타기","dir":"U"},{"to":"old_front_gate","gate":"기류 승월","dir":"R"}]},
+    {"id":"cyn_rim_path","name_kr":"벼랑 순례길","concept":"바람 순례자들이 밟아 다진 좁은 길. 발밑으로 협곡 전체가 내려다보인다.","type":"field","subzone":"협곡 상부","gx":6,"gy":0,"size":"M","flags":[],"exits":[{"to":"cyn_east_rim","gate":"none","dir":"R"},{"to":"cyn_ledge_top","gate":"none","dir":"L"}]},
+    {"id":"cyn_ledge_top","name_kr":"바람 선반","concept":"곤돌라 마을 뒷문과 이어지는 첫 선반. 여기서부터 아래는 사다리와 배짱의 영역.","type":"field","subzone":"협곡 상부","gx":4,"gy":1,"size":"M","flags":[],"exits":[{"to":"gon_cliff_gate","gate":"none","dir":"L"},{"to":"cyn_rim_path","gate":"none","dir":"U"},{"to":"cyn_ladder_upper","gate":"none","dir":"D"}]},
+    {"id":"cyn_ladder_upper","name_kr":"낡은 사다리 상부","concept":"몇 세대의 학생들이 못질해 이은 사다리 길. 군데군데 발판이 삭았다.","type":"field","subzone":"협곡 상부","gx":4,"gy":2,"size":"M","flags":[],"exits":[{"to":"cyn_ledge_top","gate":"none","dir":"U"},{"to":"cyn_gondola_mid","gate":"none","dir":"D"},{"to":"cyn_echo_shelf","gate":"비밀","dir":"R"}]},
+    {"id":"cyn_echo_shelf","name_kr":"메아리 선반","concept":"소리가 세 번 돌아오는 움푹한 선반. 옛 측량사의 기록과 마력석 광맥.","type":"secret","subzone":"협곡 상부","gx":6,"gy":2,"size":"S","flags":[],"exits":[{"to":"cyn_ladder_upper","gate":"none","dir":"L"}]},
+    {"id":"cyn_gondola_mid","name_kr":"간이 곤돌라역","concept":"협곡 중단의 버려진 간이역. 수리하면 케이블이 다시 걸린다 — 협곡의 허리 거점.","type":"bench","subzone":"협곡 중단","gx":4,"gy":4,"size":"M","flags":["bench","gondola"],"exits":[{"to":"cyn_ladder_upper","gate":"none","dir":"U"},{"to":"cyn_wall_mid","gate":"none","dir":"D"}]},
+    {"id":"cyn_wall_mid","name_kr":"협곡 벽 중단","concept":"빛이 옅어지기 시작하는 높이. 절벽 틈마다 바람매가 둥지를 튼다.","type":"field","subzone":"협곡 중단","gx":4,"gy":5,"size":"M","flags":[],"exits":[{"to":"cyn_gondola_mid","gate":"none","dir":"U"},{"to":"cyn_drop_shaft","gate":"none","dir":"D"},{"to":"cyn_wind_hollow","gate":"비밀","dir":"L"}]},
+    {"id":"cyn_wind_hollow","name_kr":"바람 안 닿는 굴","concept":"이상하리만큼 고요한 움푹한 굴. 누군가 담요와 등잔을 두고 갔다.","type":"secret","subzone":"협곡 중단","gx":3,"gy":5,"size":"S","flags":["warm"],"exits":[{"to":"cyn_wall_mid","gate":"none","dir":"R"}]},
+    {"id":"cyn_drop_shaft","name_kr":"낙하 수직굴","concept":"바닥이 보이지 않는 수직굴 — 뛰어내리면 빠르지만, 돌아오는 길은 벽을 달려야 한다.","type":"transit","subzone":"협곡 하부","gx":4,"gy":6,"size":"M","flags":[],"exits":[{"to":"cyn_wall_mid","gate":"none","dir":"U"},{"to":"cyn_wall_low","gate":"벽차기 질주","dir":"D","oneway":true,"note":"일방 낙하 — 벽을 제어하며 내려갈 수 있어야 진입 허용(조기 고립 방지)"}]},
+    {"id":"cyn_wall_low","name_kr":"어스름 벽 하부","concept":"여기서부터 해가 닿은 적 없는 세계. 이끼가 빛을 대신해 희미하게 빛난다.","type":"field","subzone":"협곡 하부","gx":4,"gy":7,"size":"M","flags":[],"exits":[{"to":"cyn_drop_shaft","gate":"벽차기 질주","dir":"U","note":"벽을 달려 되오르는 복귀로"},{"to":"cyn_floor_south","gate":"none","dir":"D"},{"to":"cyn_root_cave","gate":"비밀","dir":"R"}]},
+    {"id":"cyn_root_cave","name_kr":"뿌리 굴","concept":"숲의 나무뿌리가 협곡 벽까지 뻗어 든 굴. 뿌리 사이에 마력석이 맺혀 있다.","type":"secret","subzone":"협곡 하부","gx":5,"gy":7,"size":"S","flags":[],"exits":[{"to":"cyn_wall_low","gate":"none","dir":"L"}]},
+    {"id":"cyn_floor_south","name_kr":"협곡 바닥 남단","concept":"협곡의 밑바닥. 남쪽으로 잠들지 않는 숲의 검은 우듬지가 시작된다.","type":"transit","subzone":"협곡 하부","gx":4,"gy":8,"size":"M","flags":[],"exits":[{"to":"cyn_wall_low","gate":"none","dir":"U"},{"to":"for_mouth_north","gate":"none","dir":"D"}]}
+  ]
+}

@@ -1,0 +1,27 @@
+{
+  "region_id": "old",
+  "name_kr": "첫 학교(폐교)",
+  "element": "없음",
+  "identity": "협곡 건너편 절벽의 폐교 — 입학 첫날부터 보이지만 갈 수 없는 랜드마크. 기류 승월이 열어 주는 떡밥의 창고.",
+  "palette": "바랜 회벽 + 담쟁이 초록 + 깨진 유리창의 무지개 반사",
+  "music": "현재 학교 테마의 느리고 조각난 변주 — 아는 멜로디가 반쯤 지워져 들린다",
+  "region_magic": [],
+  "boss_key_story": "보스 없음 — 질문의 장소. '누가, 왜 떠났는가'를 묻게 만드는 환경 서사만 놓는다(스토리 미확정 — 답은 두지 않음).",
+  "region_state_change": "탐사 후 기숙사 터의 난로에 다시 불이 붙는다 — 폐교에 남는 작은 온기 하나.",
+  "unique_enemy": "먼지 학인 — 책과 먼지가 뭉쳐 학생의 형상을 흉내 내는 것. 공격보다는 따라 걷는다.",
+  "local_loops": [
+    "부유군도에서 지붕으로 떨어지는 뒷문(일방)과 정문(기류 승월)의 이중 진입"
+  ],
+  "rooms": [
+    {"id":"old_front_gate","name_kr":"무너진 정문","concept":"현판의 교명이 바람에 닳아 읽히지 않는다 — 협곡을 건너온 자만 서는 문 앞.","type":"transit","subzone":"바깥뜰","gx":2,"gy":3,"size":"M","flags":[],"exits":[{"to":"cyn_east_rim","gate":"기류 승월","dir":"L"},{"to":"old_yard","gate":"none","dir":"R"}]},
+    {"id":"old_yard","name_kr":"잡초 안뜰","concept":"수풀에 삼켜진 안뜰 — 조회대였던 돌단 위에 새들이 모여 산다.","type":"hub","subzone":"바깥뜰","gx":3,"gy":3,"size":"L","flags":["map"],"exits":[{"to":"old_front_gate","gate":"none","dir":"L"},{"to":"old_hall","gate":"none","dir":"R"},{"to":"old_bell_base","gate":"none","dir":"U"},{"to":"old_dorm_ruin","gate":"none","dir":"D"}]},
+    {"id":"old_hall","name_kr":"바랜 강당","concept":"천장이 반쯤 무너진 강당 — 남은 현수막의 글자가 지금 학교의 표어와 미묘하게 다르다.","type":"field","subzone":"교사(校舍)","gx":4,"gy":3,"size":"L","flags":[],"exits":[{"to":"old_yard","gate":"none","dir":"L"},{"to":"old_classroom","gate":"none","dir":"U"},{"to":"old_library_ruin","gate":"비밀","dir":"R"},{"to":"old_exam_hall","gate":"none","dir":"D"}]},
+    {"id":"old_classroom","name_kr":"옛 교실","concept":"칠판에 마지막 수업이 그대로 남은 교실 — 낯선 술식 표기. 분필은 아직 놓인 그대로다.","type":"event","subzone":"교사(校舍)","gx":4,"gy":2,"size":"M","flags":[],"exits":[{"to":"old_hall","gate":"none","dir":"D"}]},
+    {"id":"old_library_ruin","name_kr":"무너진 서고","concept":"책장이 서로를 떠받치며 버티는 서고 — 지금 학교가 잊은 옛 마법의 마도서 한 권이 꽂혀 있다.","type":"secret","subzone":"교사(校舍)","gx":5,"gy":3,"size":"M","flags":[],"exits":[{"to":"old_hall","gate":"none","dir":"L"}]},
+    {"id":"old_exam_hall","name_kr":"옛 시험장","concept":"지금과 전혀 다른 방식의 실기 시험장 흔적 — 바닥 문양이 절반쯤 남아 여전히 희미하게 반응한다.","type":"event","subzone":"교사(校舍)","gx":4,"gy":4,"size":"M","flags":[],"exits":[{"to":"old_hall","gate":"none","dir":"U"},{"to":"old_deep_cellar","gate":"비밀","dir":"D"}]},
+    {"id":"old_deep_cellar","name_kr":"봉인된 지하","concept":"시험장 아래 잠긴 층계 — 문 너머는 조용하다. 열 수 있지만, 답은 없다(떡밥만 남긴다).","type":"secret","subzone":"교사(校舍)","gx":4,"gy":5,"size":"M","flags":[],"exits":[{"to":"old_exam_hall","gate":"none","dir":"U"}]},
+    {"id":"old_bell_base","name_kr":"낡은 종탑 기단","concept":"협곡 건너 지금 학교의 시계탑과 마주 보는 종탑 — 종은 사라지고 매듭만 남았다.","type":"field","subzone":"종탑","gx":3,"gy":2,"size":"M","flags":[],"exits":[{"to":"old_yard","gate":"none","dir":"D"},{"to":"old_roof","gate":"none","dir":"U"}]},
+    {"id":"old_roof","name_kr":"이끼 낀 지붕","concept":"부유군도에서 떨어진 자가 처음 딛는 기와 — 위를 올려다보면 구름 틈의 섬들이 보인다.","type":"transit","subzone":"종탑","gx":3,"gy":1,"size":"M","flags":[],"exits":[{"to":"old_bell_base","gate":"none","dir":"D"}]},
+    {"id":"old_dorm_ruin","name_kr":"옛 기숙사 터","concept":"거점 — 무너진 기숙사에서 유일하게 온전한 방 하나. 난로에 불을 붙이면 아직 따뜻해진다.","type":"bench","subzone":"바깥뜰","gx":3,"gy":4,"size":"S","flags":["bench","warm"],"exits":[{"to":"old_yard","gate":"none","dir":"U"}]}
+  ]
+}

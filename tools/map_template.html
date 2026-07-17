@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>대협곡 세계 — 월드맵 v1</title>
+<style>
+  :root{--bg:#0b0d12;--panel:#141826;--line:#2a3348;--txt:#dfe6f2;--dim:#8a93a6;}
+  *{box-sizing:border-box;margin:0;padding:0;}
+  html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--txt);
+    font-family:'Malgun Gothic','맑은 고딕','Noto Sans KR',sans-serif;}
+  #cv{position:absolute;inset:0;cursor:grab;}
+  #cv.drag{cursor:grabbing;}
+  #hud{position:fixed;top:0;left:0;right:0;padding:10px 14px;display:flex;gap:14px;align-items:center;
+    background:linear-gradient(180deg,rgba(11,13,18,.92),rgba(11,13,18,0));pointer-events:none;flex-wrap:wrap;}
+  #hud>*{pointer-events:auto;}
+  h1{font-size:15px;font-weight:700;letter-spacing:.5px;}
+  h1 small{color:var(--dim);font-weight:400;margin-left:8px;}
+  #stagebox{display:flex;align-items:center;gap:8px;background:var(--panel);border:1px solid var(--line);
+    border-radius:999px;padding:6px 14px;font-size:12px;}
+  #stagebox input{accent-color:#e8c66a;}
+  #stageLabel{min-width:180px;color:#e8c66a;}
+  .btn{background:var(--panel);border:1px solid var(--line);color:var(--txt);border-radius:8px;
+    padding:6px 10px;font-size:12px;cursor:pointer;}
+  .btn:hover{border-color:#e8c66a;}
+  #legend{position:fixed;left:14px;bottom:14px;background:rgba(20,24,38,.94);border:1px solid var(--line);
+    border-radius:10px;padding:10px 12px;font-size:11px;line-height:1.9;max-height:46vh;overflow:auto;}
+  #legend b{font-size:12px;}
+  .lg{display:flex;align-items:center;gap:7px;white-space:nowrap;}
+  .sw{width:10px;height:10px;border-radius:50%;display:inline-block;flex:none;}
+  #info{position:fixed;right:14px;top:64px;width:330px;max-height:calc(100vh - 90px);overflow:auto;
+    background:rgba(20,24,38,.96);border:1px solid var(--line);border-radius:12px;padding:14px;font-size:12.5px;
+    line-height:1.75;display:none;}
+  #info h2{font-size:15px;margin-bottom:2px;}
+  #info .meta{color:var(--dim);font-size:11px;margin-bottom:8px;}
+  #info .concept{border-left:3px solid var(--line);padding-left:9px;margin:8px 0;}
+  #info .ex{color:var(--dim);}
+  #info .gate{color:#e8c66a;}
+  #info .close{float:right;cursor:pointer;color:var(--dim);}
+  #tip{position:fixed;padding:4px 9px;background:#000d;border:1px solid var(--line);border-radius:6px;
+    font-size:12px;pointer-events:none;display:none;z-index:9;}
+</style>
+</head>
+<body>
+<canvas id="cv"></canvas>
+<div id="hud">
+  <h1>🗺 대협곡 세계 — 월드맵 v1<small id="stats"></small></h1>
+  <div id="stagebox">
+    <span>진행 단계</span>
+    <input type="range" id="stage" min="0" max="6" value="6" step="1">
+    <span id="stageLabel"></span>
+  </div>
+  <button class="btn" id="fit">화면 맞춤</button>
+  <button class="btn" id="zin">＋</button>
+  <button class="btn" id="zout">－</button>
+</div>
+<div id="legend"></div>
+<div id="info"></div>
+<div id="tip"></div>
+<script>
+"use strict";
+const DATA = /*__DATA__*/null;
+const STAGE_NAMES = ["시작 킷 (지상 질풍보·영창 부유)","+ 공중 질풍보","+ 벽차기 질주","+ 발판 각인","+ 바람 타기","+ 물잠","+ 기류 승월"];
+const cv = document.getElementById('cv');
+const ctx = cv.getContext('2d');
+const rooms = DATA.rooms, regions = DATA.regions, edges = DATA.edges;
+const byId = {}; rooms.forEach(r => byId[r.id] = r);
+const regById = {}; regions.forEach(r => regById[r.id] = r);
+document.getElementById('stats').textContent = regions.length + '개 지역 · ' + rooms.length + '방';
+
+let cam = {x:0, y:0, z:1};
+let stageMax = 6;
+
+function fit(){
+  const xs = rooms.map(r=>r.x), ys = rooms.map(r=>r.y);
+  const minx = Math.min(...xs)-80, maxx = Math.max(...xs)+80;
+  const miny = Math.min(...ys)-110, maxy = Math.max(...ys)+80;
+  const z = Math.min(innerWidth/(maxx-minx), innerHeight/(maxy-miny));
+  cam.z = z; cam.x = minx - (innerWidth/z-(maxx-minx))/2; cam.y = miny - (innerHeight/z-(maxy-miny))/2;
+}
+function resize(){
+  cv.width = innerWidth*devicePixelRatio; cv.height = innerHeight*devicePixelRatio;
+  cv.style.width = innerWidth+'px'; cv.style.height = innerHeight+'px';
+  draw();
+}
+const W2S = (x,y)=>[(x-cam.x)*cam.z, (y-cam.y)*cam.z];
+const S2W = (x,y)=>[x/cam.z+cam.x, y/cam.z+cam.y];
+const RAD = {S:7,M:9,L:12,XL:15};
+
+function roomAlpha(r){ return r.stage<=stageMax ? 1 : 0.13; }
+
+function draw(){
+  ctx.setTransform(devicePixelRatio,0,0,devicePixelRatio,0,0);
+  ctx.clearRect(0,0,innerWidth,innerHeight);
+  ctx.fillStyle = '#0b0d12'; ctx.fillRect(0,0,innerWidth,innerHeight);
+  // 지역 박스
+  for(const g of regions){
+    const [x1,y1] = W2S(g.bounds[0]-34, g.bounds[1]-34);
+    const [x2,y2] = W2S(g.bounds[2]+34, g.bounds[3]+34);
+    ctx.fillStyle = g.color+'12'; ctx.strokeStyle = g.color+'55'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.roundRect(x1,y1,x2-x1,y2-y1,10); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = g.color; ctx.font = 'bold '+(13*Math.min(cam.z*1.6,1.15)+3)+'px sans-serif';
+    ctx.globalAlpha = 0.9; ctx.fillText(g.name, x1+9, y1+18); ctx.globalAlpha = 1;
+  }
+  // 간선
+  for(const e of edges){
+    const a = byId[e.a], b = byId[e.b]; if(!a||!b) continue;
+    const [x1,y1] = W2S(a.x,a.y), [x2,y2] = W2S(b.x,b.y);
+    const dim = (a.stage>stageMax || b.stage>stageMax);
+    ctx.globalAlpha = dim?0.08:(e.cross?0.85:0.45);
+    ctx.strokeStyle = e.gate==='none' ? (e.cross?'#c9d4e8':'#5f6b85') : '#e8c66a';
+    ctx.lineWidth = e.cross?2:1.2;
+    ctx.setLineDash(e.gate==='none'?[]:[5,4]);
+    ctx.beginPath(); ctx.moveTo(x1,y1); ctx.lineTo(x2,y2); ctx.stroke();
+    ctx.setLineDash([]);
+    if(e.oneway){ // 화살촉
+      const mx=(x1+x2)/2, my=(y1+y2)/2, ang=Math.atan2(y2-y1,x2-x1);
+      ctx.fillStyle = ctx.strokeStyle;
+      ctx.beginPath();
+      ctx.moveTo(mx+7*Math.cos(ang), my+7*Math.sin(ang));
+      ctx.lineTo(mx+7*Math.cos(ang+2.6), my+7*Math.sin(ang+2.6));
+      ctx.lineTo(mx+7*Math.cos(ang-2.6), my+7*Math.sin(ang-2.6));
+      ctx.fill();
+    }
+  }
+  ctx.globalAlpha = 1;
+  // 방
+  for(const r of rooms){
+    const [x,y] = W2S(r.x,r.y);
+    const rad = RAD[r.size]*Math.max(cam.z,0.55)/Math.max(cam.z,0.0001)*cam.z; // 화면 고정 크기 근사
+    const R = RAD[r.size]* Math.min(Math.max(cam.z,0.6),1.4);
+    ctx.globalAlpha = roomAlpha(r);
+    const col = regById[r.region].color;
+    ctx.fillStyle = col; ctx.strokeStyle = '#0b0d12'; ctx.lineWidth = 2;
+    ctx.beginPath();
+    if(r.type==='boss'||r.type==='miniboss'){
+      const k = r.type==='boss'?R*1.5:R*1.1;
+      ctx.moveTo(x,y-k); ctx.lineTo(x+k,y); ctx.lineTo(x,y+k); ctx.lineTo(x-k,y);
+      ctx.closePath();
+    } else if(r.type==='town'||r.type==='hub'){
+      ctx.rect(x-R,y-R,R*2,R*2);
+    } else {
+      ctx.arc(x,y,R,0,7);
+    }
+    ctx.fill(); ctx.stroke();
+    if(r.type==='secret'){ ctx.setLineDash([3,3]); ctx.strokeStyle='#fff9'; ctx.stroke(); ctx.setLineDash([]); }
+    if(r.type==='challenge'){ ctx.strokeStyle='#fff6'; ctx.beginPath(); ctx.arc(x,y,R+3,0,7); ctx.stroke(); }
+    if(r.flags.includes('bench')){ ctx.fillStyle='#0b0d12'; ctx.beginPath(); ctx.arc(x,y,Math.max(R*0.35,2),0,7); ctx.fill(); }
+    if(r.flags.includes('gondola')||r.flags.includes('rail')){
+      ctx.strokeStyle='#fff'; ctx.lineWidth=1.4;
+      ctx.beginPath(); ctx.arc(x,y,R+4,0,7); ctx.stroke();
+    }
+    if(cam.z>0.85){
+      ctx.fillStyle = '#dfe6f2'; ctx.font = '10px sans-serif'; ctx.textAlign='center';
+      ctx.fillText(r.name, x, y+R+11); ctx.textAlign='left';
+    }
+    ctx.globalAlpha = 1;
+  }
+}
+
+function roomAt(sx,sy){
+  const [wx,wy] = S2W(sx,sy);
+  let best=null, bd=1e9;
+  for(const r of rooms){
+    const d = Math.hypot(r.x-wx, r.y-wy);
+    if(d<bd){bd=d;best=r;}
+  }
+  return bd*cam.z < 22 ? best : null;
+}
+
+const info = document.getElementById('info');
+function showInfo(r){
+  const g = regById[r.region];
+  const exits = r.exits.map(e=>{
+    const t = byId[e.to];
+    const gate = e.gate!=='none' ? ' <span class="gate">['+e.gate+']</span>' : '';
+    const ow = e.oneway ? ' (일방)' : '';
+    return '<div class="ex">→ ' + (t? t.name + ' <small>('+regById[t.region].name+')</small>' : e.to) + gate + ow + '</div>';
+  }).join('');
+  info.innerHTML = '<span class="close" onclick="info.style.display=\'none\'">✕</span>'
+    + '<h2>' + r.name + '</h2>'
+    + '<div class="meta">' + g.name + ' · ' + r.subzone + ' · ' + r.type + ' · 크기 ' + r.size
+    + ' · 개방 단계 ' + r.stage + (r.flags.length? ' · '+r.flags.join(','):'') + '</div>'
+    + '<div class="concept">' + r.concept + '</div>'
+    + exits
+    + '<div style="margin-top:10px;color:#8a93a6;font-size:11px">'
+    + '지역: ' + g.identity + '</div>';
+  info.style.display = 'block';
+}
+
+// 입력
+let drag = null;
+cv.addEventListener('pointerdown', e=>{ drag = {x:e.clientX, y:e.clientY, cx:cam.x, cy:cam.y, moved:false}; cv.classList.add('drag'); cv.setPointerCapture(e.pointerId); });
+cv.addEventListener('pointermove', e=>{
+  const tip = document.getElementById('tip');
+  if(drag){
+    const dx = (e.clientX-drag.x)/cam.z, dy=(e.clientY-drag.y)/cam.z;
+    if(Math.hypot(e.clientX-drag.x, e.clientY-drag.y)>4) drag.moved=true;
+    cam.x = drag.cx-dx; cam.y = drag.cy-dy; draw();
+  } else {
+    const r = roomAt(e.clientX, e.clientY);
+    if(r){ tip.style.display='block'; tip.style.left=(e.clientX+14)+'px'; tip.style.top=(e.clientY+10)+'px';
+      tip.textContent = r.name + ' — ' + regById[r.region].name; }
+    else tip.style.display='none';
+  }
+});
+cv.addEventListener('pointerup', e=>{
+  cv.classList.remove('drag');
+  if(drag && !drag.moved){ const r = roomAt(e.clientX, e.clientY); if(r) showInfo(r); }
+  drag = null;
+});
+cv.addEventListener('wheel', e=>{
+  e.preventDefault();
+  const f = e.deltaY<0 ? 1.15 : 1/1.15;
+  const [wx,wy] = S2W(e.clientX, e.clientY);
+  cam.z = Math.min(Math.max(cam.z*f, 0.15), 4);
+  cam.x = wx - e.clientX/cam.z; cam.y = wy - e.clientY/cam.z;
+  draw();
+},{passive:false});
+document.getElementById('fit').onclick = ()=>{fit();draw();};
+document.getElementById('zin').onclick = ()=>{cam.z*=1.25;draw();};
+document.getElementById('zout').onclick = ()=>{cam.z/=1.25;draw();};
+const stageInput = document.getElementById('stage');
+function setStageLabel(){
+  document.getElementById('stageLabel').textContent = stageInput.value+'단계 — '+STAGE_NAMES[stageInput.value];
+}
+stageInput.addEventListener('input', ()=>{ stageMax = +stageInput.value; setStageLabel(); draw(); });
+
+// 범례
+const lg = document.getElementById('legend');
+lg.innerHTML = '<b>지역</b><br>' + regions.map(g=>{
+  const cnt = rooms.filter(r=>r.region===g.id).length;
+  return '<div class="lg"><span class="sw" style="background:'+g.color+'"></span>'+g.name+' <small style="color:#8a93a6">'+cnt+'방'+(g.element!=='없음'&&!g.element.startsWith('없음')?' · '+g.element:'')+'</small></div>';
+}).join('') + '<hr style="border-color:#2a3348;margin:6px 0">'
+ + '<div class="lg">■ 마을/허브 · ● 필드 · ◆ 보스 · ◇ 미니보스</div>'
+ + '<div class="lg">중심점 = 거점(세이브) · 겹띠 = 곤돌라/수레역</div>'
+ + '<div class="lg">점선 테두리 = 비밀 · <span style="color:#e8c66a">노란 점선</span> = 잠긴 길(게이트)</div>'
+ + '<div class="lg">화살촉 = 일방통행 · 굵은 선 = 지역 간 연결</div>';
+
+addEventListener('resize', resize);
+setStageLabel(); fit(); resize();
+</script>
+</body>
+</html>

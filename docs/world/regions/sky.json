@@ -1,0 +1,40 @@
+{
+  "region_id": "sky",
+  "name_kr": "바람이 시작되는 곳",
+  "element": "바람 심화",
+  "identity": "세계의 바람이 시작되는 부유 군도 — 최후반 지역. 기류 승월이 열고, 시계탑과 폭풍 두 개의 하늘길이 닿는다.",
+  "palette": "새벽하늘의 담청·연보라 + 구름의 흰색 + 섬 밑면의 젖은 바위색",
+  "music": "높은 목관과 성가풍 허밍 — 바람이 화음을 이룬다",
+  "region_magic": [{"name":"기류 부름(가칭)","effect":"그 자리에 상승기류 기둥을 세운다 — 이동과 전투(띄우기)를 겸하는 바람 심화 마법"}],
+  "boss_key_story": "순례자 야영지의 오래된 약속 — '가장 높은 곳은 바람이 허락한 자에게만'. 세 바람 사당에 예를 갖추면 마지막 기류가 열린다.",
+  "region_state_change": "시험을 마치면 군도의 기류가 온화해져 섬 사이 이동이 쉬워지고, 세계 전체가 보이는 자리가 열린다.",
+  "unique_enemy": "구름송곳 — 구름 속에 숨어 있다가 기류를 타고 내리꽂는 급습형. 그림자가 유일한 예고다.",
+  "local_loops": [
+    "가장자리에서 떨어져도 기류가 받아 낮은 섬으로 — 낙사가 없는 대신 되돌이 기류로 복귀하는 순환",
+    "두 상륙섬(시계탑/폭풍)이 야영지에서 만나는 이중 진입 구조"
+  ],
+  "rooms": [
+    {"id":"sky_clock_updraft","name_kr":"시계탑 기류 상륙섬","concept":"학교 시계탑에서 오르는 기류가 닿는 첫 섬 — 아래로 학교가 장난감처럼 보인다.","type":"transit","subzone":"상륙","gx":2,"gy":4,"size":"M","flags":[],"exits":[{"to":"sch_clock_peak","gate":"기류 승월","dir":"D"},{"to":"sky_isle_gate_w","gate":"none","dir":"R"}]},
+    {"id":"sky_storm_updraft","name_kr":"폭풍 기류 상륙섬","concept":"걷힌 폭풍 위로 오르는 기류가 닿는 동쪽 섬 — 아직 정전기가 풀잎에 남아 있다.","type":"transit","subzone":"상륙","gx":9,"gy":4,"size":"M","flags":[],"exits":[{"to":"lig_storm_top","gate":"기류 승월","dir":"D"},{"to":"sky_isle_gate_e","gate":"none","dir":"L"}]},
+    {"id":"sky_isle_gate_w","name_kr":"서쪽 바람 문","concept":"바람이 문설주처럼 갈라지는 길목 — 순례자들이 서쪽에서 오는 이를 맞는 곳.","type":"field","subzone":"상륙","gx":3,"gy":4,"size":"M","flags":[],"exits":[{"to":"sky_clock_updraft","gate":"none","dir":"L"},{"to":"sky_camp","gate":"none","dir":"R"}]},
+    {"id":"sky_isle_gate_e","name_kr":"동쪽 바람 문","concept":"폭풍 쪽 하늘길의 관문 — 기류 해협의 물살(바람살)을 처음 읽는 곳.","type":"field","subzone":"상륙","gx":8,"gy":4,"size":"M","flags":[],"exits":[{"to":"sky_storm_updraft","gate":"none","dir":"R"},{"to":"sky_current_1","gate":"none","dir":"L"}]},
+    {"id":"sky_camp","name_kr":"순례자 야영지","concept":"바람 순례자들의 천막과 깃발 — 군도의 안전지대이자 지도 입수처. 두 하늘길이 여기서 만난다.","type":"town","subzone":"야영지","gx":5,"gy":4,"size":"L","flags":["bench","map","shop"],"exits":[{"to":"sky_isle_gate_w","gate":"none","dir":"L"},{"to":"sky_current_1","gate":"none","dir":"R"},{"to":"sky_drift_row","gate":"none","dir":"U"},{"to":"sky_updraft_back","gate":"none","dir":"D"}]},
+    {"id":"sky_current_1","name_kr":"첫 기류 해협","concept":"섬과 섬 사이의 바람 물길 — 기류 플랫포밍의 도입. 바람을 '읽고 올라타는' 법.","type":"field","subzone":"기류 해협","gx":7,"gy":4,"size":"L","flags":[],"exits":[{"to":"sky_camp","gate":"none","dir":"L"},{"to":"sky_isle_gate_e","gate":"none","dir":"R"},{"to":"sky_current_2","gate":"none","dir":"U"},{"to":"sky_wind_trial","gate":"none","dir":"D"}]},
+    {"id":"sky_wind_trial","name_kr":"기류 회랑","concept":"격리된 챌린지 — 좁은 바람길을 끊기지 않고 완주하는 순례자의 시험.","type":"challenge","subzone":"기류 해협","gx":7,"gy":5,"size":"L","flags":[],"exits":[{"to":"sky_current_1","gate":"none","dir":"U"}]},
+    {"id":"sky_current_2","name_kr":"갈라지는 기류","concept":"응용 구간 — 두 갈래 기류가 얽히며 가짜 길을 만든다. 깃발의 방향이 힌트.","type":"field","subzone":"기류 해협","gx":7,"gy":3,"size":"L","flags":[],"exits":[{"to":"sky_current_1","gate":"none","dir":"D"},{"to":"sky_spiral","gate":"none","dir":"U"},{"to":"sky_low_isle","gate":"none","dir":"D","oneway":true,"note":"기류에서 떨어지면 낮은 섬이 받아준다"}]},
+    {"id":"sky_low_isle","name_kr":"낮은 섬","concept":"군도의 밑바닥 섬 — 떨어진 자들이 모이는 곳. 잃어버린 짐과 오래된 낙서.","type":"field","subzone":"군도 하부","gx":6,"gy":6,"size":"M","flags":[],"exits":[{"to":"sky_updraft_back","gate":"none","dir":"L"},{"to":"sky_drop_old","gate":"none","dir":"R"}]},
+    {"id":"sky_updraft_back","name_kr":"되돌이 기류","concept":"낮은 섬에서 야영지로 되돌아가는 상승 기둥 — 군도의 자비. 낙하가 벌이 되지 않는 이유.","type":"transit","subzone":"군도 하부","gx":5,"gy":6,"size":"S","flags":[],"exits":[{"to":"sky_low_isle","gate":"none","dir":"R"},{"to":"sky_camp","gate":"none","dir":"U"}]},
+    {"id":"sky_drop_old","name_kr":"가장자리 벼랑","concept":"군도의 남쪽 끝 — 구름 틈으로 폐교의 지붕이 보인다. 뛰어내리면 그리로 떨어진다.","type":"transit","subzone":"군도 하부","gx":7,"gy":6,"size":"S","flags":[],"exits":[{"to":"sky_low_isle","gate":"none","dir":"L"},{"to":"old_roof","gate":"none","dir":"D","oneway":true,"note":"일방 낙하 — 첫 학교 지붕으로"}]},
+    {"id":"sky_drift_row","name_kr":"떠도는 징검섬","concept":"자리를 바꾸는 작은 섬들의 줄 — 오늘의 길이 내일은 없다. 바람 정원으로 가는 길목.","type":"field","subzone":"바람 정원","gx":5,"gy":3,"size":"M","flags":[],"exits":[{"to":"sky_camp","gate":"none","dir":"D"},{"to":"sky_garden","gate":"none","dir":"U"},{"to":"sky_hermit_isle","gate":"비밀","dir":"L"}]},
+    {"id":"sky_hermit_isle","name_kr":"바람 은자의 섬","concept":"구름에 가려진 작은 섬 — 바람의 고급 선생이 홀로 산다. 찾아오는 것 자체가 첫 수업.","type":"secret","subzone":"바람 정원","gx":4,"gy":3,"size":"S","flags":["teacher","warm"],"exits":[{"to":"sky_drift_row","gate":"none","dir":"R"}]},
+    {"id":"sky_garden","name_kr":"바람 정원","concept":"풀이 눕는 방향으로 길을 읽는 정원 — 군도에서 가장 고요한 곳. 첫 바람 사당이 있다.","type":"field","subzone":"바람 정원","gx":5,"gy":2,"size":"L","flags":["warm"],"exits":[{"to":"sky_drift_row","gate":"none","dir":"D"},{"to":"sky_shrine_gate","gate":"none","dir":"R"}]},
+    {"id":"sky_shrine_gate","name_kr":"사당 길목","concept":"세 바람 사당을 잇는 순례길의 갈림 — 예를 갖춘 흔적이 리본으로 남는다.","type":"field","subzone":"바람 정원","gx":6,"gy":2,"size":"M","flags":[],"exits":[{"to":"sky_garden","gate":"none","dir":"L"},{"to":"sky_wind_shrine","gate":"none","dir":"R"}]},
+    {"id":"sky_wind_shrine","name_kr":"바람 사당","concept":"바람 심화 마법이 잠든 사당 — 기류 부름을 여기서 얻는다. 사당지기는 없고 바람이 대답한다.","type":"event","subzone":"바람 정원","gx":7,"gy":2,"size":"M","flags":[],"exits":[{"to":"sky_shrine_gate","gate":"none","dir":"L"},{"to":"sky_spiral","gate":"none","dir":"D"}]},
+    {"id":"sky_spiral","name_kr":"나선 기류","concept":"조합 구간 — 나선으로 감아 오르는 기류. 발판 각인·바람 타기·기류 승월이 한 호흡에 엮인다.","type":"field","subzone":"높은 하늘","gx":7,"gy":1,"size":"L","flags":[],"exits":[{"to":"sky_current_2","gate":"none","dir":"D"},{"to":"sky_wind_shrine","gate":"none","dir":"U"},{"to":"sky_high_reach","gate":"none","dir":"R"}]},
+    {"id":"sky_high_reach","name_kr":"높은 물마루","concept":"기류가 파도의 물마루처럼 부서지는 최고 난도 구간 — 구름송곳들의 사냥터.","type":"field","subzone":"높은 하늘","gx":8,"gy":1,"size":"L","flags":[],"exits":[{"to":"sky_spiral","gate":"none","dir":"L"},{"to":"sky_ante","gate":"none","dir":"U"},{"to":"sky_echo_isle","gate":"비밀","dir":"R"}]},
+    {"id":"sky_echo_isle","name_kr":"메아리 섬","concept":"부르면 바람이 따라 부르는 섬 — 숨은 마력석 광맥과 순례자의 마지막 기록.","type":"secret","subzone":"높은 하늘","gx":9,"gy":1,"size":"S","flags":[],"exits":[{"to":"sky_high_reach","gate":"none","dir":"L"}]},
+    {"id":"sky_ante","name_kr":"가장 높은 곳 앞","concept":"보스 앞 거점 — 구름 위, 바람마저 숨을 고르는 곳. 순례의 리본들이 여기서 끝난다.","type":"bench","subzone":"정상","gx":8,"gy":0,"size":"M","flags":["bench"],"exits":[{"to":"sky_high_reach","gate":"none","dir":"D"},{"to":"sky_summit","gate":"열쇠:세 사당의 예","dir":"U"}]},
+    {"id":"sky_summit","name_kr":"가장 높은 곳의 시험","concept":"보스전(가칭) — 바람 기믹의 최종 졸업시험. 서사는 미정, 기믹은 확정: 기류 위에서만 성립하는 전투.","type":"boss","subzone":"정상","gx":8,"gy":-1,"size":"XL","flags":[],"exits":[{"to":"sky_ante","gate":"none","dir":"D"},{"to":"sky_overlook","gate":"상태:바람의 인정","dir":"R"}]},
+    {"id":"sky_overlook","name_kr":"세계가 보이는 곳","concept":"보스 후 — 대협곡, 사막, 설곡, 바다까지 세계 전부가 한눈에 담기는 자리. 여정의 갈피가 접히는 방.","type":"event","subzone":"정상","gx":9,"gy":-1,"size":"M","flags":["warm"],"exits":[{"to":"sky_summit","gate":"none","dir":"L"}]}
+  ]
+}

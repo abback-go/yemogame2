@@ -1,0 +1,22 @@
+{
+  "region_id": "mkt",
+  "name_kr": "달시장",
+  "element": "없음",
+  "identity": "보름밤에만 열리는 이동 시장 — 세 도시의 빈터에 같은 시장이 나타난다. 단, 시장은 '네가 이미 서 본 적 있는 터'로만 문을 낸다 (미방문 도시로의 지름길 불가).",
+  "palette": "먹빛 밤하늘 + 달빛의 은백 + 등롱의 남보라와 금색",
+  "music": "어디선가 들리는 오르골과 낮은 웅성임 — 박자가 달의 위상처럼 느리게 찬다",
+  "region_magic": [],
+  "boss_key_story": "보스 없음 — 시장의 유일한 규칙: '값을 깎지 말 것, 출처를 묻지 말 것.'",
+  "region_state_change": "방문 횟수가 쌓이면 골동품상이 얼굴을 기억하고, 안 팔던 물건을 슬쩍 꺼내 놓는다.",
+  "unique_enemy": "없음(시장 — 전투 없음)",
+  "local_loops": [
+    "곤돌라 마을·거울의 도시·조수 도시의 세 터를 잇는 보름밤 지름길 — 시장 자체가 움직이는 루프"
+  ],
+  "rooms": [
+    {"id":"mkt_gate_gon","name_kr":"등불 문","concept":"곤돌라 마을 빈터 쪽 문 — 빨랫줄 자리에 등불이 줄지어 걸린다.","type":"transit","subzone":"문","gx":1,"gy":0,"size":"S","flags":[],"exits":[{"to":"gon_moon_site","gate":"상태:보름밤","dir":"U"},{"to":"mkt_lane","gate":"none","dir":"D"}]},
+    {"id":"mkt_gate_mir","name_kr":"모래 문","concept":"거울의 도시 그늘 터 쪽 문 — 문지방에 사막의 모래가 흘러든다.","type":"transit","subzone":"문","gx":0,"gy":1,"size":"S","flags":[],"exits":[{"to":"mir_moon_site","gate":"상태:달시장 터·거울","dir":"L"},{"to":"mkt_lane","gate":"none","dir":"R"}]},
+    {"id":"mkt_gate_tid","name_kr":"물때 문","concept":"조수 도시 물때 터 쪽 문 — 문턱이 젖어 있고 갯내가 난다.","type":"transit","subzone":"문","gx":2,"gy":1,"size":"S","flags":[],"exits":[{"to":"tid_moon_site","gate":"상태:달시장 터·조수","dir":"R"},{"to":"mkt_lane","gate":"none","dir":"L"}]},
+    {"id":"mkt_lane","name_kr":"달빛 골목","concept":"세 문이 만나는 등롱 골목 — 좌판마다 낯선 물건. 걸음이 느려지는 곳.","type":"town","subzone":"시장","gx":1,"gy":1,"size":"M","flags":["shop","warm"],"exits":[{"to":"mkt_gate_gon","gate":"none","dir":"U"},{"to":"mkt_gate_mir","gate":"none","dir":"L"},{"to":"mkt_gate_tid","gate":"none","dir":"R"},{"to":"mkt_bazaar","gate":"none","dir":"D"}]},
+    {"id":"mkt_bazaar","name_kr":"달의 좌판","concept":"수상한 마도서 상인과 화폐→마력석 환전소(보름마다 한정 수량) — 시장의 심장. 골동품상은 손님 얼굴을 오래 기억한다.","type":"town","subzone":"시장","gx":1,"gy":2,"size":"M","flags":["shop"],"exits":[{"to":"mkt_lane","gate":"none","dir":"U"}]}
+  ]
+}

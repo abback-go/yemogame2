@@ -1,0 +1,27 @@
+{
+  "region_id": "gon",
+  "name_kr": "곤돌라 마을",
+  "element": "없음",
+  "identity": "학교로 오르는 곤돌라 줄기에 계단식으로 붙어 자란 하숙·상점 마을. 튜토리얼 직후 만나는 세상의 첫 온기.",
+  "palette": "낡은 목재 갈색 + 빨랫줄의 원색 + 곤돌라 케이블의 검은 선",
+  "music": "아코디언과 그릇 부딪는 소리, 저녁엔 느려진다",
+  "region_magic": [],
+  "boss_key_story": "보스 없음 — 마을. 하숙집에 짐을 풀면(첫 거점) 마을 사람들의 부탁이 게시판으로 흘러들기 시작한다.",
+  "region_state_change": "의뢰 평판이 쌓일수록 장터에 좌판이 늘고 곤돌라 야간 운행이 열린다.",
+  "unique_enemy": "없음(마을 — 안전지대)",
+  "local_loops": [
+    "곤돌라 정거장→윗계단→중턱 장터→아랫계단→우물 계단→(정수장)→학교→곤돌라 (수직 생활 순환)"
+  ],
+  "rooms": [
+    {"id":"gon_lift_top","name_kr":"곤돌라 정거장","concept":"마을 꼭대기의 정거장. 케이블이 협곡 위 학교까지 걸려 있다.","type":"transit","subzone":"윗마을","gx":5,"gy":0,"size":"M","flags":["gondola"],"exits":[{"to":"sch_gondola_st","gate":"none","dir":"U"},{"to":"gon_steps_up","gate":"none","dir":"D"}]},
+    {"id":"gon_steps_up","name_kr":"윗계단 골목","concept":"계단 양옆으로 하숙 간판이 다닥다닥. 처마 밑을 지나면 밥 냄새가 난다.","type":"town","subzone":"윗마을","gx":5,"gy":1,"size":"M","flags":[],"exits":[{"to":"gon_lift_top","gate":"none","dir":"U"},{"to":"gon_inn","gate":"none","dir":"L"},{"to":"gon_steps_mid","gate":"none","dir":"D"}]},
+    {"id":"gon_inn","name_kr":"하숙집","concept":"주인 아주머니의 하숙집 — 마을의 거점. 늦게 들어가면 잔소리와 야식이 같이 나온다.","type":"bench","subzone":"윗마을","gx":4,"gy":1,"size":"S","flags":["bench","warm"],"exits":[{"to":"gon_steps_up","gate":"none","dir":"R"}]},
+    {"id":"gon_steps_mid","name_kr":"중턱 장터","concept":"마을의 배꼽. 지역 지도를 파는 행상과 소식이 모이는 좌판들.","type":"town","subzone":"중턱","gx":5,"gy":2,"size":"L","flags":["shop","map"],"exits":[{"to":"gon_steps_up","gate":"none","dir":"U"},{"to":"gon_workshop","gate":"none","dir":"L"},{"to":"gon_moon_site","gate":"none","dir":"R"},{"to":"gon_steps_low","gate":"none","dir":"D"}]},
+    {"id":"gon_workshop","name_kr":"지팡이 공방","concept":"장인이 마력 회로를 손보는 공방. 첫 지팡이 정비를 여기서 배운다.","type":"town","subzone":"중턱","gx":4,"gy":2,"size":"S","flags":["shop"],"exits":[{"to":"gon_steps_mid","gate":"none","dir":"R"}]},
+    {"id":"gon_moon_site","name_kr":"달빛 빈터","concept":"평소엔 빨래만 널린 빈터 — 보름밤이면 등불이 줄지어 켜지고 낯선 문이 선다.","type":"event","subzone":"중턱","gx":6,"gy":2,"size":"S","flags":["moon_site"],"exits":[{"to":"gon_steps_mid","gate":"none","dir":"L"},{"to":"mkt_gate_gon","gate":"상태:보름밤","dir":"R"}]},
+    {"id":"gon_steps_low","name_kr":"아랫계단","concept":"마을의 발치. 절벽 쪽에서 찬바람이 올라와 겨울엔 다들 종종걸음.","type":"town","subzone":"아랫마을","gx":5,"gy":3,"size":"M","flags":[],"exits":[{"to":"gon_steps_mid","gate":"none","dir":"U"},{"to":"gon_cellar","gate":"비밀","dir":"L"},{"to":"gon_cliff_gate","gate":"none","dir":"R"},{"to":"gon_lower_stair","gate":"none","dir":"D"}]},
+    {"id":"gon_cellar","name_kr":"바람 창고","concept":"계단 아래 숨은 창고. 옛 상인의 장부와 마력석 꾸러미가 먼지를 쓰고 있다.","type":"secret","subzone":"아랫마을","gx":4,"gy":3,"size":"S","flags":[],"exits":[{"to":"gon_steps_low","gate":"none","dir":"R"}]},
+    {"id":"gon_cliff_gate","name_kr":"절벽 뒷문","concept":"마을 뒤 협곡 벽으로 나가는 좁은 문. '바람 부는 날엔 나가지 말 것.'","type":"transit","subzone":"아랫마을","gx":6,"gy":3,"size":"S","flags":[],"exits":[{"to":"gon_steps_low","gate":"none","dir":"L"},{"to":"cyn_ledge_top","gate":"none","dir":"R"}]},
+    {"id":"gon_lower_stair","name_kr":"우물 계단","concept":"마을 우물이 있는 가장 낮은 계단 — 물길이 학교 정수장과 이어져 있다.","type":"transit","subzone":"아랫마을","gx":5,"gy":4,"size":"S","flags":[],"exits":[{"to":"gon_steps_low","gate":"none","dir":"U"},{"to":"sch_cistern_upper","gate":"none","dir":"D"}]}
+  ]
+}

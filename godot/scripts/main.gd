@@ -13,6 +13,11 @@ func _ready() -> void:
 	_setup_camera(player)
 	_setup_ui()
 
+func _unhandled_input(event: InputEvent) -> void:
+	if event is InputEventKey and event.pressed and not event.echo:
+		if event.physical_keycode == KEY_ESCAPE:
+			get_tree().change_scene_to_file("res://scenes/launcher.tscn")
+
 func _setup_input() -> void:
 	# 에디터 없이 코드로 입력 맵 등록 — HTML 프로토타입과 같은 키
 	_add_key(&"move_left", KEY_LEFT)

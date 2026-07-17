@@ -7,7 +7,7 @@ config_version=5
 [application]
 
 config/name="이름 없는 마법학교 — 파이프라인 실험"
-run/main_scene="res://scenes/main.tscn"
+run/main_scene="res://scenes/launcher.tscn"
 config/features=PackedStringArray("4.7", "GL Compatibility")
 
 [display]

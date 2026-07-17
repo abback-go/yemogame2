@@ -1,0 +1,29 @@
+{
+  "region_id": "sun",
+  "name_kr": "수몰 성소·지하 수맥",
+  "element": "없음(물 테마)",
+  "identity": "물에 잠긴 옛 성소와 그 아래의 수맥 — 물잠이 여는 수중 미니 던전. 숨 대신 마나가 닳는 세계.",
+  "palette": "물속의 심청색 + 성소 석재의 상아색 + 수면에 흔들리는 빛 무늬",
+  "music": "물에 잠긴 종소리 같은 잔향 — 수면 위와 아래의 소리가 다르다",
+  "region_magic": [],
+  "boss_key_story": "보스 없음(미니보스 수문장만). 성소가 무엇을 모셨는지는 끝내 말하지 않는다 — 부조와 배치로만 묻게 한다(스토리 미확정).",
+  "region_state_change": "수문장이 물러나면 수맥의 물이 맑아져 숲 쪽 물길의 시야가 트인다.",
+  "unique_enemy": "빛낚시꾼 — 어둔 물속에서 등불 같은 미끼를 흔드는 놈. 미끼와 진짜 출구를 구분해야 한다.",
+  "local_loops": [
+    "조수 도시(썰물)에서 내려와 숲 심부(물잠)로 빠져나가는 관통형 던전 — 월드 루프 ③의 물밑 구간"
+  ],
+  "rooms": [
+    {"id":"sun_upper_gate","name_kr":"성소 상부 수문","concept":"수직갱의 두레박이 닿는 곳 — 썰물 때만 문설주가 물 위로 드러난다.","type":"transit","subzone":"상부","gx":3,"gy":0,"size":"M","flags":[],"exits":[{"to":"tid_lowtide_well","gate":"상태:썰물","dir":"U"},{"to":"sun_dry_cloister","gate":"none","dir":"D"}]},
+    {"id":"sun_dry_cloister","name_kr":"마른 회랑","concept":"썰물이면 걸어서, 밀물이면 헤엄으로 — 물때가 난이도를 정하는 회랑.","type":"field","subzone":"상부","gx":3,"gy":1,"size":"L","flags":[],"exits":[{"to":"sun_upper_gate","gate":"none","dir":"U"},{"to":"sun_altar_isle","gate":"none","dir":"L"},{"to":"sun_mosaic_hall","gate":"none","dir":"D"}]},
+    {"id":"sun_altar_isle","name_kr":"물 위 제단","concept":"거점 — 어떤 물때에도 잠기지 않는 단 하나의 제단. 촛불이 물그림자에 흔들린다.","type":"bench","subzone":"상부","gx":2,"gy":1,"size":"M","flags":["bench","warm"],"exits":[{"to":"sun_dry_cloister","gate":"none","dir":"R"}]},
+    {"id":"sun_mosaic_hall","name_kr":"물비늘 모자이크 홀","concept":"바닥 모자이크가 물결에 살아 움직이는 홀 — 무엇을 그린 그림인지는 반쯤 지워져 있다.","type":"field","subzone":"상부","gx":3,"gy":2,"size":"L","flags":[],"exits":[{"to":"sun_dry_cloister","gate":"none","dir":"U"},{"to":"sun_relief_room","gate":"비밀","dir":"R"},{"to":"sun_sunk_stair","gate":"none","dir":"D"}]},
+    {"id":"sun_relief_room","name_kr":"부조의 방","concept":"오래된 신앙의 부조 — 물에 닳아 얼굴들이 지워졌다. 답 없는 질문 하나와 마력석.","type":"secret","subzone":"상부","gx":4,"gy":2,"size":"S","flags":[],"exits":[{"to":"sun_mosaic_hall","gate":"none","dir":"L"}]},
+    {"id":"sun_sunk_stair","name_kr":"잠긴 계단","concept":"어느 물때에도 물 밑인 계단 — 여기부터는 물잠 없이 내려갈 수 없다.","type":"transit","subzone":"심부","gx":3,"gy":3,"size":"M","flags":[],"exits":[{"to":"sun_mosaic_hall","gate":"none","dir":"U"},{"to":"sun_deep_nave","gate":"물잠","dir":"D"}]},
+    {"id":"sun_deep_nave","name_kr":"수몰된 본당","concept":"완전한 수중 — 마나가 숨이 되는 본당. 기둥 사이로 빛낚시꾼의 가짜 등불이 어른거린다.","type":"field","subzone":"심부","gx":3,"gy":4,"size":"XL","flags":[],"exits":[{"to":"sun_sunk_stair","gate":"물잠","dir":"U"},{"to":"sun_choir_cave","gate":"비밀","dir":"R"},{"to":"sun_warden_hall","gate":"none","dir":"D"}]},
+    {"id":"sun_choir_cave","name_kr":"노래하는 공기굴","concept":"천장에 갇힌 큰 공기 방울 — 숨(마나)을 고르는 쉼터. 물이 오르간처럼 운다.","type":"secret","subzone":"심부","gx":4,"gy":4,"size":"S","flags":["warm"],"exits":[{"to":"sun_deep_nave","gate":"none","dir":"L"}]},
+    {"id":"sun_warden_hall","name_kr":"수문장의 방","concept":"미니보스 — 성소의 마지막 수문장. 물살을 일으켜 위치를 강제하는 수중전의 시험.","type":"miniboss","subzone":"심부","gx":3,"gy":5,"size":"L","flags":[],"exits":[{"to":"sun_deep_nave","gate":"none","dir":"U"},{"to":"sun_aquifer_1","gate":"none","dir":"L"}]},
+    {"id":"sun_aquifer_1","name_kr":"지하 수맥","concept":"성소를 지나 서쪽으로 흐르는 큰 물길 — 세계의 밑을 잇는 조용한 혈관.","type":"field","subzone":"수맥","gx":2,"gy":5,"size":"L","flags":[],"exits":[{"to":"sun_warden_hall","gate":"none","dir":"R"},{"to":"sun_aquifer_book","gate":"비밀","dir":"U"},{"to":"sun_aquifer_west","gate":"none","dir":"L"}]},
+    {"id":"sun_aquifer_book","name_kr":"물에 잠긴 서고","concept":"방수 유리함에 봉해진 마도서 한 권 — 물의 상급 주문. 누가 여기 두었는지는 모른다.","type":"secret","subzone":"수맥","gx":2,"gy":4,"size":"S","flags":[],"exits":[{"to":"sun_aquifer_1","gate":"none","dir":"D"}]},
+    {"id":"sun_aquifer_west","name_kr":"수맥 서단","concept":"물길이 숲의 뿌리 밑으로 빠져나가는 서쪽 끝 — 물 밖으로 반딧불의 초록빛이 비쳐 든다.","type":"transit","subzone":"수맥","gx":1,"gy":5,"size":"M","flags":[],"exits":[{"to":"sun_aquifer_1","gate":"none","dir":"R"},{"to":"for_deep_east","gate":"물잠","dir":"L"}]}
+  ]
+}
