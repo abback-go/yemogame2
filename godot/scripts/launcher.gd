@@ -13,7 +13,7 @@ func _ready() -> void:
 	title.add_theme_font_size_override("font_size", 30)
 	layer.add_child(title)
 	var menu := Label.new()
-	menu.text = "[1]  조작감 테스트 방  (달리기·점프·대시)\n\n[2]  월드맵 뷰어  (17개 지역 · 295방 설계도)"
+	menu.text = "[1]  조작감 테스트 방  (이동 마법 9종 토글)\n\n[2]  월드맵 뷰어  (17개 지역 · 295방 설계도)"
 	menu.position = Vector2(64, 230)
 	menu.add_theme_font_override("font", font)
 	menu.add_theme_font_size_override("font_size", 18)
