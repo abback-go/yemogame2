@@ -14,6 +14,7 @@ var _hud: CanvasLayer
 var _font: SystemFont
 var _water_rects: Array[Rect2] = []
 var _updraft_rects: Array[Rect2] = []
+var _air_bubble: Node2D = null
 
 func _ready() -> void:
 	RenderingServer.set_default_clear_color(Color(0.043, 0.051, 0.071))
@@ -24,6 +25,9 @@ func _ready() -> void:
 	_build_room()
 	_player = _spawn_player()
 	_player.set_zones(_water_rects, _updraft_rects)
+	# 산소통 참조 직접 전달 (경로 조회 없이, set_zones와 동일 원칙, spec §2.1-8)
+	if _air_bubble != null:
+		_player.register_air_bubble(_air_bubble)
 	_setup_camera(_player)
 	_hud = _setup_hud(_player)
 
@@ -95,7 +99,7 @@ func _build_hover(plat: Color) -> void:
 	# ⑧ 부유: 260px 갭 위에서 X 홀드 체공
 	_add_platform(Rect2(300, 1360, 180, 16), plat)
 	_add_platform(Rect2(740, 1360, 180, 16), plat)
-	_add_sign(Vector2(300, 1290), "부유(3): 공중 X 홀드\n갭 260px 체공")
+	_add_sign(Vector2(300, 1290), "부유(3): 공중 X 홀드 2초\n쿨 3초 · 착지 시 초기화")
 
 func _build_double_jump(plat: Color) -> void:
 	# ② 이단점프: 단일 점프 불가 높이(180px) 선반
@@ -129,7 +133,7 @@ func _build_ice_course(plat: Color) -> void:
 	_add_platform(Rect2(2990, 1200, 170, 16), plat)
 	_add_platform(Rect2(3060, 960, 170, 16), plat)
 	_add_reward(Vector2(3145, 940))
-	_add_sign(Vector2(2960, 1120), "얼음 발판(6): A로 발판을 놓고,\n이단점프로 넘어가라")
+	_add_sign(Vector2(2960, 1120), "얼음 발판(6): A로 발판 하나(쿨 5초)\n이단점프와 조합해 넘어가라")
 
 func _build_water(wall: Color) -> void:
 	# ⑥ 깊은 물 웅덩이: 깊이 360 (익사 경고 확인 가능), 바닥에 보상
@@ -140,7 +144,9 @@ func _build_water(wall: Color) -> void:
 	_add_zone(water, Color(0.2, 0.45, 0.9, 0.35))
 	_water_rects.append(water)
 	_add_reward(Vector2(3460, 1830))
-	_add_sign(Vector2(3300, 1420), "물잠(8): 물에서 방향키·마나 8/s\n마나 0=익사, 2초당 체력 1")
+	# ⑥(v2.1) 산소통: 깊은 물 바닥 근처에 공기 방울 1개
+	_air_bubble = _make_air_bubble(Vector2(3560, 1790))
+	_add_sign(Vector2(3300, 1420), "물잠(8): 산소→마나→체력 순 소모\n하늘색 방울 = 산소 리필")
 
 func _build_glide_flight(plat: Color) -> void:
 	# ⑤ 활공 코스 + 상승기류 / ⑦ 비행 개활지 + 높은 목표
@@ -196,6 +202,19 @@ func _add_reward(pos: Vector2) -> void:
 	])
 	vis.color = Color(1.0, 0.85, 0.25)
 	add_child(vis)
+
+func _make_air_bubble(pos: Vector2) -> Node2D:
+	# 하늘색 원(12각형 근사, 반지름 12) — 접촉 시 산소 리필, 5초 뒤 재생성
+	var vis := Polygon2D.new()
+	vis.position = pos
+	var pts := PackedVector2Array()
+	for i in 12:
+		var a := TAU * float(i) / 12.0
+		pts.append(Vector2(cos(a), sin(a)) * 12.0)
+	vis.polygon = pts
+	vis.color = Color(0.55, 0.85, 1.0, 0.9)
+	add_child(vis)
+	return vis
 
 func _add_sign(pos: Vector2, text: String) -> void:
 	var lb := Label.new()

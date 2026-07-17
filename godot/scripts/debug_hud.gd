@@ -1,6 +1,6 @@
 extends CanvasLayer
-## 디버그 HUD v2 — 능력 ON/OFF·마나 비용·마나 바·체력 마스크·비행 시간/쿨·
-## 얼음 발판 잔여·익사 경고·상태·키 안내·토글 토스트 (spec §7).
+## 디버그 HUD v2.1 — 능력 ON/OFF·마나 비용·마나 바·산소 바·체력 마스크·
+## 부유/비행 시간·쿨·얼음 발판 쿨·익사 경고·상태·키 안내·토글 토스트 (spec §7).
 ## 노드는 전부 코드 생성, 상태는 bind()된 플레이어에서 매 프레임 조회.
 
 const PlayerScript := preload("res://scripts/player.gd")
@@ -15,8 +15,12 @@ var _rows: Array[Label] = []
 var _masks: Array[ColorRect] = []
 var _mana_fill: ColorRect
 var _mana_text: Label
+var _oxygen_bg: ColorRect
+var _oxygen_fill: ColorRect
+var _oxygen_text: Label
 var _health_text: Label
 var _ice_text: Label
+var _hover_text: Label
 var _fly_text: Label
 var _state: Label
 var _drown: Label
@@ -56,22 +60,37 @@ func _build() -> void:
 	_mana_fill.position = Vector2(16.0, by + 22.0)
 	_mana_fill.size = Vector2(BAR_W, 14.0)
 	add_child(_mana_fill)
+	# 산소 바: 물 접촉 중 또는 산소 미충전 시에만 표시 (spec §7)
+	_oxygen_text = _mklabel("산소", Vector2(16.0, by + 40.0), 14, Color(0.6, 0.9, 1.0))
+	add_child(_oxygen_text)
+	_oxygen_bg = ColorRect.new()
+	_oxygen_bg.color = Color(0.12, 0.2, 0.26)
+	_oxygen_bg.position = Vector2(16.0, by + 62.0)
+	_oxygen_bg.size = Vector2(BAR_W, 14.0)
+	add_child(_oxygen_bg)
+	_oxygen_fill = ColorRect.new()
+	_oxygen_fill.color = Color(0.4, 0.8, 1.0)
+	_oxygen_fill.position = Vector2(16.0, by + 62.0)
+	_oxygen_fill.size = Vector2(BAR_W, 14.0)
+	add_child(_oxygen_fill)
 	_build_status(by)
 
 func _build_status(by: float) -> void:
-	_health_text = _mklabel("체력", Vector2(16.0, by + 46.0), 14, Color(0.95, 0.7, 0.7))
+	_health_text = _mklabel("체력", Vector2(16.0, by + 86.0), 14, Color(0.95, 0.7, 0.7))
 	add_child(_health_text)
 	for i in PlayerScript.HEALTH_MAX:
 		var m := ColorRect.new()
-		m.position = Vector2(70.0 + float(i) * 22.0, by + 46.0)
+		m.position = Vector2(70.0 + float(i) * 22.0, by + 86.0)
 		m.size = Vector2(18.0, 16.0)
 		add_child(m)
 		_masks.append(m)
-	_ice_text = _mklabel("", Vector2(16.0, by + 70.0), 14, Color(0.7, 0.9, 1.0))
+	_ice_text = _mklabel("", Vector2(16.0, by + 110.0), 14, Color(0.7, 0.9, 1.0))
 	add_child(_ice_text)
-	_fly_text = _mklabel("", Vector2(16.0, by + 92.0), 14, Color(0.85, 0.75, 1.0))
+	_hover_text = _mklabel("", Vector2(16.0, by + 132.0), 14, Color(0.8, 0.95, 0.8))
+	add_child(_hover_text)
+	_fly_text = _mklabel("", Vector2(16.0, by + 154.0), 14, Color(0.85, 0.75, 1.0))
 	add_child(_fly_text)
-	_state = _mklabel("", Vector2(16.0, by + 116.0), 14, Color(0.8, 0.85, 0.95))
+	_state = _mklabel("", Vector2(16.0, by + 176.0), 14, Color(0.8, 0.85, 0.95))
 	add_child(_state)
 	var guide := _mklabel(KEY_GUIDE, Vector2(16.0, 486.0), 13, Color(0.6, 0.65, 0.75))
 	add_child(guide)
@@ -97,6 +116,7 @@ func _process(delta: float) -> void:
 	_update_toast(delta)
 	_update_abilities()
 	_update_mana()
+	_update_oxygen()
 	_update_status()
 
 func _update_toast(delta: float) -> void:
@@ -130,13 +150,33 @@ func _update_mana() -> void:
 		_mana_fill.color = Color(0.3, 0.6, 1.0)
 	_mana_text.text = "마나  %d / 100" % int(m)
 
+func _update_oxygen() -> void:
+	var o: float = player.oxygen
+	var omax: float = PlayerScript.OXYGEN_MAX
+	var show: bool = player.in_water or o < omax
+	_oxygen_text.visible = show
+	_oxygen_bg.visible = show
+	_oxygen_fill.visible = show
+	if not show:
+		return
+	_oxygen_fill.size.x = BAR_W * clampf(o / omax, 0.0, 1.0)
+	_oxygen_fill.color = Color(1.0, 0.5, 0.3) if o < 25.0 else Color(0.4, 0.8, 1.0)
+	_oxygen_text.text = "산소  %d / 100" % int(o)
+
 func _update_status() -> void:
 	var hp: int = player.health
 	for i in _masks.size():
 		_masks[i].color = Color(0.9, 0.3, 0.3) if i < hp else Color(0.28, 0.16, 0.18)
-	var ice_max: int = PlayerScript.ICE_PLATFORM_MAX
-	var left: int = maxi(0, ice_max - player.ice_count())
-	_ice_text.text = "얼음 발판  잔여 %d / %d" % [left, ice_max]
+	if player.ice_cd > 0.0:
+		_ice_text.text = "얼음 발판  쿨타임 %.1f초 (동시 1개)" % player.ice_cd
+	else:
+		_ice_text.text = "얼음 발판  대기 (동시 1개)"
+	if player.hovering:
+		_hover_text.text = "부유  남은 %.1f초" % player.hover_t
+	elif player.hover_cd > 0.0:
+		_hover_text.text = "부유  쿨타임 %.1f초" % player.hover_cd
+	else:
+		_hover_text.text = "부유  대기"
 	if player.flying:
 		_fly_text.text = "비행  남은 %.1f초" % player.fly_t
 	elif player.fly_cd > 0.0:
