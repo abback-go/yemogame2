@@ -1,7 +1,9 @@
 extends CharacterBody2D
-## 이동 마법 테스트 컨트롤러 — 능력 9종을 딕셔너리로 토글.
-## 수치는 movement-spec.md §2·§3의 시작값(F5 손 튜닝 전제).
+## 이동 마법 테스트 컨트롤러 v2 — 능력 9종을 딕셔너리로 토글.
+## 수치는 movement-spec.md v2 §2·§3의 시작값(F5 손 튜닝 전제).
 ## 상태 우선순위: 물 > 비행 > 벽달리기 > 대시 > 일반.
+## v2 핵심: 전 이동 마나 소모 / 8방향 공중대시 / 부유 고정 / 얼음 발판 A키
+## 설치형(이단점프와 완전 독립) / 활공 ↓홀드 / 물잠 익사(체력) / 비행 D키 발동형.
 
 const RUN_SPEED := 280.0
 const ACCEL := 2600.0
@@ -20,19 +22,36 @@ const WALL_RUN_SPEED := 380.0
 const WALL_RUN_MAX := 0.8
 const WALL_JUMP_X := 420.0
 const WALL_JUMP_Y := -520.0
-const ICE_JUMP_VELOCITY := -620.0
-const ICE_PLATFORM_LIFE := 0.75
-const HOVER_GRAVITY_SCALE := 0.15
-const HOVER_MAX := 0.6
+const HOVER_DRIFT := 40.0
+const HOVER_DECEL := 1400.0
 const GLIDE_FALL_MAX := 140.0
 const GLIDE_UPDRAFT_RISE := -260.0
 const SWIM_SPEED := 240.0
-const SWIM_MANA_PER_SEC := 8.0
 const FLY_SPEED := 300.0
-const FLY_MANA_PER_SEC := 12.0
+const FLY_DURATION := 6.0
+const FLY_COOLDOWN := 12.0
 const MANA_MAX := 100.0
 const MANA_REGEN_GROUND := 20.0
 const MANA_REGEN_AIR := 6.0
+
+# v2 마나 비용 (모든 이동 마법이 소모 — spec §2)
+const DASH_MANA := 4.0
+const DOUBLE_JUMP_MANA := 5.0
+const HOVER_MANA_PER_SEC := 3.0
+const WALL_RUN_MANA_PER_SEC := 6.0
+const ICE_PLATFORM_MANA := 12.0
+const GLIDE_MANA_PER_SEC := 2.0
+const SWIM_MANA_PER_SEC := 8.0
+const FLY_MANA_COST := 45.0
+
+# 얼음 발판 설치형 (spec §2-6)
+const ICE_PLATFORM_LIFE := 3.0
+const ICE_PLATFORM_MAX := 2
+
+# 체력·익사 (spec §2-8·§4)
+const HEALTH_MAX := 5
+const DROWN_INTERVAL := 2.0
+const MANA_BLINK_TIME := 0.4
 
 # HUD·main과 공유하는 능력 순서/한글명 (단일 출처)
 const ABILITY_KEYS := [
@@ -50,6 +69,18 @@ const ABILITY_LABELS := {
 	"water_dive": "물잠",
 	"flight": "비행",
 }
+# 능력별 마나 비용 표기 (HUD 토글 목록 옆)
+const ABILITY_COSTS := {
+	"dash_ground": "마나 4",
+	"dash_air": "마나 4",
+	"hover": "마나 3/초",
+	"double_jump": "마나 5",
+	"wall_run": "마나 6/초",
+	"ice_platform": "마나 12/개",
+	"glide": "마나 2/초",
+	"water_dive": "마나 8/초",
+	"flight": "마나 45 선불",
+}
 
 # 시작 킷만 기본 ON (spec §2)
 var abilities := {
@@ -65,18 +96,24 @@ var abilities := {
 }
 
 var mana := MANA_MAX
+var health := HEALTH_MAX
 var state_name := "일반"
 var coyote := 0.0
 var jump_buf := 0.0
 var dash_t := 0.0
 var dash_cd := 0.0
-var hover_left := HOVER_MAX
+var dash_dir := Vector2.ZERO
 var wall_run_t := 0.0
 var wall_active_side := 0
 var last_wall_dir := 0
 var air_dash_used := false
 var double_jump_used := false
 var flying := false
+var fly_t := 0.0
+var fly_cd := 0.0
+var drown_t := 0.0
+var drowning := false
+var mana_blink := 0.0
 var mana_draining := false
 var in_water := false
 var in_updraft := false
@@ -85,6 +122,7 @@ var start_pos := Vector2.ZERO
 var fall_limit := 2000.0
 var water_rects: Array[Rect2] = []
 var updraft_rects: Array[Rect2] = []
+var ice_platforms: Array[Node] = []
 
 func _ready() -> void:
 	start_pos = position
@@ -102,17 +140,29 @@ func respawn() -> void:
 	global_position = start_pos
 	velocity = Vector2.ZERO
 	mana = MANA_MAX
+	health = HEALTH_MAX
 	air_dash_used = false
 	double_jump_used = false
-	hover_left = HOVER_MAX
 	wall_run_t = 0.0
 	wall_active_side = 0
 	last_wall_dir = 0
 	flying = false
+	fly_t = 0.0
+	fly_cd = 0.0
+	drown_t = 0.0
+	drowning = false
+	_clear_ice_platforms()
 
 func set_zones(water: Array[Rect2], updraft: Array[Rect2]) -> void:
 	water_rects = water
 	updraft_rects = updraft
+
+func ice_count() -> int:
+	var n := 0
+	for p in ice_platforms:
+		if is_instance_valid(p):
+			n += 1
+	return n
 
 func _physics_process(delta: float) -> void:
 	_tick_timers(delta)
@@ -121,6 +171,8 @@ func _physics_process(delta: float) -> void:
 	_update_zones()
 	_recover_on_contact()
 	_try_start_dash()
+	_try_place_ice()
+	_try_start_flight()
 
 	if in_water:
 		_water_move(delta)
@@ -142,7 +194,10 @@ func _tick_timers(delta: float) -> void:
 	coyote -= delta
 	jump_buf -= delta
 	dash_cd -= delta
+	fly_cd = maxf(0.0, fly_cd - delta)
+	mana_blink = maxf(0.0, mana_blink - delta)
 	mana_draining = false
+	drowning = false
 
 func _read_facing() -> void:
 	var dir := Input.get_axis("move_left", "move_right")
@@ -156,6 +211,11 @@ func _buffer_jump() -> void:
 func _update_zones() -> void:
 	in_water = _in_any(water_rects)
 	in_updraft = _in_any(updraft_rects)
+	if not in_water:
+		drown_t = 0.0
+	# 물에 잠기면 비행 강제 해제 (물 상태가 최우선)
+	if in_water and flying:
+		_end_flight()
 
 func _in_any(rects: Array) -> bool:
 	for r in rects:
@@ -164,18 +224,20 @@ func _in_any(rects: Array) -> bool:
 	return false
 
 func _recover_on_contact() -> void:
-	# 착지: 공중 자원 전부 회복 (spec §2-2·3·4·6)
+	# 착지: 공중 자원 회복 (spec §2-2·3·4). 비행은 시간제라 착지로 안 풀림.
 	if is_on_floor():
 		coyote = COYOTE_TIME
 		air_dash_used = false
 		double_jump_used = false
-		hover_left = HOVER_MAX
 		last_wall_dir = 0
 		wall_active_side = 0
-		flying = false
 	# 벽 접촉: 공중 대시만 회복 (spec §2-2)
 	if is_on_wall():
 		air_dash_used = false
+
+func _flash_mana() -> void:
+	# 마나 부족 피드백: HUD 마나 바 깜빡임 (spec §2 공통 원칙)
+	mana_blink = MANA_BLINK_TIME
 
 func _try_start_dash() -> void:
 	if in_water or flying:
@@ -186,46 +248,123 @@ func _try_start_dash() -> void:
 		return
 	if is_on_floor():
 		if abilities["dash_ground"]:
-			_begin_dash()
+			_attempt_dash(Vector2(float(face), 0.0), false)
 	elif abilities["dash_air"] and not air_dash_used:
-		air_dash_used = true
-		_begin_dash()
+		_attempt_dash(_air_dash_dir(), true)
 
-func _begin_dash() -> void:
+func _attempt_dash(dir: Vector2, is_air: bool) -> void:
+	if mana < DASH_MANA:
+		_flash_mana()
+		return
+	if is_air:
+		air_dash_used = true
+	mana -= DASH_MANA
+	dash_dir = dir
 	dash_t = DASH_TIME
 	dash_cd = DASH_COOLDOWN
 
+func _air_dash_dir() -> Vector2:
+	# 공중 대시: 방향키 8방향(대각 정규화). 무입력=바라보는 방향 수평.
+	var h := Input.get_axis("move_left", "move_right")
+	var v := Input.get_axis("fly_up", "move_down")
+	var d := Vector2(h, v)
+	if d == Vector2.ZERO:
+		return Vector2(float(face), 0.0)
+	return d.normalized()
+
 func _dash_move(delta: float) -> void:
-	# 대시 중: 수평 고정, 중력 0 (프로토타입 이식)
+	# 대시 중: 시작 방향 고정, 중력 0 (지상=수평, 공중=8방향)
 	dash_t -= delta
-	velocity.x = float(face) * DASH_SPEED
-	velocity.y = 0.0
+	velocity = dash_dir * DASH_SPEED
 	state_name = "대시"
 
-func _do_flight(delta: float) -> bool:
-	if not abilities["flight"] or is_on_floor():
-		flying = false
-		return false
-	# ↑ 홀드로 유지, 마나 소진 시 자동 해제 (spec §2-9)
-	if not Input.is_action_pressed("fly_up") or mana <= 0.0:
-		flying = false
-		return false
+func _try_place_ice() -> void:
+	# A 키: 발밑에 얼음 발판 설치 (지상·공중 모두 허용, spec §2-6)
+	if not Input.is_action_just_pressed("ice_place"):
+		return
+	if not abilities["ice_platform"]:
+		return
+	if mana < ICE_PLATFORM_MANA:
+		_flash_mana()
+		return
+	mana -= ICE_PLATFORM_MANA
+	_spawn_ice_platform()
+
+func _spawn_ice_platform() -> void:
+	var parent := get_parent()
+	if parent == null:
+		return
+	var plat := StaticBody2D.new()
+	var shape := CollisionShape2D.new()
+	var rs := RectangleShape2D.new()
+	rs.size = Vector2(72.0, 14.0)
+	shape.shape = rs
+	plat.add_child(shape)
+	var vis := Polygon2D.new()
+	vis.polygon = PackedVector2Array([
+		Vector2(-36.0, -7.0), Vector2(36.0, -7.0),
+		Vector2(36.0, 7.0), Vector2(-36.0, 7.0),
+	])
+	vis.color = Color(0.6, 0.85, 1.0, 0.55)
+	plat.add_child(vis)
+	parent.add_child(plat)
+	plat.global_position = global_position + Vector2(0.0, 24.0)
+	ice_platforms.append(plat)
+	# 동시 최대 2개: 초과 시 가장 오래된 것 파괴 (spec §2-6)
+	while ice_platforms.size() > ICE_PLATFORM_MAX:
+		var old: Node = ice_platforms.pop_front()
+		if is_instance_valid(old):
+			old.queue_free()
+	get_tree().create_timer(ICE_PLATFORM_LIFE).timeout.connect(
+		_on_ice_expire.bind(plat))
+
+func _on_ice_expire(plat: Node) -> void:
+	ice_platforms.erase(plat)
+	if is_instance_valid(plat):
+		plat.queue_free()
+
+func _clear_ice_platforms() -> void:
+	for p in ice_platforms:
+		if is_instance_valid(p):
+			p.queue_free()
+	ice_platforms.clear()
+
+func _try_start_flight() -> void:
+	# D 키 발동형: 마나 45 선불·6초 자유비행·쿨 12초 (spec §2-9)
+	if not Input.is_action_just_pressed("fly"):
+		return
+	if not abilities["flight"] or flying or fly_cd > 0.0:
+		return
+	if mana < FLY_MANA_COST:
+		_flash_mana()
+		return
+	mana -= FLY_MANA_COST
 	flying = true
-	mana_draining = true
-	var spd := FLY_SPEED
-	var cost := FLY_MANA_PER_SEC
-	if in_updraft:
-		spd *= 1.5
-		cost *= 0.5
+	fly_t = FLY_DURATION
+
+func _do_flight(delta: float) -> bool:
+	if not flying:
+		return false
+	fly_t -= delta
+	if fly_t <= 0.0:
+		_end_flight()
+		return false
+	# 방향키 8방향 300, 정규화, 중력 무시
 	var h := Input.get_axis("move_left", "move_right")
 	var v := Input.get_axis("fly_up", "move_down")
 	var mv := Vector2(h, v)
 	if mv.length() > 1.0:
 		mv = mv.normalized()
-	velocity = mv * spd
-	mana = maxf(0.0, mana - cost * delta)
+	velocity = mv * FLY_SPEED
+	mana_draining = true
 	state_name = "비행"
 	return true
+
+func _end_flight() -> void:
+	if flying:
+		fly_cd = FLY_COOLDOWN
+	flying = false
+	fly_t = 0.0
 
 func _do_wall_run(delta: float) -> bool:
 	if not abilities["wall_run"] or is_on_floor() or not is_on_wall():
@@ -250,7 +389,12 @@ func _do_wall_run(delta: float) -> bool:
 	if wall_run_t <= 0.0:
 		last_wall_dir = wall_side
 		return false
+	# 마나 6/초 소모 — 0이면 발동 불가 (spec §2-5)
+	if mana <= 0.0:
+		return false
 	wall_run_t -= delta
+	mana = maxf(0.0, mana - WALL_RUN_MANA_PER_SEC * delta)
+	mana_draining = true
 	velocity.y = -WALL_RUN_SPEED
 	velocity.x = float(wall_side) * 40.0
 	state_name = "벽달리기"
@@ -264,20 +408,36 @@ func _water_move(delta: float) -> void:
 		velocity.y = JUMP_VELOCITY
 		state_name = "물 탈출"
 		return
-	# 물잠 ON + 마나>0: 4방향 수영 / 아니면 수면 뜨기 (spec §2-8)
-	if abilities["water_dive"] and mana > 0.0:
-		var v := Input.get_axis("fly_up", "move_down")
-		velocity.y = move_toward(velocity.y, v * SWIM_SPEED, ACCEL * delta)
-		mana = maxf(0.0, mana - SWIM_MANA_PER_SEC * delta)
-		mana_draining = true
-		state_name = "수영"
-	else:
+	if not abilities["water_dive"]:
+		# 물잠 OFF: 수면 부유만 (잠수 불가, spec §2-8)
 		var surface := _water_surface_y()
 		if global_position.y > surface:
 			velocity.y = maxf(-SWIM_SPEED, (surface - global_position.y) * 8.0)
 		else:
 			velocity.y = 0.0
 		state_name = "수면"
+		return
+	# 물잠 ON: 마나와 무관하게 4방향 잠수 가능 (spec §2-8)
+	var v := Input.get_axis("fly_up", "move_down")
+	velocity.y = move_toward(velocity.y, v * SWIM_SPEED, ACCEL * delta)
+	if mana > 0.0:
+		mana = maxf(0.0, mana - SWIM_MANA_PER_SEC * delta)
+		mana_draining = true
+		drown_t = 0.0
+		state_name = "수영"
+	else:
+		# 익사: 마나 0이어도 부상 안 함 — 2초당 체력 1 소모 (spec §2-8)
+		_drown(delta)
+		state_name = "익사"
+
+func _drown(delta: float) -> void:
+	drowning = true
+	drown_t += delta
+	if drown_t >= DROWN_INTERVAL:
+		drown_t -= DROWN_INTERVAL
+		health -= 1
+		if health <= 0:
+			respawn()
 
 func _water_surface_y() -> float:
 	for r in water_rects:
@@ -286,26 +446,25 @@ func _water_surface_y() -> float:
 	return global_position.y
 
 func _normal_move(delta: float) -> void:
+	if _apply_hover(delta):
+		_hover_move(delta)
+		return
 	var dir := Input.get_axis("move_left", "move_right")
 	if dir != 0.0:
 		velocity.x = move_toward(velocity.x, dir * RUN_SPEED, ACCEL * delta)
 	else:
 		velocity.x = move_toward(velocity.x, 0.0, DECEL * delta)
 
-	var g := GRAVITY
-	var hovering := _apply_hover(delta)
-	if hovering:
-		g *= HOVER_GRAVITY_SCALE
-	velocity.y = minf(velocity.y + g * delta, FALL_MAX)
+	velocity.y = minf(velocity.y + GRAVITY * delta, FALL_MAX)
 
-	if not hovering and _glide_active():
+	if _glide_active():
 		if in_updraft:
 			velocity.y = GLIDE_UPDRAFT_RISE
 		else:
 			velocity.y = minf(velocity.y, GLIDE_FALL_MAX)
+		mana = maxf(0.0, mana - GLIDE_MANA_PER_SEC * delta)
+		mana_draining = true
 		state_name = "활공"
-	elif hovering:
-		state_name = "부유"
 	else:
 		state_name = "일반"
 
@@ -315,19 +474,32 @@ func _normal_move(delta: float) -> void:
 	_handle_jump()
 
 func _apply_hover(delta: float) -> bool:
-	# X 홀드 + 공중, 잔여 시간 소모 (착지 시 회복)
+	# X 홀드 + 공중: 마나 3/초가 유일한 제한 (시간 상한 없음, spec §2-3)
 	if not abilities["hover"] or is_on_floor():
 		return false
-	if not Input.is_action_pressed("cast") or hover_left <= 0.0:
+	if not Input.is_action_pressed("cast") or mana <= 0.0:
 		return false
-	hover_left -= delta
+	mana = maxf(0.0, mana - HOVER_MANA_PER_SEC * delta)
+	mana_draining = true
 	return true
 
+func _hover_move(delta: float) -> void:
+	# 그 자리·그 높이 고정(속도 급감쇠 →0) + 방향키 초당 40 미세 표류
+	var drift := Vector2(
+		Input.get_axis("move_left", "move_right"),
+		Input.get_axis("fly_up", "move_down"))
+	if drift.length() > 1.0:
+		drift = drift.normalized()
+	var target := drift * HOVER_DRIFT
+	velocity.x = move_toward(velocity.x, target.x, HOVER_DECEL * delta)
+	velocity.y = move_toward(velocity.y, target.y, HOVER_DECEL * delta)
+	state_name = "부유"
+
 func _glide_active() -> bool:
-	# Z 홀드 + 공중, 하강 중이거나 상승기류 위 (spec §2-7)
+	# ↓ 홀드 + 공중, 하강 중이거나 상승기류 위 (spec §2-7)
 	if not abilities["glide"] or is_on_floor():
 		return false
-	if not Input.is_action_pressed("jump"):
+	if not Input.is_action_pressed("move_down") or mana <= 0.0:
 		return false
 	return velocity.y > 0.0 or in_updraft
 
@@ -342,40 +514,18 @@ func _handle_jump() -> void:
 		return
 	if is_on_floor() or coyote > 0.0:
 		return
-	# 공중 Z: 얼음 발판이 이단점프보다 우선 (spec §2-6)
-	if abilities["ice_platform"] and not double_jump_used:
-		_spawn_ice_platform()
-		velocity.y = ICE_JUMP_VELOCITY
-		double_jump_used = true
-		jump_buf = 0.0
-	elif abilities["double_jump"] and not double_jump_used:
+	# 순수 공중 점프 — 얼음 발판과 완전 독립 (spec §2-4)
+	if abilities["double_jump"] and not double_jump_used:
+		if mana < DOUBLE_JUMP_MANA:
+			_flash_mana()
+			return
 		velocity.y = DOUBLE_JUMP_VELOCITY
 		double_jump_used = true
+		mana -= DOUBLE_JUMP_MANA
 		jump_buf = 0.0
 
-func _spawn_ice_platform() -> void:
-	var parent := get_parent()
-	if parent == null:
-		return
-	var plat := StaticBody2D.new()
-	var shape := CollisionShape2D.new()
-	var rs := RectangleShape2D.new()
-	rs.size = Vector2(72.0, 14.0)
-	shape.shape = rs
-	plat.add_child(shape)
-	var vis := Polygon2D.new()
-	vis.polygon = PackedVector2Array([
-		Vector2(-36.0, -7.0), Vector2(36.0, -7.0),
-		Vector2(36.0, 7.0), Vector2(-36.0, 7.0),
-	])
-	vis.color = Color(0.6, 0.85, 1.0, 0.55)
-	plat.add_child(vis)
-	parent.add_child(plat)
-	plat.global_position = global_position + Vector2(0.0, 24.0)
-	get_tree().create_timer(ICE_PLATFORM_LIFE).timeout.connect(plat.queue_free)
-
 func _regen_mana(delta: float) -> void:
-	if mana_draining:
+	if mana_draining or in_water:
 		return
 	var rate := MANA_REGEN_GROUND if is_on_floor() else MANA_REGEN_AIR
 	mana = minf(MANA_MAX, mana + rate * delta)
@@ -385,7 +535,13 @@ func _post_move() -> void:
 		respawn()
 
 func _draw() -> void:
-	# 임시 비주얼: 상태별 몸통색 + 지팡이
+	# 임시 비주얼: 상태별 몸통색 + 지팡이 + 비행 날개
+	if flying:
+		var wcol := Color(0.96, 0.96, 1.0, 0.9)
+		draw_colored_polygon(PackedVector2Array([
+			Vector2(-3.0, -6.0), Vector2(-24.0, -20.0), Vector2(-6.0, 8.0)]), wcol)
+		draw_colored_polygon(PackedVector2Array([
+			Vector2(3.0, -6.0), Vector2(24.0, -20.0), Vector2(6.0, 8.0)]), wcol)
 	var body_color := Color(0.93, 0.91, 0.86)
 	if flying:
 		body_color = Color(0.75, 0.6, 1.0)

@@ -60,6 +60,8 @@ func _setup_input() -> void:
 	_add_key(&"dash", KEY_C)
 	_add_key(&"dash", KEY_SHIFT)
 	_add_key(&"cast", KEY_X)
+	_add_key(&"ice_place", KEY_A)
+	_add_key(&"fly", KEY_D)
 	_add_key(&"fly_up", KEY_UP)
 	_add_key(&"move_down", KEY_DOWN)
 
@@ -83,8 +85,9 @@ func _build_room() -> void:
 	_build_hover(plat)
 	_build_double_jump(plat)
 	_build_dash(plat)
+	_build_diag_dash(plat)
 	_build_wall_run(wall, plat)
-	_build_ice_tower(plat)
+	_build_ice_course(plat)
 	_build_water(wall)
 	_build_glide_flight(plat)
 
@@ -106,6 +109,13 @@ func _build_dash(plat: Color) -> void:
 	_add_platform(Rect2(2300, 1300, 200, 16), plat)
 	_add_sign(Vector2(1280, 1230), "대시(1·2): 240·380 갭\n380은 공중 대시")
 
+func _build_diag_dash(plat: Color) -> void:
+	# ② 대각 대시 검증: 하단 발판에서 45° 우상단 선반 (dx160·dy-160)
+	_add_platform(Rect2(1990, 1300, 120, 16), plat)
+	_add_platform(Rect2(2150, 1140, 120, 16), plat)
+	_add_reward(Vector2(2210, 1120))
+	_add_sign(Vector2(1960, 1210), "대각 대시(2): 공중 ↗+대시\n45° 상단 선반")
+
 func _build_wall_run(wall: Color, plat: Color) -> void:
 	# ③ 벽달리기: 높이 500·폭 140 수직 통로
 	_add_platform(Rect2(2600, 1000, 20, 500), wall)
@@ -114,22 +124,23 @@ func _build_wall_run(wall: Color, plat: Color) -> void:
 	_add_reward(Vector2(2860, 980))
 	_add_sign(Vector2(2560, 920), "벽달리기(5): 벽 향해+위\n좌우벽 교차로 상승")
 
-func _build_ice_tower(plat: Color) -> void:
-	# ④ 얼음 발판 고탑: 연속 발판으로 400px 상승
-	_add_platform(Rect2(3020, 1080, 200, 16), plat)
-	_add_reward(Vector2(3120, 1060))
-	_add_sign(Vector2(3000, 1010), "얼음 발판(6): 공중 Z 반복\n420px 상승")
+func _build_ice_course(plat: Color) -> void:
+	# ④ 얼음 발판 조합 코스: A로 설치 → 이단점프로 상단 선반 도달
+	_add_platform(Rect2(2990, 1200, 170, 16), plat)
+	_add_platform(Rect2(3060, 960, 170, 16), plat)
+	_add_reward(Vector2(3145, 940))
+	_add_sign(Vector2(2960, 1120), "얼음 발판(6): A로 발판을 놓고,\n이단점프로 넘어가라")
 
 func _build_water(wall: Color) -> void:
-	# ⑥ 물 웅덩이: 깊이 300, 바닥에 보상
-	_add_platform(Rect2(3260, 1800, 400, 60), wall)
-	_add_platform(Rect2(3260, 1500, 20, 300), wall)
-	_add_platform(Rect2(3640, 1500, 20, 300), wall)
-	var water := Rect2(3280, 1500, 360, 300)
+	# ⑥ 깊은 물 웅덩이: 깊이 360 (익사 경고 확인 가능), 바닥에 보상
+	_add_platform(Rect2(3260, 1860, 400, 60), wall)
+	_add_platform(Rect2(3260, 1500, 20, 360), wall)
+	_add_platform(Rect2(3640, 1500, 20, 360), wall)
+	var water := Rect2(3280, 1500, 360, 360)
 	_add_zone(water, Color(0.2, 0.45, 0.9, 0.35))
 	_water_rects.append(water)
-	_add_reward(Vector2(3460, 1770))
-	_add_sign(Vector2(3300, 1420), "물잠(8): 물에서 방향키\n마나 8/s, 0이면 부상")
+	_add_reward(Vector2(3460, 1830))
+	_add_sign(Vector2(3300, 1420), "물잠(8): 물에서 방향키·마나 8/s\n마나 0=익사, 2초당 체력 1")
 
 func _build_glide_flight(plat: Color) -> void:
 	# ⑤ 활공 코스 + 상승기류 / ⑦ 비행 개활지 + 높은 목표
@@ -141,8 +152,8 @@ func _build_glide_flight(plat: Color) -> void:
 	_add_reward(Vector2(3970, 1100))
 	_add_platform(Rect2(4000, 420, 150, 16), plat)
 	_add_reward(Vector2(4075, 400))
-	_add_sign(Vector2(3660, 620), "활공(7): Z 홀드 낙하감속\n초록 기둥=상승기류")
-	_add_sign(Vector2(3980, 330), "비행(9): 공중 ↑ 홀드\n마나 12/s, 높은 목표")
+	_add_sign(Vector2(3660, 620), "활공(7): 공중 ↓ 홀드 낙하감속\n초록 기둥=상승기류")
+	_add_sign(Vector2(3980, 330), "비행(9): D 발동 · 6초 자유비행\n마나 45 선불 · 쿨 12초")
 
 func _add_platform(rect: Rect2, color: Color) -> void:
 	var body := StaticBody2D.new()
