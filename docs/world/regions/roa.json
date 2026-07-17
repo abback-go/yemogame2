@@ -10,19 +10,19 @@
   "region_state_change": "수레 레일 재가동 — 광산↔폐역 교차로↔사막 앞 폐역이 이어지는 수평 패스트트래블 개통. 역장이 처음으로 제복을 다려 입는다.",
   "unique_enemy": "가도 뜨내기 — 버려진 짐수레를 뒤지는 스캐빈저형. 싸움보다 도망이 빠르다.",
   "local_loops": [
-    "절벽 밧줄 샛길(벽차기 질주)로 남쪽 가도에 내려가고, 거울의 도시 남문(내부 개방 후)→가도로 되돌아오는 순환",
+    "절벽 밧줄 샛길(벽달리기)로 남쪽 가도에 내려가고, 거울의 도시 남문(내부 개방 후)→가도로 되돌아오는 순환",
     "레일 재가동 후 서쪽 팔 전체가 패스트트래블 순환에 편입(월드 루프 ①·⑤의 연결로)"
   ],
   "rooms": [
     {"id":"roa_mine_trail","name_kr":"광산 오솔길","concept":"수레 바큇자국이 두 줄로 팬 오솔길 — 광산의 지상 문과 가도를 잇는다.","type":"transit","subzone":"서쪽 팔","gx":6,"gy":1,"size":"M","flags":[],"exits":[{"to":"min_camp_gate","gate":"none","dir":"R"},{"to":"roa_rail_junction","gate":"none","dir":"L"}]},
     {"id":"roa_rail_junction","name_kr":"폐역 교차로","concept":"거점 — 늙은 역장이 홀로 지키는 큰 폐역. 대합실 난로와 백 년 치 시각표. 레일 패스트트래블의 심장.","type":"bench","subzone":"서쪽 팔","gx":4,"gy":1,"size":"L","flags":["bench","rail","warm","map"],"exits":[{"to":"roa_mine_trail","gate":"none","dir":"R"},{"to":"roa_knight_gate","gate":"none","dir":"U"},{"to":"roa_west_run","gate":"none","dir":"L"},{"to":"roa_cliff_drop","gate":"none","dir":"D"}]},
-    {"id":"roa_knight_gate","name_kr":"무너진 벼랑 구간","concept":"기사단 마을로 가는 가도가 벼랑째 무너진 곳 — 벽을 달릴 수 있다면 지나갈 수 있다.","type":"field","subzone":"서쪽 팔","gx":4,"gy":0,"size":"M","flags":[],"exits":[{"to":"roa_rail_junction","gate":"none","dir":"D"},{"to":"kni_road_west","gate":"벽차기 질주","dir":"L"}]},
+    {"id":"roa_knight_gate","name_kr":"무너진 벼랑 구간","concept":"기사단 마을로 가는 가도가 벼랑째 무너진 곳 — 벽을 달릴 수 있다면 지나갈 수 있다.","type":"field","subzone":"서쪽 팔","gx":4,"gy":0,"size":"M","flags":[],"exits":[{"to":"roa_rail_junction","gate":"none","dir":"D"},{"to":"kni_road_west","gate":"벽달리기","dir":"L"}]},
     {"id":"roa_west_run","name_kr":"서쪽 가도","concept":"레일과 가도가 나란히 달리는 긴 직선 — 지평선 끝에 사막의 흰 빛이 걸려 있다.","type":"field","subzone":"서쪽 팔","gx":2,"gy":1,"size":"L","flags":[],"exits":[{"to":"roa_rail_junction","gate":"none","dir":"R"},{"to":"roa_rail_westend","gate":"none","dir":"L"},{"to":"roa_old_camp","gate":"비밀","dir":"U"}]},
     {"id":"roa_old_camp","name_kr":"옛 상단 야영지","concept":"가도 전성기의 야영 터 — 모닥불 자리와 상단의 장부. 세계 물류가 어떻게 돌았는지의 기록.","type":"secret","subzone":"서쪽 팔","gx":2,"gy":0,"size":"S","flags":[],"exits":[{"to":"roa_west_run","gate":"none","dir":"D"}]},
     {"id":"roa_rail_westend","name_kr":"사막 앞 폐역","concept":"레일의 서쪽 종점 — 모래가 플랫폼을 반쯤 삼켰다. 재가동되면 사막의 관문이 코앞이다.","type":"transit","subzone":"서쪽 팔","gx":1,"gy":1,"size":"M","flags":["rail"],"exits":[{"to":"roa_west_run","gate":"none","dir":"R"},{"to":"roa_desert_west","gate":"none","dir":"L"}]},
-    {"id":"roa_desert_west","name_kr":"사막 관문 앞","concept":"거울의 도시 이중문 앞 모래 언덕 — 허공에 발판을 새길 수 있어야 문루에 오른다.","type":"transit","subzone":"서쪽 팔","gx":0,"gy":1,"size":"M","flags":[],"exits":[{"to":"roa_rail_westend","gate":"none","dir":"R"},{"to":"mir_gate_east","gate":"발판 각인","dir":"L"}]},
-    {"id":"roa_cliff_drop","name_kr":"절벽 밧줄 샛길","concept":"옛 밀수꾼들이 절벽에 걸어 둔 샛길 — 벽을 달릴 줄 아는 자만 오르내린다.","type":"transit","subzone":"남쪽 팔","gx":4,"gy":2,"size":"S","flags":[],"exits":[{"to":"roa_rail_junction","gate":"none","dir":"U"},{"to":"roa_south_high","gate":"벽차기 질주","dir":"D"}]},
-    {"id":"roa_south_high","name_kr":"남쪽 가도 상단","concept":"절벽 허리를 감아 도는 가도 — 위로는 거울의 도시 남문, 아래로는 가마 연기가 보인다.","type":"field","subzone":"남쪽 팔","gx":4,"gy":3,"size":"M","flags":[],"exits":[{"to":"roa_cliff_drop","gate":"벽차기 질주","dir":"U"},{"to":"roa_south_low","gate":"none","dir":"D"},{"to":"mir_south_gate","gate":"상태:남문 개방","dir":"L"}]},
+    {"id":"roa_desert_west","name_kr":"사막 관문 앞","concept":"거울의 도시 이중문 앞 모래 언덕 — 허공에 얼음 발판을 놓을 수 있어야 문루에 오른다.","type":"transit","subzone":"서쪽 팔","gx":0,"gy":1,"size":"M","flags":[],"exits":[{"to":"roa_rail_westend","gate":"none","dir":"R"},{"to":"mir_gate_east","gate":"얼음 발판","dir":"L"}]},
+    {"id":"roa_cliff_drop","name_kr":"절벽 밧줄 샛길","concept":"옛 밀수꾼들이 절벽에 걸어 둔 샛길 — 벽을 달릴 줄 아는 자만 오르내린다.","type":"transit","subzone":"남쪽 팔","gx":4,"gy":2,"size":"S","flags":[],"exits":[{"to":"roa_rail_junction","gate":"none","dir":"U"},{"to":"roa_south_high","gate":"벽달리기","dir":"D"}]},
+    {"id":"roa_south_high","name_kr":"남쪽 가도 상단","concept":"절벽 허리를 감아 도는 가도 — 위로는 거울의 도시 남문, 아래로는 가마 연기가 보인다.","type":"field","subzone":"남쪽 팔","gx":4,"gy":3,"size":"M","flags":[],"exits":[{"to":"roa_cliff_drop","gate":"벽달리기","dir":"U"},{"to":"roa_south_low","gate":"none","dir":"D"},{"to":"mir_south_gate","gate":"상태:남문 개방","dir":"L"}]},
     {"id":"roa_south_low","name_kr":"남쪽 가도 하단","concept":"가마 마을의 도기 수레가 쉬어 가는 굽잇길 — 깨진 도기 조각이 이정표처럼 박혀 있다.","type":"field","subzone":"남쪽 팔","gx":4,"gy":4,"size":"M","flags":[],"exits":[{"to":"roa_south_high","gate":"none","dir":"U"},{"to":"kil_south_gate","gate":"none","dir":"R"}]}
   ]
 }

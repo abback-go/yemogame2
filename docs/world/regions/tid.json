@@ -2,7 +2,7 @@
   "region_id": "tid",
   "name_kr": "조수 도시",
   "element": "없음",
-  "identity": "밀물과 썰물로 길이 바뀌는 항구 도시 — 같은 골목이 물때에 따라 다른 지도가 된다. 발판 각인 연계 소지역.",
+  "identity": "밀물과 썰물로 길이 바뀌는 항구 도시 — 같은 골목이 물때에 따라 다른 지도가 된다. 얼음 발판 연계 소지역.",
   "palette": "젖은 목재의 짙은 갈색 + 바다의 청록 + 등대의 흰색과 주황",
   "music": "뱃노래 풍의 아코디언 — 밀물 때는 잔잔하게, 썰물 때는 경쾌하게 바뀐다",
   "region_magic": [],
@@ -15,14 +15,14 @@
   ],
   "rooms": [
     {"id":"tid_river_west","name_kr":"강 하구 나루","concept":"온천의 김이 채 가시지 않은 강물이 바다와 만나는 나루 — 갈매기가 먼저 안다.","type":"transit","subzone":"항구","gx":0,"gy":2,"size":"M","flags":[],"exits":[{"to":"spr_river_east","gate":"none","dir":"L"},{"to":"tid_quay","gate":"none","dir":"R"}]},
-    {"id":"tid_quay","name_kr":"부두","concept":"도시의 현관 — 지역 지도 입수처. 밧줄과 생선 궤짝, 물때표가 걸린 게시판.","type":"town","subzone":"항구","gx":2,"gy":2,"size":"L","flags":["map","shop"],"exits":[{"to":"tid_river_west","gate":"none","dir":"L"},{"to":"tid_market","gate":"none","dir":"R"},{"to":"tid_lighthouse_base","gate":"none","dir":"U"},{"to":"tid_lower_town","gate":"발판 각인","dir":"D"}]},
+    {"id":"tid_quay","name_kr":"부두","concept":"도시의 현관 — 지역 지도 입수처. 밧줄과 생선 궤짝, 물때표가 걸린 게시판.","type":"town","subzone":"항구","gx":2,"gy":2,"size":"L","flags":["map","shop"],"exits":[{"to":"tid_river_west","gate":"none","dir":"L"},{"to":"tid_market","gate":"none","dir":"R"},{"to":"tid_lighthouse_base","gate":"none","dir":"U"},{"to":"tid_lower_town","gate":"얼음 발판","dir":"D"}]},
     {"id":"tid_market","name_kr":"생선 골목 시장","concept":"경매 소리로 시끄러운 시장 — 물때에 따라 파는 것이 달라진다.","type":"town","subzone":"항구","gx":3,"gy":2,"size":"M","flags":["shop"],"exits":[{"to":"tid_quay","gate":"none","dir":"L"},{"to":"tid_moon_site","gate":"none","dir":"R"}]},
     {"id":"tid_moon_site","name_kr":"보름 물때 빈터","concept":"보름밤 만조 때만 물 위로 드러나는 판판한 터 — 달시장의 소문이 도는 곳.","type":"event","subzone":"항구","gx":4,"gy":2,"size":"S","flags":["moon_site"],"exits":[{"to":"tid_market","gate":"none","dir":"L"},{"to":"mkt_gate_tid","gate":"상태:보름밤","dir":"R"}]},
     {"id":"tid_lighthouse_base","name_kr":"등대 기단","concept":"거점 — 등대지기의 부엌이 딸린 기단. 벽에 물때 달력이 백 년 치 걸려 있다.","type":"bench","subzone":"등대","gx":2,"gy":1,"size":"M","flags":["bench","warm"],"exits":[{"to":"tid_quay","gate":"none","dir":"D"},{"to":"tid_lighthouse_top","gate":"none","dir":"U"}]},
     {"id":"tid_lighthouse_top","name_kr":"등대 꼭대기","concept":"고장 난 조수 시계가 있는 꼭대기 — 수리하면 여기서 물때를 전환한다(지역 기믹의 심장).","type":"event","subzone":"등대","gx":2,"gy":0,"size":"M","flags":[],"exits":[{"to":"tid_lighthouse_base","gate":"none","dir":"D"}]},
-    {"id":"tid_lower_town","name_kr":"물에 잠긴 하층","concept":"밀물이면 지붕만 남는 옛 시가 — 썰물이면 골목이, 밀물이면 뱃길이 된다.","type":"field","subzone":"하층","gx":2,"gy":4,"size":"L","flags":[],"exits":[{"to":"tid_quay","gate":"발판 각인","dir":"U","note":"잠긴 지붕들을 발판 각인으로 건너 내려간다 — 하층 개방 게이트"},{"to":"tid_flooded_lane","gate":"상태:썰물","dir":"D"},{"to":"tid_cliff_north","gate":"none","dir":"R"}]},
+    {"id":"tid_lower_town","name_kr":"물에 잠긴 하층","concept":"밀물이면 지붕만 남는 옛 시가 — 썰물이면 골목이, 밀물이면 뱃길이 된다.","type":"field","subzone":"하층","gx":2,"gy":4,"size":"L","flags":[],"exits":[{"to":"tid_quay","gate":"얼음 발판","dir":"U","note":"잠긴 지붕들을 얼음 발판으로 건너 내려간다 — 하층 개방 게이트"},{"to":"tid_flooded_lane","gate":"상태:썰물","dir":"D"},{"to":"tid_cliff_north","gate":"none","dir":"R"}]},
     {"id":"tid_flooded_lane","name_kr":"잠긴 골목","concept":"미니보스 — 썰물 골목의 주인, 따개비 집게 큰 놈. 물때가 바뀌면 싸움의 지형도 바뀐다.","type":"miniboss","subzone":"하층","gx":2,"gy":5,"size":"L","flags":[],"exits":[{"to":"tid_lower_town","gate":"none","dir":"U"},{"to":"tid_lowtide_well","gate":"상태:썰물","dir":"D"}]},
     {"id":"tid_lowtide_well","name_kr":"썰물 수직갱","concept":"썰물 때만 아가리를 드러내는 우물 모양 수직갱 — 두레박 사슬이 어둠 속으로 이어진다.","type":"transit","subzone":"하층","gx":2,"gy":6,"size":"M","flags":[],"exits":[{"to":"tid_flooded_lane","gate":"상태:썰물","dir":"U"},{"to":"sun_upper_gate","gate":"상태:썰물","dir":"D"}]},
-    {"id":"tid_cliff_north","name_kr":"북쪽 벼랑길","concept":"바닷바람이 벼랑을 때리는 북행 길 — 고원의 목장까지, 바람을 타는 자만 오른다.","type":"transit","subzone":"하층","gx":4,"gy":4,"size":"M","flags":[],"exits":[{"to":"tid_lower_town","gate":"none","dir":"L"},{"to":"lig_south_trail","gate":"바람 타기","dir":"U"}]}
+    {"id":"tid_cliff_north","name_kr":"북쪽 벼랑길","concept":"바닷바람이 벼랑을 때리는 북행 길 — 고원의 목장까지, 활공으로 기류를 타는 자만 오른다.","type":"transit","subzone":"하층","gx":4,"gy":4,"size":"M","flags":[],"exits":[{"to":"tid_lower_town","gate":"none","dir":"L"},{"to":"lig_south_trail","gate":"활공","dir":"U"}]}
   ]
 }

@@ -1,6 +1,6 @@
 extends CharacterBody2D
 ## 파이프라인 실험용 플레이어 — 수치는 HTML 프로토타입 v0.2에서 이식.
-## 시작 킷 중 달리기 / 점프(코요테·선입력·컷) / 지상 질풍보만 구현.
+## 시작 킷 중 달리기 / 점프(코요테·선입력·컷) / 대시만 구현.
 
 const RUN_SPEED := 280.0
 const ACCEL := 2600.0
@@ -38,7 +38,7 @@ func _physics_process(delta: float) -> void:
 		jump_buf = JUMP_BUFFER
 
 	if dash_t > 0.0:
-		# 질풍보 중: 수평 고정, 중력 무시 (프로토타입과 동일)
+		# 대시 중: 수평 고정, 중력 무시 (프로토타입과 동일)
 		dash_t -= delta
 		velocity.x = face * DASH_SPEED
 		velocity.y = 0.0

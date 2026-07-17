@@ -46,7 +46,7 @@ func _build_room() -> void:
 	_add_platform(Rect2(500, 890, 200, 16), plat)
 	_add_platform(Rect2(820, 780, 200, 16), plat)
 	_add_platform(Rect2(500, 670, 200, 16), plat)
-	# 질풍보 거리 테스트: 같은 높이, 240px 갭 (달리기 점프로는 애매, 질풍보로 쾌적)
+	# 대시 거리 테스트: 같은 높이, 240px 갭 (달리기 점프로는 애매, 대시로 쾌적)
 	_add_platform(Rect2(1150, 670, 180, 16), plat)
 	_add_platform(Rect2(1570, 670, 180, 16), plat)
 
@@ -107,7 +107,7 @@ func _setup_camera(player: CharacterBody2D) -> void:
 func _setup_ui() -> void:
 	var ui := CanvasLayer.new()
 	var label := Label.new()
-	label.text = "←→ 이동   Z/Space 점프   C/Shift 질풍보\n파이프라인 실험 — 조작 수치는 HTML 프로토타입 이식"
+	label.text = "←→ 이동   Z/Space 점프   C/Shift 대시\n파이프라인 실험 — 조작 수치는 HTML 프로토타입 이식"
 	label.position = Vector2(16, 12)
 	var f := SystemFont.new()
 	f.font_names = PackedStringArray(["Malgun Gothic", "맑은 고딕", "NanumGothic", "Noto Sans KR"])

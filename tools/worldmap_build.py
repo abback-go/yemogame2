@@ -26,13 +26,13 @@ ORIGINS = {
 CELL = 30
 
 TECH_STAGES = [
-  [],  # 0단계: 시작 킷(지상 질풍보·영창 부유)만
-  ['공중 질풍보'],
-  ['벽차기 질주'],
-  ['발판 각인'],
-  ['바람 타기'],
+  [],  # 0단계: 시작 킷(대시·부유)만
+  ['이단점프'],
+  ['벽달리기'],
+  ['얼음 발판'],
+  ['활공'],
   ['물잠'],
-  ['기류 승월'],
+  ['비행'],
 ]
 # 상태/열쇠의 해금 출처: 그 방에 도달하면 해당 게이트가 열린다
 UNLOCK_SOURCES = {
@@ -282,7 +282,7 @@ def main():
     md.append('| 단계 | 해금 이동술 | 새로 열림 | 누적 도달 |')
     md.append('|---|---|---|---|')
     for s, new, tot in report:
-        md.append(f"| {s} | {'+'.join(TECH_STAGES[s]) or '시작 킷(지상 질풍보·영창 부유)'} | +{new} | {tot} |")
+        md.append(f"| {s} | {'+'.join(TECH_STAGES[s]) or '시작 킷(대시·부유)'} | +{new} | {tot} |")
     md.append('')
     md.append('## 지역별 상세\n')
     for rid in REGION_ORDER:
