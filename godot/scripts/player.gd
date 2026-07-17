@@ -262,9 +262,7 @@ func _recover_on_contact() -> void:
 		wall_running = false
 		hovering = false
 		hover_cd = 0.0
-	# 벽 접촉: 공중 대시만 회복 (spec §2-2)
-	if is_on_wall():
-		air_dash_used = false
+	# v2.1: 벽 접촉 대시 회복 폐지 — 회복은 착지로만 (spec §2-2, 대시 사다리 봉쇄)
 
 func _flash_mana() -> void:
 	# 마나 부족 피드백: HUD 마나 바 깜빡임 (spec §2 공통 원칙)
