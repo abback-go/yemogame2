@@ -269,9 +269,14 @@ def main():
 
     # ---------- docs/world-map.md ----------
     md = []
-    md.append('# 월드맵 마스터 문서 — 대협곡 세계 (v1, 2026-07-15)\n')
-    md.append('> 생성원: `docs/world/regions/*.json` (지역별 원본) → `tools/worldmap_build.py`가 검증·병합.')
-    md.append('> 수정은 지역 JSON에서 하고 스크립트를 다시 돌릴 것. 이 문서와 `godot/data/world_map.json`은 산출물.\n')
+    md.append('# 월드맵 마스터 문서 — 대협곡 세계\n')
+    md.append('> 생성원: `docs/world/overview.md`(원칙 — 손으로 관리) + `docs/world/regions/*.json`(지역별 원본) → `tools/worldmap_build.py`가 검증·병합.')
+    md.append('> 수정은 원본에서 하고 스크립트를 다시 돌릴 것. 이 문서와 `godot/data/world_map.json`은 산출물.\n')
+    ov_path = os.path.join(ROOT, 'docs', 'world', 'overview.md')
+    if os.path.isfile(ov_path):
+        with open(ov_path, encoding='utf-8') as f:
+            md.append(f.read())
+        md.append('\n---\n')
     md.append(f"**규모: {len(regions)}개 지역 / {len(rooms)}방** (기획서 §5.7 예산 185~260의 최대 확장판 — 컷 라인: 종의 계곡 24방 + 비밀 일부)\n")
     md.append('## 진행 단계별 개방 (검증 결과)\n')
     md.append('| 단계 | 해금 이동술 | 새로 열림 | 누적 도달 |')
