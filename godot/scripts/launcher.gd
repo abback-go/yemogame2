@@ -20,7 +20,8 @@ func _ready() -> void:
 	menu.text = "[1]  조작감 테스트 방  (이동 마법 9종 토글)\n\n" + \
 		"[2]  월드맵 뷰어  (17개 지역 · 295방 설계도)\n\n" + \
 		"[3]  전투 아레나  (v3 · 무속성 칼 + 각인 2슬롯 · 이동 놀이터)\n\n" + \
-		"[4]  튜토리얼 (능력 획득)  (오브로 대시·이단점프·벽달리기 · 5방)"
+		"[4]  튜토리얼 (능력 획득)  (오브로 대시·이단점프·벽달리기 · 5방)\n\n" + \
+		"[5]  학교 (심장부 12방 · 그레이박스)  (안전지대 · 거점 · NPC · 결계 돔 전투)"
 	layer.add_child(menu)
 	var foot := Label.new()
 	foot.text = "숫자 키로 선택"
@@ -44,3 +45,7 @@ func _unhandled_input(event: InputEvent) -> void:
 				# 첫 진입 초기화: 시작 방·풀피/풀마나·빈 각인·방문 기록 리셋 후 로드.
 				GameState.reset_slice()
 				get_tree().change_scene_to_file("res://scenes/slice.tscn")
+			KEY_5, KEY_KP_5:
+				# 학교 그레이박스 진입: 정문 마당·풀피/풀마나·빈 각인·방문 기록 리셋 후 로드.
+				GameState.reset_school()
+				get_tree().change_scene_to_file("res://scenes/school.tscn")

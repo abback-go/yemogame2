@@ -25,6 +25,20 @@ static var respawn_room := "hub"  # 거점(bench) 세이브 방 — 사망 시 �
 static var abilities_granted: Array[String] = []
 static var orbs_taken: Array[String] = []
 
+# ── 학교 심장부 그레이박스 크로스-방 지속 상태 (school_room.gd 전용) ──
+# 튜토리얼 slice 상태(위)와 완전히 분리한 병렬 필드다. 런처 [5] 진입 시 reset_school()로
+# 리셋되며, 방 재로드(get_tree().reload_current_scene())로 방을 넘어 유지할 값(현재 방·입장
+# 문·체력/마나/산소·각인·방문 기록·거점 방)만 여기 둔다. 학교는 안전지대·전 이동기 ON이라
+# 능력 획득(abilities_granted/orbs_taken) 개념이 없다.
+static var school_room := "sch_plaza"  # 현재 학교 방 id (SchoolData 의 키)
+static var school_entry := "start"  # 입장 문 id (스폰 위치 결정)
+static var school_mana := 100.0
+static var school_health := 5
+static var school_oxygen := 100.0
+static var school_skill_slots: Array[String] = ["", ""]  # 각인 2슬롯 (방 넘어 유지)
+static var visited_school: Array[String] = []  # 방문한 학교 방 id (중복 없이, 발견 N/12)
+static var school_respawn_room := "sch_dorm_room"  # 거점(내 방) — 사망 시 리스폰
+
 
 static func reset_slice() -> void:
 	# 런처 [4] 첫 진입 초기화 — 시작 방·풀피/풀마나·빈 각인·방문·능력 획득 리셋.
@@ -38,3 +52,15 @@ static func reset_slice() -> void:
 	respawn_room = "hub"
 	abilities_granted = []
 	orbs_taken = []
+
+
+static func reset_school() -> void:
+	# 런처 [5] 첫 진입 초기화 — 정문 마당·풀피/풀마나·빈 각인·방문 기록·거점 리셋.
+	school_room = "sch_plaza"
+	school_entry = "start"
+	school_mana = 100.0
+	school_health = 5
+	school_oxygen = 100.0
+	school_skill_slots = ["", ""]
+	visited_school = []
+	school_respawn_room = "sch_dorm_room"
