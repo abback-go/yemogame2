@@ -7,9 +7,13 @@ const PlayerScript := preload("res://scripts/player.gd")
 const KEY_GUIDE := \
 	"←→ 이동  Z/Space 점프  C/Shift 대시  X 부유(홀드)  ↓ 활공(홀드)\n" + \
 	"A 얼음 발판  D 비행 발동   1~9 능력 토글   F 마나 리필   R 리스폰   Esc 메뉴"
+const COMBAT_GUIDE := \
+	"←→ 이동  Z 점프  C 대시    J 얼음 창 3타  K 관통 서리창  L 빙정 폭발\n" + \
+	"F 마나 리필   R 리스폰   Esc 메뉴"
 const BAR_W := 200.0
 
 var player: CharacterBody2D = null
+var combat_mode := false
 var _font: SystemFont
 var _rows: Array[Label] = []
 var _masks: Array[ColorRect] = []
@@ -26,6 +30,12 @@ var _state: Label
 var _drown: Label
 var _toast: Label
 var _toast_t := 0.0
+var _abil_header: Label
+var _guide: Label
+var _skill1_lbl: Label
+var _skill2_lbl: Label
+var _combo_lbl: Label
+var _combat_guide: Label
 
 func _ready() -> void:
 	_font = SystemFont.new()
@@ -36,12 +46,32 @@ func _ready() -> void:
 func bind(p: CharacterBody2D) -> void:
 	player = p
 
+func set_combat_mode(on: bool) -> void:
+	# 전투 아레나: 이동 전용 표시를 숨기고 스킬 쿨/콤보/전투 키 안내로 전환
+	combat_mode = on
+	_apply_mode()
+
+func _apply_mode() -> void:
+	var c := combat_mode
+	_abil_header.visible = not c
+	for r in _rows:
+		r.visible = not c
+	_ice_text.visible = not c
+	_hover_text.visible = not c
+	_fly_text.visible = not c
+	_guide.visible = not c
+	_skill1_lbl.visible = c
+	_skill2_lbl.visible = c
+	_combo_lbl.visible = c
+	_combat_guide.visible = c
+
 func show_toast(text: String) -> void:
 	_toast.text = text
 	_toast_t = 1.6
 
 func _build() -> void:
-	add_child(_mklabel("능력 (숫자키 토글)", Vector2(16.0, 12.0), 16, Color(1, 1, 1)))
+	_abil_header = _mklabel("능력 (숫자키 토글)", Vector2(16.0, 12.0), 16, Color(1, 1, 1))
+	add_child(_abil_header)
 	var keys: Array = PlayerScript.ABILITY_KEYS
 	for i in keys.size():
 		var lb := _mklabel("", Vector2(16.0, 40.0 + float(i) * 22.0), 15, Color(1, 1, 1))
@@ -92,14 +122,30 @@ func _build_status(by: float) -> void:
 	add_child(_fly_text)
 	_state = _mklabel("", Vector2(16.0, by + 176.0), 14, Color(0.8, 0.85, 0.95))
 	add_child(_state)
-	var guide := _mklabel(KEY_GUIDE, Vector2(16.0, 486.0), 13, Color(0.6, 0.65, 0.75))
-	add_child(guide)
+	_guide = _mklabel(KEY_GUIDE, Vector2(16.0, 486.0), 13, Color(0.6, 0.65, 0.75))
+	add_child(_guide)
+	_build_combat(by)
 	_drown = _mklabel("", Vector2(300.0, 84.0), 26, Color(1.0, 0.25, 0.2))
 	_drown.visible = false
 	add_child(_drown)
 	_toast = _mklabel("", Vector2(300.0, 30.0), 22, Color(1.0, 0.9, 0.4))
 	_toast.visible = false
 	add_child(_toast)
+
+func _build_combat(by: float) -> void:
+	# 전투 표시(기본 숨김) — 이동 슬롯 재사용, set_combat_mode로 전환
+	_skill1_lbl = _mklabel("", Vector2(16.0, by + 110.0), 15, Color(0.7, 0.9, 1.0))
+	add_child(_skill1_lbl)
+	_skill2_lbl = _mklabel("", Vector2(16.0, by + 134.0), 15, Color(0.75, 0.85, 1.0))
+	add_child(_skill2_lbl)
+	_combo_lbl = _mklabel("", Vector2(16.0, by + 162.0), 17, Color(1.0, 0.95, 0.7))
+	add_child(_combo_lbl)
+	_combat_guide = _mklabel(COMBAT_GUIDE, Vector2(16.0, 506.0), 13, Color(0.6, 0.7, 0.82))
+	add_child(_combat_guide)
+	_skill1_lbl.visible = false
+	_skill2_lbl.visible = false
+	_combo_lbl.visible = false
+	_combat_guide.visible = false
 
 func _mklabel(text: String, pos: Vector2, size: int, col: Color) -> Label:
 	var lb := Label.new()
@@ -114,10 +160,13 @@ func _process(delta: float) -> void:
 	if player == null:
 		return
 	_update_toast(delta)
-	_update_abilities()
+	if not combat_mode:
+		_update_abilities()
 	_update_mana()
 	_update_oxygen()
 	_update_status()
+	if combat_mode:
+		_update_combat()
 
 func _update_toast(delta: float) -> void:
 	if _toast_t > 0.0:
@@ -151,6 +200,11 @@ func _update_mana() -> void:
 	_mana_text.text = "마나  %d / 100" % int(m)
 
 func _update_oxygen() -> void:
+	if combat_mode:
+		_oxygen_text.visible = false
+		_oxygen_bg.visible = false
+		_oxygen_fill.visible = false
+		return
 	var o: float = player.oxygen
 	var omax: float = PlayerScript.OXYGEN_MAX
 	var show: bool = player.in_water or o < omax
@@ -190,3 +244,23 @@ func _update_status() -> void:
 		_drown.text = "익사! 물 밖으로  (체력 %d)" % hp
 	else:
 		_drown.visible = false
+
+func _update_combat() -> void:
+	# 스킬 2종 쿨다운 + 콤보 카운터 (마나 바·체력 마스크는 공용 재사용)
+	var dim := Color(0.5, 0.6, 0.7)
+	if player.skill1_cd > 0.0:
+		_skill1_lbl.text = "K  관통 서리창   쿨 %.1f초" % player.skill1_cd
+		_skill1_lbl.add_theme_color_override("font_color", dim)
+	else:
+		_skill1_lbl.text = "K  관통 서리창   준비"
+		_skill1_lbl.add_theme_color_override("font_color", Color(0.7, 0.9, 1.0))
+	if player.skill2_cd > 0.0:
+		_skill2_lbl.text = "L  빙정 폭발   쿨 %.1f초" % player.skill2_cd
+		_skill2_lbl.add_theme_color_override("font_color", dim)
+	else:
+		_skill2_lbl.text = "L  빙정 폭발   준비"
+		_skill2_lbl.add_theme_color_override("font_color", Color(0.75, 0.85, 1.0))
+	var combo: int = player.attack_step
+	if combo == 0 and player.combo_reset_t > 0.0:
+		combo = player.combo_index
+	_combo_lbl.text = "콤보  x%d" % combo if combo > 0 else "J  얼음 창 3타 콤보"

@@ -9,8 +9,16 @@ const CAM_BOTTOM := 1860.0
 const PlayerScript := preload("res://scripts/player.gd")
 const HudScript := preload("res://scripts/debug_hud.gd")
 
+@export_group("주스 (이동 방 리트로핏 · combat-spec §6)")
+@export var shake_max_offset := 12.0
+@export var trauma_decay := 1.8
+@export var lookahead_dist := 40.0
+@export var lookahead_speed := 5.0
+@export var hitstop_scale := 0.0
+
 var _player: CharacterBody2D
 var _hud: CanvasLayer
+var _juice: Juice
 var _font: SystemFont
 var _water_rects: Array[Rect2] = []
 var _updraft_rects: Array[Rect2] = []
@@ -28,7 +36,15 @@ func _ready() -> void:
 	# 산소통 참조 직접 전달 (경로 조회 없이, set_zones와 동일 원칙, spec §2.1-8)
 	if _air_bubble != null:
 		_player.register_air_bubble(_air_bubble)
-	_setup_camera(_player)
+	var cam := _setup_camera(_player)
+	# 이동 방에도 주스 리트로핏(룩어헤드·착지/대시 먼지·흔들림, §6)
+	_juice = Juice.new()
+	_juice.configure(
+		shake_max_offset, trauma_decay, lookahead_dist, lookahead_speed, hitstop_scale)
+	_juice.bind_camera(cam)
+	_juice.bind_target(_player)
+	add_child(_juice)
+	_player.set_juice(_juice)
 	_hud = _setup_hud(_player)
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -68,6 +84,10 @@ func _setup_input() -> void:
 	_add_key(&"fly", KEY_D)
 	_add_key(&"fly_up", KEY_UP)
 	_add_key(&"move_down", KEY_DOWN)
+	# 전투 키 (combat-spec §1) — 플레이어 공유. 이동 방에서도 주스 확인 가능
+	_add_key(&"attack", KEY_J)
+	_add_key(&"skill1", KEY_K)
+	_add_key(&"skill2", KEY_L)
 
 func _add_key(action: StringName, keycode: Key) -> void:
 	if not InputMap.has_action(action):
@@ -246,7 +266,7 @@ func _spawn_player() -> CharacterBody2D:
 	add_child(p)
 	return p
 
-func _setup_camera(player: CharacterBody2D) -> void:
+func _setup_camera(player: CharacterBody2D) -> Camera2D:
 	var cam := Camera2D.new()
 	cam.limit_left = 0
 	cam.limit_top = 0
@@ -256,6 +276,7 @@ func _setup_camera(player: CharacterBody2D) -> void:
 	cam.set("position_smoothing_speed", 8.0)
 	player.add_child(cam)
 	cam.make_current()
+	return cam
 
 func _setup_hud(player: CharacterBody2D) -> CanvasLayer:
 	var hud := CanvasLayer.new()

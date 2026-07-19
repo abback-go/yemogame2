@@ -90,6 +90,72 @@ const ABILITY_COSTS := {
 	"flight": "마나 45 선불",
 }
 
+# ─────────────────────────────────────────────────────────────
+# 전투 코어 (combat-spec v0.1) — 얼음/창 트라이얼. 수치는 전부 시작값,
+# 인스펙터 @export로 F5 손 튜닝. 공격 상태머신 페이즈 상수:
+const AP_NONE := 0
+const AP_STARTUP := 1
+const AP_ACTIVE := 2
+const AP_RECOVERY := 3
+
+@export_group("기본 공격 · 타이밍")
+@export var atk1_startup := 0.08
+@export var atk1_active := 0.06
+@export var atk1_recovery := 0.12
+@export var atk2_startup := 0.07
+@export var atk2_active := 0.06
+@export var atk2_recovery := 0.12
+@export var atk3_startup := 0.12
+@export var atk3_active := 0.08
+@export var atk3_recovery := 0.22
+@export var combo_buffer_time := 0.25
+@export var combo_reset_time := 0.5
+
+@export_group("기본 공격 · 판정/런지")
+@export var atk1_reach := 64.0
+@export var atk2_reach := 64.0
+@export var atk3_reach := 88.0
+@export var attack_hitbox_height := 24.0
+@export var atk_lunge_light := 240.0
+@export var atk_lunge_heavy := 380.0
+@export var atk_knockback_light := 160.0
+@export var atk_knockback_heavy := 320.0
+@export var atk_mana_light := 3.0
+@export var atk_mana_heavy := 5.0
+@export var atk_damage_light := 1
+@export var atk_damage_heavy := 2
+
+@export_group("스킬1 · 관통 서리창 (K)")
+@export var skill1_cooldown := 6.0
+@export var skill1_mana := 20.0
+@export var skill1_damage := 3
+@export var skill1_reach := 160.0
+@export var skill1_dash_dist := 140.0
+@export var skill1_dash_time := 0.2
+@export var skill1_cast_tell := 0.15
+@export var skill1_slow_factor := 0.4
+@export var skill1_slow_time := 2.0
+
+@export_group("스킬2 · 빙정 폭발 (L)")
+@export var skill2_cooldown := 9.0
+@export var skill2_mana := 30.0
+@export var skill2_damage := 2
+@export var skill2_radius := 90.0
+@export var skill2_cast_tell := 0.18
+@export var skill2_stun_time := 0.6
+@export var skill2_knockback := 320.0
+
+@export_group("피격 · 주스")
+@export var invuln_time := 0.6
+@export var damage_knockback := 220.0
+@export var hitstop_light := 0.04
+@export var hitstop_heavy := 0.09
+@export var trauma_light := 0.2
+@export var trauma_heavy := 0.4
+@export var trauma_land := 0.15
+@export var squash_recover_speed := 12.0
+@export var land_shake_min_speed := 260.0
+
 # 시작 킷만 기본 ON (spec §2)
 var abilities := {
 	"dash_ground": true,
@@ -138,8 +204,36 @@ var updraft_rects: Array[Rect2] = []
 var ice_platforms: Array[Node] = []
 var air_bubbles: Array[Dictionary] = []
 
+# 전투 상태 (combat-spec §2·§3)
+var attack_step := 0
+var combo_index := 0
+var attack_phase := AP_NONE
+var attack_phase_t := 0.0
+var attack_hit_done := false
+var attack_buffer_t := 0.0
+var attack_cancelable := false
+var combo_reset_t := 0.0
+var attack_face := 1
+var skill1_cd := 0.0
+var skill2_cd := 0.0
+var skill1_cast_t := 0.0
+var skill2_cast_t := 0.0
+var skill1_dash_t := 0.0
+var invuln_t := 0.0
+var hurt_flash_t := 0.0
+var squash := Vector2.ONE
+var _juice = null
+var _enemies: Array = []
+var _was_on_floor := true
+
 func _ready() -> void:
 	start_pos = position
+
+func set_juice(j) -> void:
+	_juice = j
+
+func set_enemies(arr: Array) -> void:
+	_enemies = arr
 
 func toggle_ability(key: String) -> bool:
 	if not abilities.has(key):
@@ -171,6 +265,19 @@ func respawn() -> void:
 	fly_cd = 0.0
 	drown_t = 0.0
 	drowning = false
+	attack_step = 0
+	attack_phase = AP_NONE
+	combo_index = 0
+	combo_reset_t = 0.0
+	attack_buffer_t = 0.0
+	skill1_cd = 0.0
+	skill2_cd = 0.0
+	skill1_cast_t = 0.0
+	skill2_cast_t = 0.0
+	skill1_dash_t = 0.0
+	invuln_t = 0.0
+	hurt_flash_t = 0.0
+	squash = Vector2.ONE
 	_clear_ice_platforms()
 
 func set_zones(water: Array[Rect2], updraft: Array[Rect2]) -> void:
@@ -197,6 +304,9 @@ func _physics_process(delta: float) -> void:
 	_try_start_dash()
 	_try_place_ice()
 	_try_start_flight()
+	_try_attack()
+	_try_skill1()
+	_try_skill2()
 
 	if in_water:
 		_water_move(delta)
@@ -204,16 +314,24 @@ func _physics_process(delta: float) -> void:
 		pass
 	elif _do_wall_run(delta):
 		pass
+	elif skill1_dash_t > 0.0:
+		_skill1_move(delta)
 	elif dash_t > 0.0:
 		_dash_move(delta)
 	else:
 		_normal_move(delta)
 
+	_update_attack(delta)
+	_update_skills(delta)
+	_update_squash(delta)
 	_regen_mana(delta)
 	_regen_oxygen(delta)
+	var vy_before := velocity.y
 	move_and_slide()
 	_check_air_bubbles()
 	_post_move()
+	_land_check(vy_before)
+	_was_on_floor = is_on_floor()
 	queue_redraw()
 
 func _tick_timers(delta: float) -> void:
@@ -224,6 +342,15 @@ func _tick_timers(delta: float) -> void:
 	hover_cd = maxf(0.0, hover_cd - delta)
 	ice_cd = maxf(0.0, ice_cd - delta)
 	mana_blink = maxf(0.0, mana_blink - delta)
+	skill1_cd = maxf(0.0, skill1_cd - delta)
+	skill2_cd = maxf(0.0, skill2_cd - delta)
+	invuln_t = maxf(0.0, invuln_t - delta)
+	hurt_flash_t = maxf(0.0, hurt_flash_t - delta)
+	attack_buffer_t = maxf(0.0, attack_buffer_t - delta)
+	if attack_step == AP_NONE:
+		combo_reset_t = maxf(0.0, combo_reset_t - delta)
+		if combo_reset_t <= 0.0:
+			combo_index = 0
 	mana_draining = false
 	drowning = false
 
@@ -273,6 +400,11 @@ func _try_start_dash() -> void:
 		return
 	if not Input.is_action_just_pressed("dash"):
 		return
+	# 스윙 중(판정 프레임 이전)엔 대시 불가 — 판정 이후만 캔슬 허용(§2)
+	if attack_step != AP_NONE and not attack_cancelable:
+		return
+	if skill1_cast_t > 0.0 or skill2_cast_t > 0.0 or skill1_dash_t > 0.0:
+		return
 	if dash_cd > 0.0 or dash_t > 0.0:
 		return
 	if is_on_floor():
@@ -291,6 +423,11 @@ func _attempt_dash(dir: Vector2, is_air: bool) -> void:
 	dash_dir = dir
 	dash_t = DASH_TIME
 	dash_cd = DASH_COOLDOWN
+	# 대시 캔슬 + 주스(먼지·스쿼시·흔들림) — 이동에도 즉시 적용(§6)
+	_cancel_attack()
+	_trigger_squash(Vector2(1.22, 0.82))
+	_shake(0.1)
+	Juice.dust_puff(get_parent(), global_position + Vector2(0.0, 17.0), 6)
 
 func _air_dash_dir() -> Vector2:
 	# 공중 대시: 방향키 8방향(대각 정규화). 무입력=바라보는 방향 수평.
@@ -604,11 +741,16 @@ func _glide_active() -> bool:
 	return velocity.y > 0.0 or in_updraft
 
 func _handle_jump() -> void:
+	# 스윙 판정 프레임 이전엔 점프 금지(판정 이후만 캔슬, §2)
+	if attack_step != AP_NONE and not attack_cancelable:
+		return
 	# 지상 점프 (선입력 + 코요테)
 	if jump_buf > 0.0 and coyote > 0.0:
 		velocity.y = JUMP_VELOCITY
 		jump_buf = 0.0
 		coyote = 0.0
+		_cancel_attack()
+		_trigger_squash(Vector2(0.82, 1.22))
 		return
 	if not Input.is_action_just_pressed("jump"):
 		return
@@ -623,6 +765,8 @@ func _handle_jump() -> void:
 		double_jump_used = true
 		mana -= DOUBLE_JUMP_MANA
 		jump_buf = 0.0
+		_cancel_attack()
+		_trigger_squash(Vector2(0.82, 1.22))
 
 func _regen_mana(delta: float) -> void:
 	if mana_draining or in_water:
@@ -640,6 +784,289 @@ func _post_move() -> void:
 	if global_position.y > fall_limit:
 		respawn()
 
+# ── 주스 래퍼 (juice 미주입 시 안전 no-op) ───────────────────────
+
+func _shake(amount: float) -> void:
+	if _juice != null:
+		_juice.add_trauma(amount)
+
+func _hitstop(duration: float) -> void:
+	if _juice != null:
+		_juice.hitstop(duration)
+
+func _trigger_squash(v: Vector2) -> void:
+	squash = v
+
+func _update_squash(delta: float) -> void:
+	squash = squash.lerp(Vector2.ONE, clampf(delta * squash_recover_speed, 0.0, 1.0))
+
+func _land_check(vy_before: float) -> void:
+	# 착지 스쿼시·먼지·흔들림 — 이동 밋밋함 해소(§6)
+	if is_on_floor() and not _was_on_floor and vy_before >= land_shake_min_speed:
+		_trigger_squash(Vector2(1.25, 0.78))
+		_shake(trauma_land)
+		Juice.dust_puff(get_parent(), global_position + Vector2(0.0, 17.0), 8)
+
+# ── 기본 공격: 얼음 창 3타 lunge 콤보 (§2) ──────────────────────
+
+func _can_attack() -> bool:
+	if in_water or flying or wall_running:
+		return false
+	if dash_t > 0.0 or skill1_dash_t > 0.0:
+		return false
+	return skill1_cast_t <= 0.0 and skill2_cast_t <= 0.0
+
+func _try_attack() -> void:
+	if not Input.is_action_just_pressed("attack"):
+		return
+	if not _can_attack():
+		return
+	if attack_step == AP_NONE:
+		var nxt := 1
+		if combo_reset_t > 0.0 and combo_index >= 1 and combo_index < 3:
+			nxt = combo_index + 1
+		_start_attack_step(nxt)
+	else:
+		# 진행 중이면 다음 타 버퍼(후딜 중 0.25s, §2)
+		attack_buffer_t = combo_buffer_time
+
+func _start_attack_step(step: int) -> void:
+	attack_step = step
+	attack_phase = AP_STARTUP
+	attack_phase_t = _atk_startup(step)
+	attack_hit_done = false
+	attack_cancelable = false
+	attack_buffer_t = 0.0
+	attack_face = face
+	_trigger_squash(Vector2(0.9, 1.12))
+
+func _update_attack(delta: float) -> void:
+	if attack_step == AP_NONE:
+		return
+	if in_water or flying:
+		_cancel_attack()
+		return
+	attack_phase_t -= delta
+	match attack_phase:
+		AP_STARTUP:
+			if attack_phase_t <= 0.0:
+				_enter_active()
+		AP_ACTIVE:
+			_attack_hit_check()
+			if attack_phase_t <= 0.0:
+				_enter_recovery()
+		AP_RECOVERY:
+			attack_cancelable = true
+			if attack_phase_t <= 0.0:
+				_finish_attack_step()
+
+func _enter_active() -> void:
+	attack_phase = AP_ACTIVE
+	attack_phase_t = _atk_active(attack_step)
+	attack_hit_done = false
+	var lunge := atk_lunge_heavy if attack_step == 3 else atk_lunge_light
+	velocity.x = float(attack_face) * lunge
+	_trigger_squash(Vector2(1.3, 0.85))
+	var tip := global_position + Vector2(float(attack_face) * _atk_reach(attack_step) * 0.6, -8.0)
+	Juice.frost_trail(get_parent(), tip, attack_face)
+
+func _enter_recovery() -> void:
+	attack_phase = AP_RECOVERY
+	attack_phase_t = _atk_recovery(attack_step)
+	attack_cancelable = true
+
+func _finish_attack_step() -> void:
+	var step := attack_step
+	if attack_buffer_t > 0.0:
+		attack_buffer_t = 0.0
+		var nxt := step + 1
+		if nxt > 3:
+			nxt = 1
+		combo_index = 0 if nxt == 1 else step
+		_start_attack_step(nxt)
+	else:
+		combo_index = step
+		attack_step = AP_NONE
+		attack_phase = AP_NONE
+		combo_reset_t = combo_reset_time
+
+func _cancel_attack() -> void:
+	if attack_step == AP_NONE:
+		return
+	combo_index = attack_step
+	combo_reset_t = combo_reset_time
+	attack_step = AP_NONE
+	attack_phase = AP_NONE
+	attack_buffer_t = 0.0
+
+func _attack_hit_check() -> void:
+	if attack_hit_done:
+		return
+	attack_hit_done = true
+	var heavy := attack_step == 3
+	var reach := _atk_reach(attack_step)
+	var hb := _attack_hitbox(reach)
+	var dmg := atk_damage_heavy if heavy else atk_damage_light
+	var kb := atk_knockback_heavy if heavy else atk_knockback_light
+	var up := -120.0 if heavy else -60.0
+	var knock := Vector2(float(attack_face) * kb, up)
+	var hit_any := false
+	for e in _enemies:
+		if not is_instance_valid(e) or not e.alive:
+			continue
+		if _rect_hits(hb, e.global_position, e.hurt_radius):
+			e.take_hit(dmg, knock, heavy)
+			hit_any = true
+	if hit_any:
+		# 타격이 마나 수급원(§4): 콤보로 벌어 스킬로 쓴다
+		mana = minf(MANA_MAX, mana + (atk_mana_heavy if heavy else atk_mana_light))
+		_hitstop(hitstop_heavy if heavy else hitstop_light)
+		_shake(trauma_heavy if heavy else trauma_light)
+		var fx := global_position + Vector2(float(attack_face) * reach * 0.7, -8.0)
+		Juice.frost_burst(get_parent(), fx, 10 if heavy else 6)
+
+func _attack_hitbox(reach: float) -> Rect2:
+	# 얇고 긴 창 판정 — 세로 attack_hitbox_height, 가로 reach, 전방으로 뻗음
+	var cx := global_position.x + float(attack_face) * (reach * 0.5 + 6.0)
+	var cy := global_position.y - 6.0
+	return Rect2(
+		cx - reach * 0.5, cy - attack_hitbox_height * 0.5, reach, attack_hitbox_height)
+
+func _rect_hits(rect: Rect2, point: Vector2, radius: float) -> bool:
+	var nx := clampf(point.x, rect.position.x, rect.position.x + rect.size.x)
+	var ny := clampf(point.y, rect.position.y, rect.position.y + rect.size.y)
+	return Vector2(nx, ny).distance_to(point) <= radius
+
+func _atk_startup(step: int) -> float:
+	return atk1_startup if step == 1 else atk2_startup if step == 2 else atk3_startup
+
+func _atk_active(step: int) -> float:
+	return atk1_active if step == 1 else atk2_active if step == 2 else atk3_active
+
+func _atk_recovery(step: int) -> float:
+	return atk1_recovery if step == 1 else atk2_recovery if step == 2 else atk3_recovery
+
+func _atk_reach(step: int) -> float:
+	return atk1_reach if step == 1 else atk2_reach if step == 2 else atk3_reach
+
+# ── 스킬 2종 (§3): 시전 텔 → 마침표. 쿨+마나, 자동발동 아님 ────────
+
+func _can_cast() -> bool:
+	return not in_water and not flying
+
+func _try_skill1() -> void:
+	if not Input.is_action_just_pressed("skill1"):
+		return
+	if not _can_cast():
+		return
+	if skill1_cd > 0.0 or skill1_cast_t > 0.0 or skill1_dash_t > 0.0:
+		_shake(0.08)  # 불발(쿨) 피드백
+		return
+	if mana < skill1_mana:
+		_flash_mana()
+		_shake(0.08)
+		return
+	mana -= skill1_mana
+	skill1_cd = skill1_cooldown
+	attack_face = face
+	_cancel_attack()
+	skill1_cast_t = skill1_cast_tell
+	var rp := global_position + Vector2(float(face) * 10.0, -8.0)
+	Juice.rune_flash(get_parent(), rp, 34.0, 0.2, Color(0.65, 0.9, 1.0))
+
+func _try_skill2() -> void:
+	if not Input.is_action_just_pressed("skill2"):
+		return
+	if not _can_cast():
+		return
+	if skill2_cd > 0.0 or skill2_cast_t > 0.0:
+		_shake(0.08)
+		return
+	if mana < skill2_mana:
+		_flash_mana()
+		_shake(0.08)
+		return
+	mana -= skill2_mana
+	skill2_cd = skill2_cooldown
+	attack_face = face
+	_cancel_attack()
+	skill2_cast_t = skill2_cast_tell
+
+func _update_skills(delta: float) -> void:
+	if skill1_cast_t > 0.0:
+		velocity.x = move_toward(velocity.x, 0.0, 1200.0 * delta)  # 영창 루팅
+		skill1_cast_t -= delta
+		if skill1_cast_t <= 0.0:
+			skill1_cast_t = 0.0
+			_skill1_fire()
+	if skill2_cast_t > 0.0:
+		velocity.x = move_toward(velocity.x, 0.0, 1200.0 * delta)
+		skill2_cast_t -= delta
+		if skill2_cast_t <= 0.0:
+			skill2_cast_t = 0.0
+			_skill2_fire()
+
+func _skill1_fire() -> void:
+	# 관통 서리창: 전방 돌진 + 긴 얼음창 직선 관통 + 빙결 슬로우
+	skill1_dash_t = skill1_dash_time
+	invuln_t = maxf(invuln_t, skill1_dash_time + 0.05)  # 약한 밀림 저항(§3)
+	var hb := _attack_hitbox(skill1_reach)
+	var knock := Vector2(float(attack_face) * 180.0, -80.0)
+	for e in _enemies:
+		if not is_instance_valid(e) or not e.alive:
+			continue
+		if _rect_hits(hb, e.global_position, e.hurt_radius):
+			e.take_hit(skill1_damage, knock, true)
+			if e.has_method("apply_slow"):
+				e.apply_slow(skill1_slow_factor, skill1_slow_time)
+	_hitstop(hitstop_heavy)
+	_shake(trauma_heavy)
+	var fx := global_position + Vector2(float(attack_face) * skill1_reach * 0.6, -8.0)
+	Juice.frost_burst(get_parent(), fx, 16, Color(0.72, 0.92, 1.0))
+
+func _skill1_move(delta: float) -> void:
+	skill1_dash_t -= delta
+	velocity = Vector2(float(attack_face) * (skill1_dash_dist / skill1_dash_time), 0.0)
+	state_name = "관통 서리창"
+
+func _skill2_fire() -> void:
+	# 빙정 폭발: 반경 90px 냉기 폭발 + 넉백 + 짧은 빙결 스턴
+	for e in _enemies:
+		if not is_instance_valid(e) or not e.alive:
+			continue
+		var d := global_position.distance_to(e.global_position)
+		if d <= skill2_radius + e.hurt_radius:
+			var dir := signf(e.global_position.x - global_position.x)
+			if dir == 0.0:
+				dir = float(face)
+			e.take_hit(skill2_damage, Vector2(dir * skill2_knockback, -160.0), true)
+			if e.has_method("apply_stun"):
+				e.apply_stun(skill2_stun_time)
+	_hitstop(hitstop_heavy)
+	_shake(trauma_heavy)
+	Juice.frost_ring(get_parent(), global_position, skill2_radius)
+	var rp := global_position + Vector2(0.0, 16.0)
+	Juice.rune_flash(get_parent(), rp, skill2_radius, 0.28, Color(0.6, 0.85, 1.0))
+
+# ── 피격/체력 (§4) ──────────────────────────────────────────────
+
+func take_damage(amount: int, from_pos: Vector2) -> void:
+	if invuln_t > 0.0:
+		return
+	health -= amount
+	invuln_t = invuln_time
+	hurt_flash_t = 0.25
+	var dir := signf(global_position.x - from_pos.x)
+	if dir == 0.0:
+		dir = -float(face)
+	velocity.x = dir * damage_knockback
+	velocity.y = minf(velocity.y, -160.0)
+	_cancel_attack()
+	_shake(trauma_heavy)
+	Juice.frost_burst(get_parent(), global_position, 6, Color(1.0, 0.6, 0.6))
+	if health <= 0:
+		respawn()
+
 func _draw() -> void:
 	# 임시 비주얼: 상태별 몸통색 + 지팡이 + 비행 날개
 	if flying:
@@ -653,9 +1080,43 @@ func _draw() -> void:
 		body_color = Color(0.75, 0.6, 1.0)
 	elif in_water:
 		body_color = Color(0.45, 0.7, 1.0)
-	elif dash_t > 0.0:
+	elif dash_t > 0.0 or skill1_dash_t > 0.0:
 		body_color = Color(0.6, 0.9, 1.0)
-	draw_rect(Rect2(-10.0, -17.0, 20.0, 34.0), body_color)
-	var tip := Vector2(15.0 * float(face), -14.0)
-	draw_line(Vector2(6.0 * float(face), 4.0), tip, Color(0.83, 0.62, 0.25), 3.0)
-	draw_circle(tip, 3.0, Color(0.4, 0.75, 1.0))
+	if invuln_t > 0.0 and int(invuln_t * 16.0) % 2 == 0:
+		body_color = body_color.lerp(Color(1.0, 0.4, 0.4), 0.6)  # 피격 무적 깜빡임
+	# 스쿼시/스트레치 적용(충돌 도형 불변, 비주얼만, §6)
+	var hw := 10.0 * squash.x
+	var hh := 17.0 * squash.y
+	draw_rect(Rect2(-hw, -hh, hw * 2.0, hh * 2.0), body_color)
+	# 매개체(마도구/촉매) — 손 위치에 상시 발광 오브(마법 출처, §0.2)
+	var hand := Vector2(8.0 * float(face), -8.0)
+	draw_circle(hand, 6.0, Color(0.5, 0.8, 1.0, 0.18))
+	draw_circle(hand, 3.0, Color(0.72, 0.92, 1.0, 0.92))
+	# 얼음 창 — 반투명·발광 냉기 형상(강철 금지, §2·§0.2)
+	var slen := _current_spear_len()
+	if slen > 0.0:
+		_draw_ice_spear(hand, slen)
+
+func _current_spear_len() -> float:
+	# 시전/돌진 중엔 긴 관통창, 기본 공격은 판정 페이즈에 리치만큼
+	if skill1_dash_t > 0.0 or skill1_cast_t > 0.0:
+		return skill1_reach
+	if attack_step != AP_NONE and attack_phase == AP_STARTUP:
+		return _atk_reach(attack_step) * 0.45
+	if attack_step != AP_NONE and attack_phase == AP_ACTIVE:
+		return _atk_reach(attack_step)
+	return 0.0
+
+func _draw_ice_spear(base: Vector2, length: float) -> void:
+	# 스러스트 스트레치 반영(가로 늘림) + 3겹 글로우로 발광하는 냉기 창
+	var f := float(face)
+	var tip := base + Vector2(f * length * squash.x, 0.0)
+	var w := attack_hitbox_height * 0.5
+	_spear_layer(base, tip, w * 1.7, Color(0.5, 0.8, 1.0, 0.16))
+	_spear_layer(base, tip, w, Color(0.6, 0.88, 1.0, 0.4))
+	_spear_layer(base, tip, w * 0.5, Color(0.86, 0.96, 1.0, 0.88))
+	draw_circle(tip, 3.0, Color(0.9, 0.98, 1.0, 0.9))
+
+func _spear_layer(base: Vector2, tip: Vector2, w: float, col: Color) -> void:
+	draw_colored_polygon(PackedVector2Array([
+		base + Vector2(0.0, -w), base + Vector2(0.0, w), tip]), col)
