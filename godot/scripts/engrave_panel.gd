@@ -51,13 +51,22 @@ func open(player: CharacterBody2D) -> void:
 
 
 func close() -> void:
-	# 확정: 선택을 player.skill_slots 에 반영 후 입력 잠금 해제
+	# 확정: 선택을 player.skill_slots 에 반영 후 입력 잠금 해제.
+	# 배우지 않은(미습득) 스킬은 각인 불가 → 빈칸으로 처리(안전).
 	if _player != null:
 		for s in 2:
-			_player.skill_slots[s] = _options[_choice[s]]
+			var id: String = _options[_choice[s]]
+			if not _is_available(id):
+				id = ""
+			_player.skill_slots[s] = id
 		_player.input_locked = false
 	_open = false
 	_set_visible(false)
+
+
+func _is_available(id: String) -> bool:
+	# 빈칸은 항상 가능, 그 외엔 수업으로 배운 스킬(GameState.arena_learned)만 각인 가능.
+	return id == "" or id in GameState.arena_learned
 
 
 func _input(event: InputEvent) -> void:
@@ -83,8 +92,14 @@ func _input(event: InputEvent) -> void:
 
 
 func _cycle(dir: int) -> void:
+	# 미습득(잠금) 스킬은 건너뛰어 배운 스킬·빈칸만 순환한다("" 는 항상 가능→무한루프 없음).
 	var n := _options.size()
-	_choice[_sel_slot] = (_choice[_sel_slot] + dir + n) % n
+	var idx: int = _choice[_sel_slot]
+	for _i in n:
+		idx = (idx + dir + n) % n
+		if _is_available(_options[idx]):
+			break
+	_choice[_sel_slot] = idx
 
 
 func _build() -> void:
@@ -122,10 +137,15 @@ func _refresh() -> void:
 	var cur: int = _choice[_sel_slot]
 	for i in _options.size():
 		var id: String = _options[i]
+		var avail := _is_available(id)
 		var txt := "빈칸 (미각인)" if id == "" else _skill_text(id)
+		if not avail:
+			txt = "[잠금] %s (미습득 — 수업 필요)" % _skill_text(id)
 		var arrow := "▶ " if i == cur else "    "
 		_list_lbls[i].text = arrow + txt
 		var col := Color(0.6, 1.0, 0.7) if i == cur else Color(0.72, 0.76, 0.85)
+		if not avail:
+			col = Color(0.45, 0.45, 0.5)
 		_list_lbls[i].add_theme_color_override("font_color", col)
 
 
