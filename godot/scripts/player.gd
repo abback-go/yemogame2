@@ -1029,7 +1029,7 @@ func _attack_hit_check() -> void:
 		var fx := global_position + Vector2(float(attack_face) * reach * 0.7, -8.0)
 		Juice.hit_spark(get_parent(), fx, 10 if heavy else 6)
 		if blade_element != "무":
-			Juice.frost_burst(get_parent(), fx, 6, Elements.color(blade_element))
+			Juice.frost_burst(get_parent(), fx, 6, Elements.color_of(blade_element))
 
 func _attack_hitbox(reach: float) -> Rect2:
 	# 얇고 긴 창 판정 — 세로 attack_hitbox_height, 가로 reach, 전방으로 뻗음
@@ -1345,7 +1345,7 @@ func _draw_blade(base: Vector2, length: float) -> void:
 	var f := float(face)
 	var tip := base + Vector2(f * length * squash.x, 0.0)
 	var w := attack_hitbox_height * 0.5
-	var ec := Elements.color(blade_element)  # 정수 속성색(무=백색)
+	var ec := Elements.color_of(blade_element)  # 정수 속성색(무=백색)
 	var c1 := Color(0.82, 0.84, 0.92).lerp(ec, 0.45)
 	c1.a = 0.16
 	var c2 := Color(0.88, 0.9, 0.96).lerp(ec, 0.4)

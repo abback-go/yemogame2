@@ -12,6 +12,9 @@ const EngravePanelScript := preload("res://scripts/engrave_panel.gd")
 const DummyScript := preload("res://scripts/enemies/dummy.gd")
 const WalkerScript := preload("res://scripts/enemies/walker.gd")
 const ShooterScript := preload("res://scripts/enemies/shooter.gd")
+const BruteScript := preload("res://scripts/enemies/brute.gd")
+const CasterScript := preload("res://scripts/enemies/caster.gd")
+const LearnPanelScript := preload("res://scripts/learn_panel.gd")
 
 @export_group("주스 (combat-spec §6)")
 @export var shake_max_offset := 12.0
@@ -29,7 +32,10 @@ var _water_rects: Array[Rect2] = []
 var _updraft_rects: Array[Rect2] = []
 var _air_bubble: Node2D = null
 var _engrave: EngravePanel = null
+var _learn: LearnPanel = null
 var _npc_pos := Vector2.ZERO
+var _prof_pos := Vector2.ZERO
+var _essences: Array = []
 
 func _ready() -> void:
 	RenderingServer.set_default_clear_color(Color(0.05, 0.06, 0.09))
@@ -58,6 +64,10 @@ func _ready() -> void:
 	_hud = _setup_hud(_player)
 	_hud.set_combat_mode(true)
 	_engrave = _setup_engrave()
+	_learn = _setup_learn()
+	_build_professor()
+	_build_essences()
+	_player.set_blade_element(GameState.arena_blade_element)
 
 func _enable_all_abilities() -> void:
 	# 아레나: 이동기 9종 전부 ON — 놀이터에서 전부 시험 가능
@@ -78,11 +88,17 @@ func _unhandled_input(event: InputEvent) -> void:
 				e.reset_enemy()
 		_hud.show_toast("리스폰")
 	elif code == KEY_F:
-		if _engrave != null and not _engrave.is_open() and _near_npc():
-			_engrave.open(_player)
+		_try_open_panel()
+	elif code == KEY_1:
+		_cycle_essence()
+	elif code == KEY_M:
+		GameState.arena_material += 30
+		_hud.show_toast("[디버그] 마력 결정 +30 (총 %d)" % GameState.arena_material)
+	elif code == KEY_L:
+		_debug_bootstrap()
 
-func _near_npc() -> bool:
-	return _player.global_position.distance_to(_npc_pos) < 60.0
+func _near(pos: Vector2) -> bool:
+	return _player.global_position.distance_to(pos) < 60.0
 
 func _setup_input() -> void:
 	# v3 아레나 키맵 — 이동 + 각인 스킬 2슬롯 + NPC. 씬 재진입 오염 방지 위해
@@ -156,19 +172,25 @@ func _build_water(wall: Color) -> void:
 	_air_bubble = _make_air_bubble(Vector2(2200, FLOOR_TOP + 190))
 
 func _build_signs() -> void:
-	_add_sign(Vector2(70, 250),
+	_add_sign(Vector2(70, 510),
 		"[전투 트라이얼] v3 · 무속성 마력 칼날\n" +
 		"A 칼날 콤보(타격=마나 수급)   S 슬롯1   D 슬롯2\n" +
 		"스킬은 각인술사(F)에게 각인해야 발동")
-	_add_sign(Vector2(70, 350),
+	_add_sign(Vector2(70, 610),
 		"이동 놀이터 (이동기 9종 ON)\n" +
 		"←→ Z점프 C대시 X부유 ↑상승 ↓활공 Q얼음발판 E비행")
 	_add_sign(Vector2(700, 600), "허수아비 — 무한 HP\n콤보·히트스톱·타격감 확인")
 	_add_sign(Vector2(1060, 600), "근접 워커 — HP3\n0.5초 예비동작 후 찌르기")
-	_add_sign(Vector2(900, 320), "원거리 사수 — HP2\n0.6초 조준 후 느린 투사체")
-	_add_sign(Vector2(1430, 250), "벽달리기 — 벽 향해+↑\n좌우벽 교차로 상승")
-	_add_sign(Vector2(1710, 210), "상승기류 — ↓활공/E비행으로 상승")
+	_add_sign(Vector2(840, 560), "원거리 사수 — HP2\n0.6초 조준 후 느린 투사체")
+	_add_sign(Vector2(1400, 560), "벽달리기 — 벽 향해+↑\n좌우벽 교차로 상승")
+	_add_sign(Vector2(1680, 560), "상승기류 — ↓활공/E비행으로 상승")
 	_add_sign(Vector2(2050, 560), "물잠 — 산소→마나→체력 순 소모\n하늘색 방울=산소 리필")
+	_add_sign(Vector2(360, 600),
+		"교수(F) 수업: 스킬 습득·강화(재화)\n각인술사(F): 배운 스킬 각인")
+	_add_sign(Vector2(1140, 600),
+		"중형 적(비리스폰) — brute·caster\nbrute 약점:물 / caster 약점:불 (상성)")
+	_add_sign(Vector2(60, 660),
+		"[디버그] 1:정수 전환  M:재화+30  L:정수2·전스킬·재화")
 
 func _build_npc() -> void:
 	# 각인술사 NPC — 코드 생성 도형 + 라벨. 근접(F)으로 각인 패널 오픈.
@@ -284,6 +306,8 @@ func _spawn_enemies() -> Array:
 	arr.append(_spawn_enemy(DummyScript, Vector2(760, 640)))
 	arr.append(_spawn_enemy(WalkerScript, Vector2(1120, 640)))
 	arr.append(_spawn_enemy(ShooterScript, Vector2(960, 420)))
+	arr.append(_spawn_enemy(BruteScript, Vector2(1350, 620)))
+	arr.append(_spawn_enemy(CasterScript, Vector2(1300, 400)))
 	return arr
 
 func _spawn_enemy(script: GDScript, pos: Vector2) -> Node:
@@ -318,3 +342,111 @@ func _setup_engrave() -> EngravePanel:
 	var panel: EngravePanel = EngravePanelScript.new()
 	add_child(panel)
 	return panel
+
+func _setup_learn() -> LearnPanel:
+	var panel: LearnPanel = LearnPanelScript.new()
+	add_child(panel)
+	return panel
+
+func _try_open_panel() -> void:
+	# F: 근접한 NPC에 따라 각인술사(각인) 또는 교수(수업) 패널을 연다.
+	if _engrave == null or _learn == null:
+		return
+	if _engrave.is_open() or _learn.is_open():
+		return
+	if _near(_npc_pos):
+		_engrave.open(_player)
+	elif _near(_prof_pos):
+		_learn.open(_player)
+
+func _cycle_essence() -> void:
+	# 1키: 보유한 속성 정수를 순환 장착("무" 포함). 미보유 시 안내.
+	var owned: Array = GameState.arena_elements
+	if owned.size() <= 1:
+		_hud.show_toast("보유 정수 없음 — 정수를 먼저 획득하세요")
+		return
+	var cur: int = owned.find(_player.blade_element)
+	if cur < 0:
+		cur = 0
+	var nxt: String = owned[(cur + 1) % owned.size()]
+	_player.set_blade_element(nxt)
+	GameState.arena_blade_element = nxt
+	_hud.show_toast("정수 장착: %s" % Elements.label(nxt))
+
+func _debug_bootstrap() -> void:
+	# L키(디버그): 두 정수 소유·전 스킬 습득·재화 지급 — 아침 테스트 부트스트랩.
+	for el in ["불", "물"]:
+		if not (el in GameState.arena_elements):
+			GameState.arena_elements.append(el)
+	for id in SkillDB.ids():
+		if not (id in GameState.arena_learned):
+			GameState.arena_learned.append(id)
+	GameState.arena_material += 100
+	_hud.show_toast("[디버그] 정수2·전스킬 습득·재화+100")
+
+func _build_professor() -> void:
+	# 교수 NPC — 수업(F): 스킬 습득·강화. 각인술사와 형제 도형(녹색 계열).
+	_prof_pos = Vector2(480, FLOOR_TOP - 30)
+	var npc := Node2D.new()
+	npc.position = _prof_pos
+	var body := Polygon2D.new()
+	body.polygon = PackedVector2Array([
+		Vector2(-14, -30), Vector2(14, -30), Vector2(14, 30), Vector2(-14, 30)])
+	body.color = Color(0.45, 0.75, 0.6)
+	npc.add_child(body)
+	var gem := Polygon2D.new()
+	gem.polygon = PackedVector2Array([
+		Vector2(0, -48), Vector2(13, -35), Vector2(0, -22), Vector2(-13, -35)])
+	gem.color = Color(0.7, 1.0, 0.85)
+	npc.add_child(gem)
+	var tag := Label.new()
+	tag.text = "교수\n(F 수업)"
+	tag.position = Vector2(-30, -94)
+	tag.add_theme_font_override("font", _font)
+	tag.add_theme_font_size_override("font_size", 14)
+	tag.add_theme_color_override("font_color", Color(0.75, 1.0, 0.85))
+	npc.add_child(tag)
+	add_child(npc)
+
+func _build_essences() -> void:
+	# 속성 정수 픽업 2종 — 접촉 시 보유·즉시 장착. 1키로 순환 전환. 아레나 테스트용.
+	_essences = []
+	_essences.append(_make_essence(Vector2(620, FLOOR_TOP - 40), "불"))
+	_essences.append(_make_essence(Vector2(1180, FLOOR_TOP - 40), "물"))
+
+func _make_essence(pos: Vector2, element: String) -> Dictionary:
+	var col := Elements.color_of(element)
+	var vis := Polygon2D.new()
+	vis.position = pos
+	vis.polygon = PackedVector2Array([
+		Vector2(0, -16), Vector2(12, 0), Vector2(0, 16), Vector2(-12, 0)])
+	vis.color = col
+	add_child(vis)
+	var tag := Label.new()
+	tag.text = "%s의 정수" % Elements.label(element)
+	tag.position = pos + Vector2(-28, -44)
+	tag.add_theme_font_override("font", _font)
+	tag.add_theme_font_size_override("font_size", 13)
+	tag.add_theme_color_override("font_color", col)
+	add_child(tag)
+	return {"node": vis, "tag": tag, "pos": pos, "element": element, "taken": false}
+
+func _check_essence_pickup() -> void:
+	for e in _essences:
+		if e["taken"]:
+			continue
+		if _player.global_position.distance_to(e["pos"]) < 40.0:
+			e["taken"] = true
+			e["node"].visible = false
+			e["tag"].visible = false
+			var el: String = e["element"]
+			if not (el in GameState.arena_elements):
+				GameState.arena_elements.append(el)
+			_player.set_blade_element(el)
+			GameState.arena_blade_element = el
+			_hud.show_toast("%s의 정수 획득! (1키로 장착 전환)" % Elements.label(el))
+
+func _process(_delta: float) -> void:
+	if _player == null:
+		return
+	_check_essence_pickup()
