@@ -128,6 +128,20 @@ static func frost_ring(parent: Node, pos: Vector2, radius: float) -> void:
 	p.color = Color(0.75, 0.92, 1.0)
 	p.emitting = true
 
+static func hit_spark(parent: Node, pos: Vector2, amount := 6) -> void:
+	# v3 무속성 마력 칼날 타격 — 흰/회색 히트스파크(원소 입자 없음)
+	var p := _spawn_particles(parent, pos, amount)
+	p.lifetime = 0.3
+	p.direction = Vector2(0.0, -1.0)
+	p.spread = 180.0
+	p.initial_velocity_min = 80.0
+	p.initial_velocity_max = 200.0
+	p.gravity = Vector2(0.0, 200.0)
+	p.scale_amount_min = 1.5
+	p.scale_amount_max = 3.0
+	p.color = Color(0.92, 0.93, 0.97)
+	p.emitting = true
+
 static func dust_puff(parent: Node, pos: Vector2, amount := 6) -> void:
 	# 대시/착지 먼지 (회갈색 도형 파티클)
 	var p := _spawn_particles(parent, pos, amount)

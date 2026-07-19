@@ -239,16 +239,15 @@ var attack_buffer_t := 0.0
 var attack_cancelable := false
 var combo_reset_t := 0.0
 var attack_face := 1
-var skill1_cd := 0.0
-var skill2_cd := 0.0
-var skill1_cast_t := 0.0
-var skill2_cast_t := 0.0
-var skill1_dash_t := 0.0
+# v3 각인 2슬롯 — 슬롯별 상태(어느 슬롯이든 어떤 스킬이든 낄 수 있게 일반화).
+var skill_slots: Array[String] = ["", ""]  # 각 슬롯: skill id 또는 빈칸(미각인)
+var slot_cd: Array[float] = [0.0, 0.0]  # 슬롯별 쿨다운
+var slot_cast_t: Array[float] = [0.0, 0.0]  # 슬롯별 시전 텔 타이머
+var slot_dash_t: Array[float] = [0.0, 0.0]  # 슬롯별 돌진 타이머(서리창)
+var input_locked := false  # 각인 패널 등 모달 UI — 이동/전투 입력 차단
 var invuln_t := 0.0
 var hurt_flash_t := 0.0
 var squash := Vector2.ONE
-# 원소 전공 (스폰 시 GameState 에서 결정) — 공개 변수
-var element := "fire"
 var _juice = null
 var _enemies: Array = []
 var _was_on_floor := true
@@ -258,14 +257,11 @@ var _use_sprite := false
 
 func _ready() -> void:
 	start_pos = position
-	_init_element()
+	_init_sprite()
 
-func _init_element() -> void:
-	# 스폰 시 GameState.combat_element(씬 전환에도 유지되는 static)로 원소 결정.
-	# 불 + 스프라이트 로드 성공 시 AnimatedSprite2D 사용, 아니면 그레이박스 폴백.
-	element = GameState.combat_element
-	if element != "fire":
-		return
+func _init_sprite() -> void:
+	# v3: 스프라이트 = 무속성 플레이어 캐릭터. 원소 게이트 없이 항상 로드 시도,
+	# 성공 시 AnimatedSprite2D, 실패 시 그레이박스 폴백(_use_sprite=false).
 	_sprite = PlayerSprite.build(self)
 	if _sprite == null:
 		return
@@ -314,11 +310,10 @@ func respawn() -> void:
 	combo_index = 0
 	combo_reset_t = 0.0
 	attack_buffer_t = 0.0
-	skill1_cd = 0.0
-	skill2_cd = 0.0
-	skill1_cast_t = 0.0
-	skill2_cast_t = 0.0
-	skill1_dash_t = 0.0
+	for i in 2:
+		slot_cd[i] = 0.0
+		slot_cast_t[i] = 0.0
+		slot_dash_t[i] = 0.0
 	invuln_t = 0.0
 	hurt_flash_t = 0.0
 	squash = Vector2.ONE
@@ -340,6 +335,9 @@ func ice_count() -> int:
 	return n
 
 func _physics_process(delta: float) -> void:
+	if input_locked:
+		_locked_physics(delta)
+		return
 	_tick_timers(delta)
 	_read_facing()
 	_buffer_jump()
@@ -349,17 +347,18 @@ func _physics_process(delta: float) -> void:
 	_try_place_ice()
 	_try_start_flight()
 	_try_attack()
-	_try_skill1()
-	_try_skill2()
+	_try_slot(0, &"skill1")
+	_try_slot(1, &"skill2")
 
+	var dash_slot := _active_dash_slot()
 	if in_water:
 		_water_move(delta)
 	elif _do_flight(delta):
 		pass
 	elif _do_wall_run(delta):
 		pass
-	elif skill1_dash_t > 0.0:
-		_skill1_move(delta)
+	elif dash_slot >= 0:
+		_slot_dash_move(dash_slot, delta)
 	elif dash_t > 0.0:
 		_dash_move(delta)
 	else:
@@ -376,6 +375,16 @@ func _physics_process(delta: float) -> void:
 	_post_move()
 	_land_check(vy_before)
 	_was_on_floor = is_on_floor()
+	_update_sprite()
+	queue_redraw()
+
+func _locked_physics(delta: float) -> void:
+	# 각인 패널 등 모달 UI 중 — 입력 무시, 관성 감쇠 + 중력만 적용해 제자리 고정.
+	velocity.x = move_toward(velocity.x, 0.0, DECEL * delta)
+	velocity.y = minf(velocity.y + GRAVITY * delta, FALL_MAX)
+	move_and_slide()
+	_update_squash(delta)
+	state_name = "각인 중"
 	_update_sprite()
 	queue_redraw()
 
@@ -404,8 +413,8 @@ func _tick_timers(delta: float) -> void:
 	hover_cd = maxf(0.0, hover_cd - delta)
 	ice_cd = maxf(0.0, ice_cd - delta)
 	mana_blink = maxf(0.0, mana_blink - delta)
-	skill1_cd = maxf(0.0, skill1_cd - delta)
-	skill2_cd = maxf(0.0, skill2_cd - delta)
+	for i in 2:
+		slot_cd[i] = maxf(0.0, slot_cd[i] - delta)
 	invuln_t = maxf(0.0, invuln_t - delta)
 	hurt_flash_t = maxf(0.0, hurt_flash_t - delta)
 	attack_buffer_t = maxf(0.0, attack_buffer_t - delta)
@@ -465,7 +474,7 @@ func _try_start_dash() -> void:
 	# 스윙 중(판정 프레임 이전)엔 대시 불가 — 판정 이후만 캔슬 허용(§2)
 	if attack_step != AP_NONE and not attack_cancelable:
 		return
-	if skill1_cast_t > 0.0 or skill2_cast_t > 0.0 or skill1_dash_t > 0.0:
+	if _busy_casting():
 		return
 	if dash_cd > 0.0 or dash_t > 0.0:
 		return
@@ -874,9 +883,9 @@ func _land_check(vy_before: float) -> void:
 func _can_attack() -> bool:
 	if in_water or flying or wall_running:
 		return false
-	if dash_t > 0.0 or skill1_dash_t > 0.0:
+	if dash_t > 0.0 or _active_dash_slot() >= 0:
 		return false
-	return skill1_cast_t <= 0.0 and skill2_cast_t <= 0.0
+	return not _any_slot_casting()
 
 func _try_attack() -> void:
 	if not Input.is_action_just_pressed("attack"):
@@ -929,11 +938,9 @@ func _enter_active() -> void:
 	var lunge := atk_lunge_heavy if attack_step == 3 else atk_lunge_light
 	velocity.x = float(attack_face) * lunge
 	_trigger_squash(Vector2(1.3, 0.85))
+	# v3 무속성: 원소 궤적 없이 중립 칼날 스파크(흰/회색)만
 	var tip := global_position + Vector2(float(attack_face) * _atk_reach(attack_step) * 0.6, -8.0)
-	if element == "fire":
-		Juice.flame_trail(get_parent(), tip, attack_face)
-	else:
-		Juice.frost_trail(get_parent(), tip, attack_face)
+	Juice.hit_spark(get_parent(), tip, 5)
 
 func _enter_recovery() -> void:
 	attack_phase = AP_RECOVERY
@@ -988,10 +995,7 @@ func _attack_hit_check() -> void:
 		_hitstop(hitstop_heavy if heavy else hitstop_light)
 		_shake(trauma_heavy if heavy else trauma_light)
 		var fx := global_position + Vector2(float(attack_face) * reach * 0.7, -8.0)
-		if element == "fire":
-			Juice.flame_burst(get_parent(), fx, 10 if heavy else 6)
-		else:
-			Juice.frost_burst(get_parent(), fx, 10 if heavy else 6)
+		Juice.hit_spark(get_parent(), fx, 10 if heavy else 6)
 
 func _attack_hitbox(reach: float) -> Rect2:
 	# 얇고 긴 창 판정 — 세로 attack_hitbox_height, 가로 reach, 전방으로 뻗음
@@ -1022,71 +1026,110 @@ func _atk_reach(step: int) -> float:
 func _can_cast() -> bool:
 	return not in_water and not flying
 
-func _try_skill1() -> void:
-	if not Input.is_action_just_pressed("skill1"):
-		return
-	if not _can_cast():
-		return
-	if skill1_cd > 0.0 or skill1_cast_t > 0.0 or skill1_dash_t > 0.0:
-		_shake(0.08)  # 불발(쿨) 피드백
-		return
-	var cost := fire_skill1_mana if element == "fire" else skill1_mana
-	if mana < cost:
-		_flash_mana()
-		_shake(0.08)
-		return
-	mana -= cost
-	skill1_cd = fire_skill1_cooldown if element == "fire" else skill1_cooldown
-	attack_face = face
-	_cancel_attack()
-	skill1_cast_t = fire_skill1_cast_tell if element == "fire" else skill1_cast_tell
-	var rp := global_position + Vector2(float(face) * 10.0, -8.0)
-	if element == "fire":
-		Juice.rune_flash(get_parent(), rp, 34.0, 0.2, Color(1.0, 0.6, 0.2))
-	else:
-		Juice.rune_flash(get_parent(), rp, 34.0, 0.2, Color(0.65, 0.9, 1.0))
+# v3 슬롯 상태 헬퍼: 어느 슬롯이 돌진/시전 중인지(슬롯 인덱스별 일반화).
 
-func _try_skill2() -> void:
-	if not Input.is_action_just_pressed("skill2"):
+func _active_dash_slot() -> int:
+	for s in 2:
+		if slot_dash_t[s] > 0.0:
+			return s
+	return -1
+
+func _any_slot_casting() -> bool:
+	return slot_cast_t[0] > 0.0 or slot_cast_t[1] > 0.0
+
+func _busy_casting() -> bool:
+	# 시전 텔/돌진 진행 중이면 다른 슬롯 발동·대시 금지(캐스트 겹침 방지)
+	return _any_slot_casting() or _active_dash_slot() >= 0
+
+func _try_slot(slot: int, action: StringName) -> void:
+	# S=슬롯0, D=슬롯1. 낀 스킬 있고·쿨 0·마나 충분이면 텔→효과 캐스트 실행.
+	if not Input.is_action_just_pressed(action):
 		return
 	if not _can_cast():
 		return
-	if skill2_cd > 0.0 or skill2_cast_t > 0.0:
-		_shake(0.08)
+	var id: String = skill_slots[slot]
+	if id == "":
+		return  # 미각인 슬롯 — 조용히 무시
+	if slot_cd[slot] > 0.0 or _busy_casting() or dash_t > 0.0:
+		_shake(0.08)  # 불발(쿨/시전 중) 피드백
 		return
-	var cost := fire_skill2_mana if element == "fire" else skill2_mana
+	var cost := _skill_mana(id)
 	if mana < cost:
 		_flash_mana()
 		_shake(0.08)
 		return
 	mana -= cost
-	skill2_cd = fire_skill2_cooldown if element == "fire" else skill2_cooldown
+	slot_cd[slot] = _skill_cooldown(id)
 	attack_face = face
 	_cancel_attack()
-	skill2_cast_t = fire_skill2_cast_tell if element == "fire" else skill2_cast_tell
-	if element == "fire":
-		var rp := global_position + Vector2(float(face) * 10.0, -8.0)
-		Juice.rune_flash(get_parent(), rp, 34.0, 0.2, Color(1.0, 0.5, 0.15))
+	slot_cast_t[slot] = _skill_cast_tell(id)
+	_cast_rune(id)
+
+func _cast_rune(id: String) -> void:
+	# 시전 텔 룬 — 속성별 색(불=주황, 물=하늘색)
+	var rp := global_position + Vector2(float(face) * 10.0, -8.0)
+	var col := Color(1.0, 0.6, 0.2)
+	if SkillDB.element_of(id) != "불":
+		col = Color(0.65, 0.9, 1.0)
+	Juice.rune_flash(get_parent(), rp, 34.0, 0.2, col)
+
+func _skill_cooldown(id: String) -> float:
+	# @export 실수치 라우팅(F5 손 튜닝 유지) — id → cooldown
+	match id:
+		"flame_pillar":
+			return fire_skill1_cooldown
+		"meteor":
+			return fire_skill2_cooldown
+		"frost_spear":
+			return skill1_cooldown
+		"ice_burst":
+			return skill2_cooldown
+	return 0.0
+
+func _skill_mana(id: String) -> float:
+	match id:
+		"flame_pillar":
+			return fire_skill1_mana
+		"meteor":
+			return fire_skill2_mana
+		"frost_spear":
+			return skill1_mana
+		"ice_burst":
+			return skill2_mana
+	return 0.0
+
+func _skill_cast_tell(id: String) -> float:
+	match id:
+		"flame_pillar":
+			return fire_skill1_cast_tell
+		"meteor":
+			return fire_skill2_cast_tell
+		"frost_spear":
+			return skill1_cast_tell
+		"ice_burst":
+			return skill2_cast_tell
+	return 0.0
 
 func _update_skills(delta: float) -> void:
-	if skill1_cast_t > 0.0:
-		velocity.x = move_toward(velocity.x, 0.0, 1200.0 * delta)  # 영창 루팅
-		skill1_cast_t -= delta
-		if skill1_cast_t <= 0.0:
-			skill1_cast_t = 0.0
-			_skill1_fire()
-	if skill2_cast_t > 0.0:
-		velocity.x = move_toward(velocity.x, 0.0, 1200.0 * delta)
-		skill2_cast_t -= delta
-		if skill2_cast_t <= 0.0:
-			skill2_cast_t = 0.0
-			_skill2_fire()
+	# 슬롯별 시전 텔 진행 → 만료 시 낀 스킬 발동(슬롯 인덱스와 무관하게 id로 라우팅)
+	for s in 2:
+		if slot_cast_t[s] > 0.0:
+			velocity.x = move_toward(velocity.x, 0.0, 1200.0 * delta)  # 영창 루팅
+			slot_cast_t[s] -= delta
+			if slot_cast_t[s] <= 0.0:
+				slot_cast_t[s] = 0.0
+				_cast_skill(skill_slots[s], s)
 
-func _skill1_fire() -> void:
-	if element == "fire":
-		_fire_skill1_fire()
-	else:
-		_ice_skill1_fire()
+func _cast_skill(id: String, slot: int) -> void:
+	match id:
+		"flame_pillar":
+			_fire_skill1_fire()
+		"meteor":
+			_fire_skill2_fire()
+		"frost_spear":
+			_frost_spear_fire(slot)
+		"ice_burst":
+			_ice_skill2_fire()
 
 func _nearest_enemy(max_dist: float) -> Node:
 	# 살아있는 적 중 가장 가까운 것(조준 대체). 범위 밖이면 null.
@@ -1125,9 +1168,9 @@ func _fire_skill1_fire() -> void:
 	_shake(trauma_heavy)
 	Juice.ground_flame(get_parent(), Vector2(fx, fy), fire_skill1_height)
 
-func _ice_skill1_fire() -> void:
-	# 관통 서리창: 전방 돌진 + 긴 얼음창 직선 관통 + 빙결 슬로우
-	skill1_dash_t = skill1_dash_time
+func _frost_spear_fire(slot: int) -> void:
+	# 관통 서리창: 전방 돌진 + 긴 얼음창 직선 관통 + 빙결 슬로우(끼운 슬롯의 돌진)
+	slot_dash_t[slot] = skill1_dash_time
 	invuln_t = maxf(invuln_t, skill1_dash_time + 0.05)  # 약한 밀림 저항(§3)
 	var hb := _attack_hitbox(skill1_reach)
 	var knock := Vector2(float(attack_face) * 180.0, -80.0)
@@ -1143,16 +1186,10 @@ func _ice_skill1_fire() -> void:
 	var fx := global_position + Vector2(float(attack_face) * skill1_reach * 0.6, -8.0)
 	Juice.frost_burst(get_parent(), fx, 16, Color(0.72, 0.92, 1.0))
 
-func _skill1_move(delta: float) -> void:
-	skill1_dash_t -= delta
+func _slot_dash_move(slot: int, delta: float) -> void:
+	slot_dash_t[slot] -= delta
 	velocity = Vector2(float(attack_face) * (skill1_dash_dist / skill1_dash_time), 0.0)
 	state_name = "관통 서리창"
-
-func _skill2_fire() -> void:
-	if element == "fire":
-		_fire_skill2_fire()
-	else:
-		_ice_skill2_fire()
 
 func _fire_skill2_fire() -> void:
 	# 메테오: 가장 가까운(또는 전방) 적 지점을 조준해 화면 위에서 메테오 낙하.
@@ -1235,7 +1272,7 @@ func _draw() -> void:
 		body_color = Color(0.75, 0.6, 1.0)
 	elif in_water:
 		body_color = Color(0.45, 0.7, 1.0)
-	elif dash_t > 0.0 or skill1_dash_t > 0.0:
+	elif dash_t > 0.0 or _active_dash_slot() >= 0:
 		body_color = Color(0.6, 0.9, 1.0)
 	if invuln_t > 0.0 and int(invuln_t * 16.0) % 2 == 0:
 		body_color = body_color.lerp(Color(1.0, 0.4, 0.4), 0.6)  # 피격 무적 깜빡임
@@ -1245,16 +1282,16 @@ func _draw() -> void:
 	draw_rect(Rect2(-hw, -hh, hw * 2.0, hh * 2.0), body_color)
 	# 매개체(마도구/촉매) — 손 위치에 상시 발광 오브(마법 출처, §0.2)
 	var hand := Vector2(8.0 * float(face), -8.0)
-	draw_circle(hand, 6.0, Color(0.5, 0.8, 1.0, 0.18))
-	draw_circle(hand, 3.0, Color(0.72, 0.92, 1.0, 0.92))
-	# 얼음 창 — 반투명·발광 냉기 형상(강철 금지, §2·§0.2)
+	draw_circle(hand, 6.0, Color(0.85, 0.87, 0.95, 0.18))
+	draw_circle(hand, 3.0, Color(0.9, 0.92, 0.97, 0.92))
+	# v3 무속성 마력 칼날 — 폴백 그레이박스용 중립 발광 칼날(원소색 없음)
 	var slen := _current_spear_len()
 	if slen > 0.0:
-		_draw_ice_spear(hand, slen)
+		_draw_blade(hand, slen)
 
 func _current_spear_len() -> float:
-	# 시전/돌진 중엔 긴 관통창, 기본 공격은 판정 페이즈에 리치만큼
-	if skill1_dash_t > 0.0 or skill1_cast_t > 0.0:
+	# 시전/돌진 중엔 긴 스킬 칼날, 기본 공격은 판정 페이즈에 리치만큼
+	if _active_dash_slot() >= 0 or _any_slot_casting():
 		return skill1_reach
 	if attack_step != AP_NONE and attack_phase == AP_STARTUP:
 		return _atk_reach(attack_step) * 0.45
@@ -1262,15 +1299,15 @@ func _current_spear_len() -> float:
 		return _atk_reach(attack_step)
 	return 0.0
 
-func _draw_ice_spear(base: Vector2, length: float) -> void:
-	# 스러스트 스트레치 반영(가로 늘림) + 3겹 글로우로 발광하는 냉기 창
+func _draw_blade(base: Vector2, length: float) -> void:
+	# 스러스트 스트레치 반영(가로 늘림) + 3겹 글로우로 발광하는 중립 칼날
 	var f := float(face)
 	var tip := base + Vector2(f * length * squash.x, 0.0)
 	var w := attack_hitbox_height * 0.5
-	_spear_layer(base, tip, w * 1.7, Color(0.5, 0.8, 1.0, 0.16))
-	_spear_layer(base, tip, w, Color(0.6, 0.88, 1.0, 0.4))
-	_spear_layer(base, tip, w * 0.5, Color(0.86, 0.96, 1.0, 0.88))
-	draw_circle(tip, 3.0, Color(0.9, 0.98, 1.0, 0.9))
+	_spear_layer(base, tip, w * 1.7, Color(0.82, 0.84, 0.92, 0.16))
+	_spear_layer(base, tip, w, Color(0.88, 0.9, 0.96, 0.4))
+	_spear_layer(base, tip, w * 0.5, Color(0.96, 0.97, 1.0, 0.88))
+	draw_circle(tip, 3.0, Color(0.97, 0.98, 1.0, 0.9))
 
 func _spear_layer(base: Vector2, tip: Vector2, w: float, col: Color) -> void:
 	draw_colored_polygon(PackedVector2Array([

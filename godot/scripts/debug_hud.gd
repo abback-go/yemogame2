@@ -8,8 +8,8 @@ const KEY_GUIDE := \
 	"←→ 이동  Z/Space 점프  C/Shift 대시  X 부유(홀드)  ↓ 활공(홀드)\n" + \
 	"A 얼음 발판  D 비행 발동   1~9 능력 토글   F 마나 리필   R 리스폰   Esc 메뉴"
 const COMBAT_GUIDE := \
-	"←→ 이동  Z 점프  C 대시    J 얼음 창 3타  K 관통 서리창  L 빙정 폭발\n" + \
-	"F 마나 리필   R 리스폰   Esc 메뉴"
+	"←→ 이동  Z 점프  C 대시  X 부유  ↑ 상승  ↓ 활공  Q 얼음발판  E 비행\n" + \
+	"A 마력 칼날  S 슬롯1  D 슬롯2  F 각인술사  R 리스폰  Esc 메뉴"
 const BAR_W := 200.0
 
 var player: CharacterBody2D = null
@@ -246,21 +246,29 @@ func _update_status() -> void:
 		_drown.visible = false
 
 func _update_combat() -> void:
-	# 스킬 2종 쿨다운 + 콤보 카운터 (마나 바·체력 마스크는 공용 재사용)
-	var dim := Color(0.5, 0.6, 0.7)
-	if player.skill1_cd > 0.0:
-		_skill1_lbl.text = "K  관통 서리창   쿨 %.1f초" % player.skill1_cd
-		_skill1_lbl.add_theme_color_override("font_color", dim)
-	else:
-		_skill1_lbl.text = "K  관통 서리창   준비"
-		_skill1_lbl.add_theme_color_override("font_color", Color(0.7, 0.9, 1.0))
-	if player.skill2_cd > 0.0:
-		_skill2_lbl.text = "L  빙정 폭발   쿨 %.1f초" % player.skill2_cd
-		_skill2_lbl.add_theme_color_override("font_color", dim)
-	else:
-		_skill2_lbl.text = "L  빙정 폭발   준비"
-		_skill2_lbl.add_theme_color_override("font_color", Color(0.75, 0.85, 1.0))
+	# v3 각인 2슬롯 표시(쿨 카운트다운) + 콤보 카운터. 마나·체력은 공용 재사용.
+	_skill1_lbl.text = _slot_line(0, "S")
+	_apply_slot_color(_skill1_lbl, 0)
+	_skill2_lbl.text = _slot_line(1, "D")
+	_apply_slot_color(_skill2_lbl, 1)
 	var combo: int = player.attack_step
 	if combo == 0 and player.combo_reset_t > 0.0:
 		combo = player.combo_index
-	_combo_lbl.text = "콤보  x%d" % combo if combo > 0 else "J  얼음 창 3타 콤보"
+	_combo_lbl.text = "콤보  x%d" % combo if combo > 0 else "A  마력 칼날 콤보"
+
+func _slot_line(idx: int, keyname: String) -> String:
+	var id: String = player.skill_slots[idx]
+	if id == "":
+		return "슬롯%d [%s]: 미각인" % [idx + 1, keyname]
+	var nm := SkillDB.name_of(id)
+	var cd: float = player.slot_cd[idx]
+	if cd > 0.0:
+		return "슬롯%d [%s]: %s   쿨 %.1f초" % [idx + 1, keyname, nm, cd]
+	return "슬롯%d [%s]: %s   준비" % [idx + 1, keyname, nm]
+
+func _apply_slot_color(lb: Label, idx: int) -> void:
+	var id: String = player.skill_slots[idx]
+	var col := Color(0.5, 0.6, 0.7)  # 미각인/쿨 중
+	if id != "" and player.slot_cd[idx] <= 0.0:
+		col = Color(0.75, 0.9, 1.0)  # 준비
+	lb.add_theme_color_override("font_color", col)
