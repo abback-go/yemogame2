@@ -5,6 +5,9 @@ extends CharacterBody2D
 ## v2 핵심: 전 이동 마나 소모 / 8방향 공중대시 / 부유 고정 / 얼음 발판 A키
 ## 설치형(이단점프와 완전 독립) / 활공 ↓홀드 / 물잠 익사(체력) / 비행 D키 발동형.
 
+# 사망(health<=0)·낙사 신호 — 수직 슬라이스가 거점 리스폰 전환에 연결(아레나는 미연결).
+signal died
+
 const RUN_SPEED := 280.0
 const ACCEL := 2600.0
 const DECEL := 3200.0
@@ -700,6 +703,7 @@ func _drown(delta: float) -> void:
 		drown_t -= DROWN_INTERVAL
 		health -= 1
 		if health <= 0:
+			died.emit()
 			respawn()
 
 func _water_surface_y() -> float:
@@ -853,6 +857,7 @@ func _regen_oxygen(delta: float) -> void:
 
 func _post_move() -> void:
 	if global_position.y > fall_limit:
+		died.emit()
 		respawn()
 
 # ── 주스 래퍼 (juice 미주입 시 안전 no-op) ───────────────────────
@@ -1254,6 +1259,7 @@ func take_damage(amount: int, from_pos: Vector2) -> void:
 	_shake(trauma_heavy)
 	Juice.frost_burst(get_parent(), global_position, 6, Color(1.0, 0.6, 0.6))
 	if health <= 0:
+		died.emit()
 		respawn()
 
 func _draw() -> void:

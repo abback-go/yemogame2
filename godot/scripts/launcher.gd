@@ -19,7 +19,8 @@ func _ready() -> void:
 	menu.add_theme_font_size_override("font_size", 18)
 	menu.text = "[1]  조작감 테스트 방  (이동 마법 9종 토글)\n\n" + \
 		"[2]  월드맵 뷰어  (17개 지역 · 295방 설계도)\n\n" + \
-		"[3]  전투 아레나  (v3 · 무속성 칼 + 각인 2슬롯 · 이동 놀이터)"
+		"[3]  전투 아레나  (v3 · 무속성 칼 + 각인 2슬롯 · 이동 놀이터)\n\n" + \
+		"[4]  수직 슬라이스  (학교 현관→뒷숲 · 5방 미니 메트로베니아)"
 	layer.add_child(menu)
 	var foot := Label.new()
 	foot.text = "숫자 키로 선택"
@@ -39,3 +40,7 @@ func _unhandled_input(event: InputEvent) -> void:
 				get_tree().change_scene_to_file("res://scenes/world_map_viewer.tscn")
 			KEY_3, KEY_KP_3:
 				get_tree().change_scene_to_file("res://scenes/combat_arena.tscn")
+			KEY_4, KEY_KP_4:
+				# 첫 진입 초기화: 시작 방·풀피/풀마나·빈 각인·방문 기록 리셋 후 로드.
+				GameState.reset_slice()
+				get_tree().change_scene_to_file("res://scenes/slice.tscn")
