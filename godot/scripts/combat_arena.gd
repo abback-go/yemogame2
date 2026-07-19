@@ -35,6 +35,7 @@ var _engrave: EngravePanel = null
 var _learn: LearnPanel = null
 var _npc_pos := Vector2.ZERO
 var _prof_pos := Vector2.ZERO
+var _bench_pos := Vector2.ZERO
 var _essences: Array = []
 
 func _ready() -> void:
@@ -67,6 +68,7 @@ func _ready() -> void:
 	_learn = _setup_learn()
 	_build_professor()
 	_build_essences()
+	_build_bench()
 	_player.set_blade_element(GameState.arena_blade_element)
 
 func _enable_all_abilities() -> void:
@@ -348,6 +350,36 @@ func _setup_learn() -> LearnPanel:
 	add_child(panel)
 	return panel
 
+func _build_bench() -> void:
+	# 거점(벤치) — F로 체력·마나·산소 완전 회복. 비리스폰 중형 적 전투의 공정성 장치.
+	# R(리스폰)과 달리 적 상태·위치를 리셋하지 않아 "치고 빠지며 회복" 루프가 가능.
+	_bench_pos = Vector2(250.0, FLOOR_TOP - 10.0)
+	var seat := Polygon2D.new()
+	seat.position = _bench_pos
+	seat.polygon = PackedVector2Array([
+		Vector2(-40, -6), Vector2(40, -6), Vector2(40, 4), Vector2(-40, 4)])
+	seat.color = Color(0.55, 0.4, 0.28)
+	add_child(seat)
+	var back := Polygon2D.new()
+	back.position = _bench_pos
+	back.polygon = PackedVector2Array([
+		Vector2(-40, -28), Vector2(-32, -28), Vector2(-32, -6), Vector2(-40, -6)])
+	back.color = Color(0.48, 0.35, 0.24)
+	add_child(back)
+	var lb := Label.new()
+	lb.text = "거점 (F 휴식)"
+	lb.position = _bench_pos + Vector2(-34, -52)
+	lb.add_theme_font_override("font", _font)
+	lb.add_theme_font_size_override("font_size", 13)
+	lb.add_theme_color_override("font_color", Color(1.0, 0.9, 0.6))
+	add_child(lb)
+
+func _rest_at_bench() -> void:
+	# 위치·적 상태 그대로 두고 체력·마나·산소만 회복.
+	_player.health = PlayerScript.HEALTH_MAX
+	_player.refill_mana()
+	_hud.show_toast("거점에서 휴식 — 체력·마나 회복")
+
 func _try_open_panel() -> void:
 	# F: 근접한 NPC에 따라 각인술사(각인) 또는 교수(수업) 패널을 연다.
 	if _engrave == null or _learn == null:
@@ -358,6 +390,8 @@ func _try_open_panel() -> void:
 		_engrave.open(_player)
 	elif _near(_prof_pos):
 		_learn.open(_player)
+	elif _near(_bench_pos):
+		_rest_at_bench()
 
 func _cycle_essence() -> void:
 	# 1키: 보유한 속성 정수를 순환 장착("무" 포함). 미보유 시 안내.
