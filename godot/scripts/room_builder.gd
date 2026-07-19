@@ -64,7 +64,7 @@ static func make_rect_visual(size: Vector2, color: Color) -> Polygon2D:
 
 
 static func mklabel(
-	parent: Node2D, font: SystemFont, text: String, pos: Vector2, size: int, col: Color
+	parent: Node, font: SystemFont, text: String, pos: Vector2, size: int, col: Color
 ) -> Label:
 	var lb := Label.new()
 	lb.text = text
