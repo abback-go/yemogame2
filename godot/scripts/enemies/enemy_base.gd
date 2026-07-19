@@ -13,9 +13,13 @@ extends CharacterBody2D
 @export var hitreact_time := 0.12
 @export var knockback_friction := 900.0
 @export var respawn_delay := 2.5
+@export var auto_respawn := true  # false=중형 적(잡으면 부활 안 함, R로만 초기화)
+@export var material_drop := 0  # 처치 시 GameState.arena_material 증가량
 
 var hp := 3
 var max_hp := 3
+var weak_element := ""  # 이 속성 공격이 약점(×1.5) — 서브클래스 _configure 에서 지정
+var resist_element := ""  # 이 속성 공격에 저항(×0.5)
 var slow_factor := 1.0
 var slow_t := 0.0
 var stun_t := 0.0
@@ -62,17 +66,28 @@ func apply_stun(t: float) -> void:
 	stun_t = maxf(stun_t, t)
 	velocity.x = 0.0
 
-func take_hit(dmg: int, knock: Vector2, heavy: bool) -> void:
+func take_hit(dmg: int, knock: Vector2, heavy: bool, element := "무") -> void:
 	if not alive:
 		return
-	hp -= dmg
+	# 상성 배율: 약점 ×1.5 / 저항 ×0.5 / 그 외·무속성 ×1.0 (최소 1 보장)
+	var mult := Elements.mult(element, weak_element, resist_element)
+	var real_dmg := int(round(float(dmg) * mult))
+	if real_dmg < 1:
+		real_dmg = 1
+	var weak_hit := mult > 1.0
+	hp -= real_dmg
 	flash_t = 0.12
 	hitreact_t = hitreact_time * (1.6 if heavy else 1.0)
 	squash = Vector2(1.35, 0.7)
 	velocity.x = knock.x
 	if use_gravity:
 		velocity.y = minf(velocity.y, knock.y)
-	Juice.frost_burst(get_parent(), global_position, 8 if heavy else 5)
+	var burst := 5
+	if heavy:
+		burst = 8
+	if weak_hit:
+		burst = 12  # 약점 히트 — 파편 강조
+	Juice.frost_burst(get_parent(), global_position, burst)
 	if hp <= 0:
 		_die()
 
@@ -81,8 +96,11 @@ func _die() -> void:
 	visible = false
 	stun_t = 0.0
 	slow_t = 0.0
+	if material_drop > 0:
+		GameState.arena_material += material_drop
 	Juice.frost_burst(get_parent(), global_position, 16, Color(0.85, 0.96, 1.0))
-	get_tree().create_timer(respawn_delay).timeout.connect(_respawn)
+	if auto_respawn:
+		get_tree().create_timer(respawn_delay).timeout.connect(_respawn)
 
 func _respawn() -> void:
 	global_position = home_pos

@@ -170,8 +170,8 @@ const AP_RECOVERY := 3
 @export var fire_skill2_stun := 0.4
 
 @export_group("불 전공 · 스프라이트")
-@export var fire_sprite_offset := Vector2(0.0, 0.0)
-@export var fire_sprite_scale := 1.0
+@export var fire_sprite_offset := Vector2(0.0, -7.0)  # 발 정렬(측정: figure 발=frame y114)
+@export var fire_sprite_scale := 1.0  # figure ~51px ≈ 스펙 54단위 → 1.0 유지(줌으로 프레이밍)
 
 @export_group("피격 · 주스")
 @export var invuln_time := 0.6
@@ -248,6 +248,7 @@ var slot_cd: Array[float] = [0.0, 0.0]  # 슬롯별 쿨다운
 var slot_cast_t: Array[float] = [0.0, 0.0]  # 슬롯별 시전 텔 타이머
 var slot_dash_t: Array[float] = [0.0, 0.0]  # 슬롯별 돌진 타이머(서리창)
 var input_locked := false  # 각인 패널 등 모달 UI — 이동/전투 입력 차단
+var blade_element := "무"  # 무속성 칼날에 부여된 속성 정수("무"=미장착) — arena 가 주입
 var invuln_t := 0.0
 var hurt_flash_t := 0.0
 var squash := Vector2.ONE
@@ -277,6 +278,29 @@ func set_juice(j) -> void:
 
 func set_enemies(arr: Array) -> void:
 	_enemies = arr
+
+func set_blade_element(e: String) -> void:
+	# 속성 정수 장착 — 무속성 칼날의 피해 속성(상성 판정용)을 바꾼다.
+	blade_element = e
+
+func _lvl_dmg(base: int, id: String) -> int:
+	# 스킬 등급 데미지 배율: 2등급 ×1.3 / 3등급 ×1.6 (GameState.arena_levels).
+	var m := 1.0
+	match GameState.skill_level(id):
+		2:
+			m = 1.3
+		3:
+			m = 1.6
+	return int(round(float(base) * m))
+
+func _lvl_cd_mult(id: String) -> float:
+	# 스킬 등급 쿨다운 배율: 2등급 ×0.9 / 3등급 ×0.8.
+	match GameState.skill_level(id):
+		2:
+			return 0.9
+		3:
+			return 0.8
+	return 1.0
 
 func toggle_ability(key: String) -> bool:
 	if not abilities.has(key):
@@ -995,7 +1019,7 @@ func _attack_hit_check() -> void:
 		if not is_instance_valid(e) or not e.alive:
 			continue
 		if _rect_hits(hb, e.global_position, e.hurt_radius):
-			e.take_hit(dmg, knock, heavy)
+			e.take_hit(dmg, knock, heavy, blade_element)
 			hit_any = true
 	if hit_any:
 		# 타격이 마나 수급원(§4): 콤보로 벌어 스킬로 쓴다
@@ -1004,6 +1028,8 @@ func _attack_hit_check() -> void:
 		_shake(trauma_heavy if heavy else trauma_light)
 		var fx := global_position + Vector2(float(attack_face) * reach * 0.7, -8.0)
 		Juice.hit_spark(get_parent(), fx, 10 if heavy else 6)
+		if blade_element != "무":
+			Juice.frost_burst(get_parent(), fx, 6, Elements.color(blade_element))
 
 func _attack_hitbox(reach: float) -> Rect2:
 	# 얇고 긴 창 판정 — 세로 attack_hitbox_height, 가로 reach, 전방으로 뻗음
@@ -1067,7 +1093,7 @@ func _try_slot(slot: int, action: StringName) -> void:
 		_shake(0.08)
 		return
 	mana -= cost
-	slot_cd[slot] = _skill_cooldown(id)
+	slot_cd[slot] = _skill_cooldown(id) * _lvl_cd_mult(id)
 	attack_face = face
 	_cancel_attack()
 	slot_cast_t[slot] = _skill_cast_tell(id)
@@ -1171,7 +1197,9 @@ func _fire_skill1_fire() -> void:
 			var kdir := signf(e.global_position.x - fx)
 			if kdir == 0.0:
 				kdir = float(attack_face)
-			e.take_hit(fire_skill1_damage, Vector2(kdir * fire_skill1_knockback, -180.0), true)
+			e.take_hit(
+				_lvl_dmg(fire_skill1_damage, "flame_pillar"),
+				Vector2(kdir * fire_skill1_knockback, -180.0), true, "불")
 	_hitstop(hitstop_heavy)
 	_shake(trauma_heavy)
 	Juice.ground_flame(get_parent(), Vector2(fx, fy), fire_skill1_height)
@@ -1186,7 +1214,7 @@ func _frost_spear_fire(slot: int) -> void:
 		if not is_instance_valid(e) or not e.alive:
 			continue
 		if _rect_hits(hb, e.global_position, e.hurt_radius):
-			e.take_hit(skill1_damage, knock, true)
+			e.take_hit(_lvl_dmg(skill1_damage, "frost_spear"), knock, true, "물")
 			if e.has_method("apply_slow"):
 				e.apply_slow(skill1_slow_factor, skill1_slow_time)
 	_hitstop(hitstop_heavy)
@@ -1219,7 +1247,9 @@ func _fire_skill2_impact(at: Vector2) -> void:
 			var kdir := signf(e.global_position.x - at.x)
 			if kdir == 0.0:
 				kdir = float(face)
-			e.take_hit(fire_skill2_damage, Vector2(kdir * fire_skill2_knockback, -220.0), true)
+			e.take_hit(
+				_lvl_dmg(fire_skill2_damage, "meteor"),
+				Vector2(kdir * fire_skill2_knockback, -220.0), true, "불")
 			if e.has_method("apply_stun"):
 				e.apply_stun(fire_skill2_stun)
 	_hitstop(hitstop_heavy)
@@ -1236,7 +1266,9 @@ func _ice_skill2_fire() -> void:
 			var dir := signf(e.global_position.x - global_position.x)
 			if dir == 0.0:
 				dir = float(face)
-			e.take_hit(skill2_damage, Vector2(dir * skill2_knockback, -160.0), true)
+			e.take_hit(
+				_lvl_dmg(skill2_damage, "ice_burst"),
+				Vector2(dir * skill2_knockback, -160.0), true, "물")
 			if e.has_method("apply_stun"):
 				e.apply_stun(skill2_stun_time)
 	_hitstop(hitstop_heavy)
@@ -1313,9 +1345,16 @@ func _draw_blade(base: Vector2, length: float) -> void:
 	var f := float(face)
 	var tip := base + Vector2(f * length * squash.x, 0.0)
 	var w := attack_hitbox_height * 0.5
-	_spear_layer(base, tip, w * 1.7, Color(0.82, 0.84, 0.92, 0.16))
-	_spear_layer(base, tip, w, Color(0.88, 0.9, 0.96, 0.4))
-	_spear_layer(base, tip, w * 0.5, Color(0.96, 0.97, 1.0, 0.88))
+	var ec := Elements.color(blade_element)  # 정수 속성색(무=백색)
+	var c1 := Color(0.82, 0.84, 0.92).lerp(ec, 0.45)
+	c1.a = 0.16
+	var c2 := Color(0.88, 0.9, 0.96).lerp(ec, 0.4)
+	c2.a = 0.4
+	var c3 := Color(0.96, 0.97, 1.0).lerp(ec, 0.3)
+	c3.a = 0.88
+	_spear_layer(base, tip, w * 1.7, c1)
+	_spear_layer(base, tip, w, c2)
+	_spear_layer(base, tip, w * 0.5, c3)
 	draw_circle(tip, 3.0, Color(0.97, 0.98, 1.0, 0.9))
 
 func _spear_layer(base: Vector2, tip: Vector2, w: float, col: Color) -> void:

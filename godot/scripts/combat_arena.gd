@@ -302,6 +302,7 @@ func _setup_camera(player: CharacterBody2D) -> Camera2D:
 	cam.limit_bottom = int(ROOM_H)
 	cam.set("position_smoothing_enabled", true)
 	cam.set("position_smoothing_speed", 8.0)
+	cam.zoom = Vector2(1.5, 1.5)  # §9.1: 960×540 창 → 640×360 월드뷰(스펙). 코드에서 조정.
 	player.add_child(cam)
 	cam.make_current()
 	return cam

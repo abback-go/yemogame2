@@ -39,6 +39,32 @@ static var school_skill_slots: Array[String] = ["", ""]  # 각인 2슬롯 (방 �
 static var visited_school: Array[String] = []  # 방문한 학교 방 id (중복 없이, 발견 N/12)
 static var school_respawn_room := "sch_dorm_room"  # 거점(내 방) — 사망 시 리스폰
 
+# ── v3 전투 아레나 진행 상태 (combat_arena.gd 전용) ──
+# 아레나는 단일 씬이라 R(리스폰)은 player.respawn()만 하고 씬을 재로드하지 않는다.
+# 재화·배운 스킬·스킬 등급·장착 정수·각인 슬롯은 Esc→메뉴→[3] 재진입에도 유지되도록
+# 여기(static)에 둔다. 런처 [3] 진입 시 reset_arena()로 리셋. 전부 slice/school 과 분리.
+static var arena_material := 0  # 마력 결정 — 적 처치 드롭, 수업·레벨업 재화
+static var arena_blade_element := "무"  # 장착된 속성 정수("무"=미장착 / "불" / "물")
+static var arena_elements: Array[String] = ["무"]  # 보유 정수(장착 순환 대상)
+static var arena_learned: Array[String] = []  # 수업으로 배운 스킬 id(각인 가능 목록)
+static var arena_levels: Dictionary = {}  # skill id → 등급(1~3), 미기재=1
+static var arena_slots: Array[String] = ["", ""]  # 각인 2슬롯 (재진입 유지)
+
+
+static func reset_arena() -> void:
+	# 런처 [3] 진입 초기화 — 재화 0·정수 미장착·배운 스킬 없음·등급 초기·빈 각인.
+	arena_material = 0
+	arena_blade_element = "무"
+	arena_elements = ["무"]
+	arena_learned = []
+	arena_levels = {}
+	arena_slots = ["", ""]
+
+
+static func skill_level(id: String) -> int:
+	# 스킬 등급 조회(미기재=1). 데미지·쿨 배율 계산의 단일 출처.
+	return int(arena_levels.get(id, 1))
+
 
 static func reset_slice() -> void:
 	# 런처 [4] 첫 진입 초기화 — 시작 방·풀피/풀마나·빈 각인·방문·능력 획득 리셋.
