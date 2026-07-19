@@ -886,7 +886,8 @@ func _land_check(vy_before: float) -> void:
 # ── 기본 공격: 얼음 창 3타 lunge 콤보 (§2) ──────────────────────
 
 func _can_attack() -> bool:
-	if in_water or flying or wall_running:
+	# 비행 중에도 기본 공격 허용(비행 이동은 유지, 공격 판정·스프라이트만 재생).
+	if in_water or wall_running:
 		return false
 	if dash_t > 0.0 or _active_dash_slot() >= 0:
 		return false
@@ -919,7 +920,7 @@ func _start_attack_step(step: int) -> void:
 func _update_attack(delta: float) -> void:
 	if attack_step == AP_NONE:
 		return
-	if in_water or flying:
+	if in_water:
 		_cancel_attack()
 		return
 	attack_phase_t -= delta
@@ -940,8 +941,10 @@ func _enter_active() -> void:
 	attack_phase = AP_ACTIVE
 	attack_phase_t = _atk_active(attack_step)
 	attack_hit_done = false
-	var lunge := atk_lunge_heavy if attack_step == 3 else atk_lunge_light
-	velocity.x = float(attack_face) * lunge
+	# 비행 중이면 런지로 비행 이동을 덮어쓰지 않는다(비행 이동 유지 — _do_flight가 담당).
+	if not flying:
+		var lunge := atk_lunge_heavy if attack_step == 3 else atk_lunge_light
+		velocity.x = float(attack_face) * lunge
 	_trigger_squash(Vector2(1.3, 0.85))
 	# v3 무속성: 원소 궤적 없이 중립 칼날 스파크(흰/회색)만
 	var tip := global_position + Vector2(float(attack_face) * _atk_reach(attack_step) * 0.6, -8.0)

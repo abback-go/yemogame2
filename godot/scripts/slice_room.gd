@@ -14,6 +14,8 @@ const ShooterScript := preload("res://scripts/enemies/shooter.gd")
 
 const BENCH_RADIUS := 70.0
 const SPAWN_GRACE := 0.25  # 스폰 직후 출구 재트리거 방지 유예
+const ORB_RADIUS := 44.0  # 능력 오브 습득 근접 거리
+const EXIT_COLOR := Color(0.3, 1.0, 1.0)  # 출구 문틀·화살표(시안)
 
 @export_group("주스 (combat-spec §6)")
 @export var shake_max_offset := 12.0
@@ -41,6 +43,7 @@ var _bench_prompt: Label
 var _reloading := false
 var _grace_t := 0.0
 var _pending_bubbles: Array[Node2D] = []  # 스폰 전 생성된 산소통 — 플레이어 스폰 후 등록
+var _orbs: Array = []  # 활성 능력 오브 [{node, pos, grants, id, toast, tween}]
 
 
 func _ready() -> void:
@@ -59,7 +62,7 @@ func _ready() -> void:
 	_player.collision_layer = 2  # 적(레이어4)·플레이어 물리 충돌 분리(발판=1)
 	_inject_player_state()
 	_player.died.connect(_on_player_death)
-	_enable_all_abilities()
+	_apply_granted_abilities()
 	_player.set_zones(_water_rects, _updraft_rects)
 	_enemies = _spawn_enemies(room["enemies"])
 	_player.set_enemies(_enemies)
@@ -78,9 +81,15 @@ func _ready() -> void:
 	_grace_t = SPAWN_GRACE
 
 
-func _enable_all_abilities() -> void:
+func _apply_granted_abilities() -> void:
+	# 튜토리얼: 9종 전부 OFF로 초기화한 뒤 GameState.abilities_granted 만 ON.
+	# 달리기·점프·칼 공격은 abilities 딕셔너리 밖 → 항상 가능(시작 능력).
 	for key in PlayerScript.ABILITY_KEYS:
-		_player.abilities[key] = true
+		_player.abilities[key] = false
+	for key in GameState.abilities_granted:
+		var k := String(key)
+		if _player.abilities.has(k):
+			_player.abilities[k] = true
 
 
 func _physics_process(delta: float) -> void:
@@ -90,6 +99,7 @@ func _physics_process(delta: float) -> void:
 		_grace_t = maxf(0.0, _grace_t - delta)
 	else:
 		_check_exits()
+	_check_orbs()
 	_update_bench_prompt()
 
 
@@ -238,7 +248,16 @@ func _build_room(room: Dictionary) -> void:
 		_add_reward(pos)
 	for s in room["signs"]:
 		_add_sign(s["pos"], String(s["text"]))
+	if room.has("gate_marks"):
+		for gm in room["gate_marks"]:
+			_add_visual_rect(gm["rect"], gm["color"])
+	if room.has("orbs"):
+		for od in room["orbs"]:
+			if not GameState.orbs_taken.has(String(od["id"])):
+				_spawn_orb(od)
 	_exits = room["exits"]
+	for ex in _exits:
+		_add_exit_marker(ex["rect"], String(ex.get("arrow", "right")), EXIT_COLOR)
 	if room.has("bench"):
 		_has_bench = true
 		_bench_pos = room["bench"]
@@ -310,6 +329,120 @@ func _make_air_bubble(pos: Vector2) -> Node2D:
 	vis.color = Color(0.55, 0.85, 1.0, 0.9)
 	add_child(vis)
 	return vis
+
+
+# ── 능력 오브 (습득 진행) ────────────────────────────────────────
+
+func _check_orbs() -> void:
+	# 플레이어 근접 시 오브 습득 — 능력 ON·GameState 영구 기록·토스트·오브 소멸.
+	if _orbs.is_empty():
+		return
+	var p := _player.global_position
+	for i in range(_orbs.size() - 1, -1, -1):
+		var orb: Dictionary = _orbs[i]
+		if p.distance_to(orb["pos"]) < ORB_RADIUS:
+			_grant_orb(orb)
+			_orbs.remove_at(i)
+
+
+func _grant_orb(orb: Dictionary) -> void:
+	for key in orb["grants"]:
+		var k := String(key)
+		if not GameState.abilities_granted.has(k):
+			GameState.abilities_granted.append(k)
+		if _player.abilities.has(k):
+			_player.abilities[k] = true
+	if not GameState.orbs_taken.has(String(orb["id"])):
+		GameState.orbs_taken.append(String(orb["id"]))
+	_hud.show_toast(String(orb["toast"]))
+	var tw = orb["tween"]
+	if tw != null and tw.is_valid():
+		tw.kill()
+	var node: Node2D = orb["node"]
+	if is_instance_valid(node):
+		node.queue_free()
+
+
+func _spawn_orb(def: Dictionary) -> void:
+	# 발광 오브(3겹 다이아 + 라벨) + 맥동 modulate tween. 습득 판정은 _check_orbs.
+	var root := Node2D.new()
+	root.position = def["pos"]
+	root.add_child(_orb_diamond(22.0, Color(0.4, 1.0, 0.9, 0.25)))
+	root.add_child(_orb_diamond(14.0, Color(0.6, 1.0, 0.95, 0.6)))
+	root.add_child(_orb_diamond(7.0, Color(1.0, 1.0, 1.0, 0.95)))
+	var lb := Label.new()
+	lb.text = String(def["label"])
+	lb.position = Vector2(-34.0, -52.0)
+	lb.add_theme_font_override("font", _font)
+	lb.add_theme_font_size_override("font_size", 15)
+	lb.add_theme_color_override("font_color", Color(0.7, 1.0, 0.95))
+	root.add_child(lb)
+	add_child(root)
+	var tw := create_tween()
+	tw.set_loops()
+	tw.tween_property(root, "modulate:a", 0.4, 0.55).set_trans(Tween.TRANS_SINE)
+	tw.tween_property(root, "modulate:a", 1.0, 0.55).set_trans(Tween.TRANS_SINE)
+	_orbs.append({
+		"node": root,
+		"pos": def["pos"],
+		"grants": def["grants"],
+		"id": String(def["id"]),
+		"toast": String(def["toast"]),
+		"tween": tw,
+	})
+
+
+func _orb_diamond(r: float, col: Color) -> Polygon2D:
+	var vis := Polygon2D.new()
+	vis.polygon = PackedVector2Array([
+		Vector2(0.0, -r), Vector2(r, 0.0), Vector2(0.0, r), Vector2(-r, 0.0)])
+	vis.color = col
+	return vis
+
+
+func _add_visual_rect(rect: Rect2, color: Color) -> void:
+	# 충돌 없는 순수 색 표식(게이트 힌트 등).
+	var vis := _make_rect_visual(rect.size, color)
+	vis.position = rect.position + rect.size / 2.0
+	add_child(vis)
+
+
+# ── 출구 문틀·화살표 (진행 방향 시각 표식) ────────────────────────
+
+func _add_exit_marker(rect: Rect2, arrow: String, color: Color) -> void:
+	# 밝은 문틀(테두리) + 진행 방향 화살표 삼각형 — 어디로 나가는지 즉시 보이게.
+	var border := Line2D.new()
+	border.width = 4.0
+	border.default_color = color
+	var x0 := rect.position.x
+	var y0 := rect.position.y
+	var x1 := x0 + rect.size.x
+	var y1 := y0 + rect.size.y
+	border.points = PackedVector2Array([
+		Vector2(x0, y0), Vector2(x1, y0), Vector2(x1, y1),
+		Vector2(x0, y1), Vector2(x0, y0),
+	])
+	add_child(border)
+	var head := Polygon2D.new()
+	head.position = rect.position + rect.size / 2.0
+	head.polygon = _arrow_points(arrow)
+	head.color = color
+	add_child(head)
+
+
+func _arrow_points(dir: String) -> PackedVector2Array:
+	var s := 14.0
+	match dir:
+		"left":
+			return PackedVector2Array([
+				Vector2(s, -s), Vector2(-s, 0.0), Vector2(s, s)])
+		"up":
+			return PackedVector2Array([
+				Vector2(-s, s), Vector2(0.0, -s), Vector2(s, s)])
+		"down":
+			return PackedVector2Array([
+				Vector2(-s, -s), Vector2(0.0, s), Vector2(s, -s)])
+	return PackedVector2Array([Vector2(-s, -s), Vector2(s, 0.0), Vector2(-s, s)])
 
 
 func _add_sign(pos: Vector2, text: String) -> void:

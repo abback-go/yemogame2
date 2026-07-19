@@ -18,10 +18,16 @@ static var player_oxygen := 100.0
 static var skill_slots: Array[String] = ["", ""]  # 각인 2슬롯 (방 넘어 유지)
 static var visited: Array[String] = []  # 방문한 방 id (중복 없이, 발견 N/5)
 static var respawn_room := "hub"  # 거점(bench) 세이브 방 — 사망 시 여기로 리스폰
+# ── 튜토리얼 능력 획득 진행(오브로 하나씩 습득 → 방 넘어·재로드 지속) ──
+# abilities_granted: 오브로 습득한 player.abilities 키들(예: "dash_ground").
+#   방 빌드마다 slice_room 이 이 목록만 player.abilities 에 ON(_apply_granted_abilities).
+# orbs_taken: 이미 먹은 오브 id — 재로드·재방문 시 오브 재생성 스킵.
+static var abilities_granted: Array[String] = []
+static var orbs_taken: Array[String] = []
 
 
 static func reset_slice() -> void:
-	# 런처 [4] 첫 진입 초기화 — 시작 방·풀피/풀마나·빈 각인·방문 기록 리셋.
+	# 런처 [4] 첫 진입 초기화 — 시작 방·풀피/풀마나·빈 각인·방문·능력 획득 리셋.
 	slice_room = "hub"
 	slice_entry = "start"
 	player_mana = 100.0
@@ -30,3 +36,5 @@ static func reset_slice() -> void:
 	skill_slots = ["", ""]
 	visited = []
 	respawn_room = "hub"
+	abilities_granted = []
+	orbs_taken = []
