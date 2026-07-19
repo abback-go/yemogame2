@@ -142,6 +142,120 @@ static func dust_puff(parent: Node, pos: Vector2, amount := 6) -> void:
 	p.color = Color(0.62, 0.58, 0.52)
 	p.emitting = true
 
+# ── 불 전공 파티클 헬퍼 (서리 헬퍼 미러, 불 팔레트 주황/빨강) ─────────
+
+static func flame_burst(
+	parent: Node, pos: Vector2,
+	amount := 8, color := Color(1.0, 0.55, 0.15)) -> void:
+	# 불의 검 타격 불똥 — 불꽃은 위로 솟구침(음의 중력)
+	var p := _spawn_particles(parent, pos, amount)
+	p.direction = Vector2(0.0, -1.0)
+	p.spread = 150.0
+	p.initial_velocity_min = 80.0
+	p.initial_velocity_max = 210.0
+	p.gravity = Vector2(0.0, -120.0)
+	p.scale_amount_min = 1.5
+	p.scale_amount_max = 3.5
+	p.color = color
+	p.emitting = true
+
+static func flame_trail(parent: Node, pos: Vector2, face: int) -> void:
+	# 불의 검 궤적 — 전방 편향 불꽃
+	var p := _spawn_particles(parent, pos, 8)
+	p.direction = Vector2(float(face), -0.3)
+	p.spread = 40.0
+	p.initial_velocity_min = 100.0
+	p.initial_velocity_max = 230.0
+	p.gravity = Vector2(0.0, -80.0)
+	p.scale_amount_min = 1.6
+	p.scale_amount_max = 3.2
+	p.color = Color(1.0, 0.7, 0.25)
+	p.emitting = true
+
+static func ground_flame(parent: Node, pos: Vector2, height: float) -> void:
+	# 스킬1 발밑 화염 기둥 — 지면(pos)에서 위로 솟구치는 불기둥 + 코어 폴리곤
+	var p := _spawn_particles(parent, pos, 34)
+	p.lifetime = 0.55
+	p.direction = Vector2(0.0, -1.0)
+	p.spread = 22.0
+	p.initial_velocity_min = height * 2.0
+	p.initial_velocity_max = height * 3.4
+	p.gravity = Vector2(0.0, -160.0)
+	p.scale_amount_min = 2.0
+	p.scale_amount_max = 4.5
+	p.color = Color(1.0, 0.55, 0.12)
+	p.emitting = true
+	var core := Polygon2D.new()
+	var hw := 9.0
+	core.polygon = PackedVector2Array([
+		Vector2(-hw, 0.0), Vector2(hw, 0.0),
+		Vector2(hw * 0.5, -height), Vector2(-hw * 0.5, -height)])
+	core.color = Color(1.0, 0.8, 0.3, 0.6)
+	core.position = pos
+	parent.add_child(core)
+	var tw := core.create_tween()
+	tw.tween_property(core, "modulate:a", 0.0, 0.4).from(1.0)
+	tw.tween_callback(core.queue_free)
+
+static func meteor(
+	parent: Node, from: Vector2, to: Vector2, fall_time: float) -> void:
+	# 스킬2 메테오 낙하 — 화면 위 from 에서 착탄점 to 로 하강(불덩이 + 꼬리 궤적)
+	var n := Node2D.new()
+	n.position = from
+	var glow := Polygon2D.new()
+	glow.polygon = _circle_poly(22.0, 12)
+	glow.color = Color(1.0, 0.4, 0.1, 0.35)
+	n.add_child(glow)
+	var head := Polygon2D.new()
+	head.polygon = _circle_poly(14.0, 12)
+	head.color = Color(1.0, 0.6, 0.2)
+	n.add_child(head)
+	var trail := CPUParticles2D.new()
+	trail.amount = 22
+	trail.lifetime = 0.4
+	trail.direction = (from - to).normalized()
+	trail.spread = 18.0
+	trail.initial_velocity_min = 40.0
+	trail.initial_velocity_max = 120.0
+	trail.gravity = Vector2.ZERO
+	trail.scale_amount_min = 2.0
+	trail.scale_amount_max = 4.0
+	trail.color = Color(1.0, 0.55, 0.15)
+	trail.emitting = true
+	n.add_child(trail)
+	parent.add_child(n)
+	var tw := n.create_tween()
+	tw.tween_property(n, "position", to, fall_time).from(from)
+	tw.tween_callback(n.queue_free)
+
+static func meteor_impact(parent: Node, pos: Vector2, radius: float) -> void:
+	# 스킬2 착탄 폭발 — 전방위 불꽃 방사 + 충격 링
+	var p := _spawn_particles(parent, pos, 30)
+	p.lifetime = 0.5
+	p.direction = Vector2(0.0, -1.0)
+	p.spread = 180.0
+	p.initial_velocity_min = radius * 2.0
+	p.initial_velocity_max = radius * 4.0
+	p.gravity = Vector2(0.0, 220.0)
+	p.scale_amount_min = 2.0
+	p.scale_amount_max = 5.0
+	p.color = Color(1.0, 0.5, 0.12)
+	p.emitting = true
+	var ring := _ring_line(radius * 0.6, Color(1.0, 0.7, 0.25), 24)
+	ring.position = pos
+	parent.add_child(ring)
+	var tw := ring.create_tween()
+	tw.tween_property(ring, "scale", Vector2(1.8, 1.8), 0.3).from(Vector2(0.5, 0.5))
+	tw.parallel().tween_property(ring, "modulate:a", 0.0, 0.3).from(1.0)
+	tw.tween_callback(ring.queue_free)
+
+static func _circle_poly(radius: float, seg: int) -> PackedVector2Array:
+	var pts := PackedVector2Array()
+	for i in seg:
+		var a := TAU * float(i) / float(seg)
+		pts.append(Vector2(cos(a), sin(a)) * radius)
+	return pts
+
 static func rune_flash(
 	parent: Node, pos: Vector2, radius: float,
 	duration: float, color: Color) -> void:

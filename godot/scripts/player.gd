@@ -145,6 +145,31 @@ const AP_RECOVERY := 3
 @export var skill2_stun_time := 0.6
 @export var skill2_knockback := 320.0
 
+@export_group("불 전공 · 발밑 화염 (S)")
+@export var fire_skill1_cooldown := 6.0
+@export var fire_skill1_mana := 20.0
+@export var fire_skill1_damage := 3
+@export var fire_skill1_cast_tell := 0.25
+@export var fire_skill1_width := 74.0
+@export var fire_skill1_height := 150.0
+@export var fire_skill1_range := 360.0
+@export var fire_skill1_knockback := 130.0
+
+@export_group("불 전공 · 메테오 (D)")
+@export var fire_skill2_cooldown := 9.0
+@export var fire_skill2_mana := 30.0
+@export var fire_skill2_damage := 4
+@export var fire_skill2_cast_tell := 0.35
+@export var fire_skill2_radius := 110.0
+@export var fire_skill2_range := 520.0
+@export var fire_skill2_knockback := 340.0
+@export var fire_skill2_fall_time := 0.45
+@export var fire_skill2_stun := 0.4
+
+@export_group("불 전공 · 스프라이트")
+@export var fire_sprite_offset := Vector2(0.0, 0.0)
+@export var fire_sprite_scale := 1.0
+
 @export_group("피격 · 주스")
 @export var invuln_time := 0.6
 @export var damage_knockback := 220.0
@@ -222,12 +247,31 @@ var skill1_dash_t := 0.0
 var invuln_t := 0.0
 var hurt_flash_t := 0.0
 var squash := Vector2.ONE
+# 원소 전공 (스폰 시 GameState 에서 결정) — 공개 변수
+var element := "fire"
 var _juice = null
 var _enemies: Array = []
 var _was_on_floor := true
+# 불 스프라이트 참조(비공개)
+var _sprite: AnimatedSprite2D = null
+var _use_sprite := false
 
 func _ready() -> void:
 	start_pos = position
+	_init_element()
+
+func _init_element() -> void:
+	# 스폰 시 GameState.combat_element(씬 전환에도 유지되는 static)로 원소 결정.
+	# 불 + 스프라이트 로드 성공 시 AnimatedSprite2D 사용, 아니면 그레이박스 폴백.
+	element = GameState.combat_element
+	if element != "fire":
+		return
+	_sprite = PlayerSprite.build(self)
+	if _sprite == null:
+		return
+	_sprite.offset = fire_sprite_offset
+	_sprite.scale = Vector2(fire_sprite_scale, fire_sprite_scale)
+	_use_sprite = true
 
 func set_juice(j) -> void:
 	_juice = j
@@ -332,7 +376,25 @@ func _physics_process(delta: float) -> void:
 	_post_move()
 	_land_check(vy_before)
 	_was_on_floor = is_on_floor()
+	_update_sprite()
 	queue_redraw()
+
+func _update_sprite() -> void:
+	if not _use_sprite or _sprite == null:
+		return
+	PlayerSprite.drive(_sprite, _sprite_state(), face)
+
+func _sprite_state() -> String:
+	# 플레이어 상태 → 불 스프라이트 애니 이름 (우선순위: 피격 > 공격 > 공중 > 지상)
+	if hurt_flash_t > 0.0:
+		return "hit"
+	if attack_step != AP_NONE:
+		return "attack2" if attack_step == 2 else "attack1"
+	if not is_on_floor():
+		return "jump" if velocity.y < 0.0 else "fall"
+	if absf(velocity.x) > 10.0:
+		return "run"
+	return "idle"
 
 func _tick_timers(delta: float) -> void:
 	coyote -= delta
@@ -868,7 +930,10 @@ func _enter_active() -> void:
 	velocity.x = float(attack_face) * lunge
 	_trigger_squash(Vector2(1.3, 0.85))
 	var tip := global_position + Vector2(float(attack_face) * _atk_reach(attack_step) * 0.6, -8.0)
-	Juice.frost_trail(get_parent(), tip, attack_face)
+	if element == "fire":
+		Juice.flame_trail(get_parent(), tip, attack_face)
+	else:
+		Juice.frost_trail(get_parent(), tip, attack_face)
 
 func _enter_recovery() -> void:
 	attack_phase = AP_RECOVERY
@@ -923,7 +988,10 @@ func _attack_hit_check() -> void:
 		_hitstop(hitstop_heavy if heavy else hitstop_light)
 		_shake(trauma_heavy if heavy else trauma_light)
 		var fx := global_position + Vector2(float(attack_face) * reach * 0.7, -8.0)
-		Juice.frost_burst(get_parent(), fx, 10 if heavy else 6)
+		if element == "fire":
+			Juice.flame_burst(get_parent(), fx, 10 if heavy else 6)
+		else:
+			Juice.frost_burst(get_parent(), fx, 10 if heavy else 6)
 
 func _attack_hitbox(reach: float) -> Rect2:
 	# 얇고 긴 창 판정 — 세로 attack_hitbox_height, 가로 reach, 전방으로 뻗음
@@ -962,17 +1030,21 @@ func _try_skill1() -> void:
 	if skill1_cd > 0.0 or skill1_cast_t > 0.0 or skill1_dash_t > 0.0:
 		_shake(0.08)  # 불발(쿨) 피드백
 		return
-	if mana < skill1_mana:
+	var cost := fire_skill1_mana if element == "fire" else skill1_mana
+	if mana < cost:
 		_flash_mana()
 		_shake(0.08)
 		return
-	mana -= skill1_mana
-	skill1_cd = skill1_cooldown
+	mana -= cost
+	skill1_cd = fire_skill1_cooldown if element == "fire" else skill1_cooldown
 	attack_face = face
 	_cancel_attack()
-	skill1_cast_t = skill1_cast_tell
+	skill1_cast_t = fire_skill1_cast_tell if element == "fire" else skill1_cast_tell
 	var rp := global_position + Vector2(float(face) * 10.0, -8.0)
-	Juice.rune_flash(get_parent(), rp, 34.0, 0.2, Color(0.65, 0.9, 1.0))
+	if element == "fire":
+		Juice.rune_flash(get_parent(), rp, 34.0, 0.2, Color(1.0, 0.6, 0.2))
+	else:
+		Juice.rune_flash(get_parent(), rp, 34.0, 0.2, Color(0.65, 0.9, 1.0))
 
 func _try_skill2() -> void:
 	if not Input.is_action_just_pressed("skill2"):
@@ -982,15 +1054,19 @@ func _try_skill2() -> void:
 	if skill2_cd > 0.0 or skill2_cast_t > 0.0:
 		_shake(0.08)
 		return
-	if mana < skill2_mana:
+	var cost := fire_skill2_mana if element == "fire" else skill2_mana
+	if mana < cost:
 		_flash_mana()
 		_shake(0.08)
 		return
-	mana -= skill2_mana
-	skill2_cd = skill2_cooldown
+	mana -= cost
+	skill2_cd = fire_skill2_cooldown if element == "fire" else skill2_cooldown
 	attack_face = face
 	_cancel_attack()
-	skill2_cast_t = skill2_cast_tell
+	skill2_cast_t = fire_skill2_cast_tell if element == "fire" else skill2_cast_tell
+	if element == "fire":
+		var rp := global_position + Vector2(float(face) * 10.0, -8.0)
+		Juice.rune_flash(get_parent(), rp, 34.0, 0.2, Color(1.0, 0.5, 0.15))
 
 func _update_skills(delta: float) -> void:
 	if skill1_cast_t > 0.0:
@@ -1007,6 +1083,49 @@ func _update_skills(delta: float) -> void:
 			_skill2_fire()
 
 func _skill1_fire() -> void:
+	if element == "fire":
+		_fire_skill1_fire()
+	else:
+		_ice_skill1_fire()
+
+func _nearest_enemy(max_dist: float) -> Node:
+	# 살아있는 적 중 가장 가까운 것(조준 대체). 범위 밖이면 null.
+	var best: Node = null
+	var best_d := max_dist
+	for e in _enemies:
+		if not is_instance_valid(e) or not e.alive:
+			continue
+		var d := global_position.distance_to(e.global_position)
+		if d <= best_d:
+			best_d = d
+			best = e
+	return best
+
+func _fire_skill1_fire() -> void:
+	# 발밑 화염: 가장 가까운(또는 전방) 적의 발밑 지면에서 화염 기둥이 솟아 판정.
+	var tgt := _nearest_enemy(fire_skill1_range)
+	var fx := global_position.x + float(attack_face) * 120.0
+	var fy := global_position.y
+	if tgt != null:
+		fx = tgt.global_position.x
+		fy = tgt.global_position.y
+	# 화염 기둥 판정: 지면(fx,fy)에서 위로 솟는 세로 rect
+	var col := Rect2(
+		fx - fire_skill1_width * 0.5, fy - fire_skill1_height,
+		fire_skill1_width, fire_skill1_height + 20.0)
+	for e in _enemies:
+		if not is_instance_valid(e) or not e.alive:
+			continue
+		if _rect_hits(col, e.global_position, e.hurt_radius):
+			var kdir := signf(e.global_position.x - fx)
+			if kdir == 0.0:
+				kdir = float(attack_face)
+			e.take_hit(fire_skill1_damage, Vector2(kdir * fire_skill1_knockback, -180.0), true)
+	_hitstop(hitstop_heavy)
+	_shake(trauma_heavy)
+	Juice.ground_flame(get_parent(), Vector2(fx, fy), fire_skill1_height)
+
+func _ice_skill1_fire() -> void:
 	# 관통 서리창: 전방 돌진 + 긴 얼음창 직선 관통 + 빙결 슬로우
 	skill1_dash_t = skill1_dash_time
 	invuln_t = maxf(invuln_t, skill1_dash_time + 0.05)  # 약한 밀림 저항(§3)
@@ -1030,6 +1149,39 @@ func _skill1_move(delta: float) -> void:
 	state_name = "관통 서리창"
 
 func _skill2_fire() -> void:
+	if element == "fire":
+		_fire_skill2_fire()
+	else:
+		_ice_skill2_fire()
+
+func _fire_skill2_fire() -> void:
+	# 메테오: 가장 가까운(또는 전방) 적 지점을 조준해 화면 위에서 메테오 낙하.
+	var tgt := _nearest_enemy(fire_skill2_range)
+	var to := global_position + Vector2(float(attack_face) * 180.0, 0.0)
+	if tgt != null:
+		to = tgt.global_position
+	var from := Vector2(to.x - 60.0, to.y - 520.0)
+	Juice.meteor(get_parent(), from, to, fire_skill2_fall_time)
+	# 착탄(폭발·피해)은 낙하 연출과 동기화 — fall_time 뒤 고정 지점에 AoE
+	get_tree().create_timer(fire_skill2_fall_time).timeout.connect(
+		_fire_skill2_impact.bind(to))
+
+func _fire_skill2_impact(at: Vector2) -> void:
+	for e in _enemies:
+		if not is_instance_valid(e) or not e.alive:
+			continue
+		if at.distance_to(e.global_position) <= fire_skill2_radius + e.hurt_radius:
+			var kdir := signf(e.global_position.x - at.x)
+			if kdir == 0.0:
+				kdir = float(face)
+			e.take_hit(fire_skill2_damage, Vector2(kdir * fire_skill2_knockback, -220.0), true)
+			if e.has_method("apply_stun"):
+				e.apply_stun(fire_skill2_stun)
+	_hitstop(hitstop_heavy)
+	_shake(trauma_heavy)
+	Juice.meteor_impact(get_parent(), at, fire_skill2_radius)
+
+func _ice_skill2_fire() -> void:
 	# 빙정 폭발: 반경 90px 냉기 폭발 + 넉백 + 짧은 빙결 스턴
 	for e in _enemies:
 		if not is_instance_valid(e) or not e.alive:
@@ -1068,6 +1220,9 @@ func take_damage(amount: int, from_pos: Vector2) -> void:
 		respawn()
 
 func _draw() -> void:
+	# 불 스프라이트 사용 시 그레이박스/창 비주얼 생략(애니 스프라이트가 몸을 그림)
+	if _use_sprite:
+		return
 	# 임시 비주얼: 상태별 몸통색 + 지팡이 + 비행 날개
 	if flying:
 		var wcol := Color(0.96, 0.96, 1.0, 0.9)

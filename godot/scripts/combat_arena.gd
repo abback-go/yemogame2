@@ -64,7 +64,8 @@ func _unhandled_input(event: InputEvent) -> void:
 		_hud.show_toast("마나 리필")
 
 func _setup_input() -> void:
-	# 이동 키(movement-spec v2.1) + 전투 키(combat-spec §1) 등록
+	# 이동 키(movement-spec v2.1) + 전투 키 A/S/D(양 전공 공통 재배치).
+	# 아레나는 이동 엑스트라(ice_place=A·fly=D) 미사용 → 더블 바인딩 방지 위해 미등록.
 	_add_key(&"move_left", KEY_LEFT)
 	_add_key(&"move_right", KEY_RIGHT)
 	_add_key(&"jump", KEY_Z)
@@ -72,13 +73,11 @@ func _setup_input() -> void:
 	_add_key(&"dash", KEY_C)
 	_add_key(&"dash", KEY_SHIFT)
 	_add_key(&"cast", KEY_X)
-	_add_key(&"ice_place", KEY_A)
-	_add_key(&"fly", KEY_D)
 	_add_key(&"fly_up", KEY_UP)
 	_add_key(&"move_down", KEY_DOWN)
-	_add_key(&"attack", KEY_J)
-	_add_key(&"skill1", KEY_K)
-	_add_key(&"skill2", KEY_L)
+	_add_key(&"attack", KEY_A)
+	_add_key(&"skill1", KEY_S)
+	_add_key(&"skill2", KEY_D)
 
 func _add_key(action: StringName, keycode: Key) -> void:
 	if not InputMap.has_action(action):
@@ -102,10 +101,17 @@ func _build_room() -> void:
 	_add_signs()
 
 func _add_signs() -> void:
-	_add_sign(Vector2(70, 250),
-		"[전투 트라이얼] 얼음 · 창\n" +
-		"J 3타 콤보   K 관통 서리창   L 빙정 폭발\n" +
-		"타격=마나 수급, 스킬=마나 소모")
+	# 현재 원소(GameState)에 맞춰 전공 안내 팻말 분기 — A/S/D 키 공통.
+	if GameState.combat_element == "fire":
+		_add_sign(Vector2(70, 250),
+			"[전투 트라이얼] 불 · 검\n" +
+			"A 불의 검 콤보   S 발밑 화염   D 메테오\n" +
+			"타격=마나 수급, 스킬=마나 소모")
+	else:
+		_add_sign(Vector2(70, 250),
+			"[전투 트라이얼] 얼음 · 창\n" +
+			"A 3타 콤보   S 관통 서리창   D 빙정 폭발\n" +
+			"타격=마나 수급, 스킬=마나 소모")
 	_add_sign(Vector2(556, 512), "허수아비 — 무한 HP\n콤보·히트스톱·타격감 확인")
 	_add_sign(Vector2(1108, 512), "근접 워커 — HP3\n0.5초 예비동작 후 찌르기")
 	_add_sign(Vector2(760, 250), "원거리 사수 — HP2\n0.6초 조준 후 느린 투사체")
