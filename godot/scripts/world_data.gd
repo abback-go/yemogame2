@@ -7,10 +7,13 @@ extends RefCounted
 ## 좌표계: 방 원점(0,0) 좌상단. 표준 방 1600×720, 바닥 top y=620.
 
 const ROOM_ORDER := [
+	"op_start", "op_hall",
 	"hub_plaza", "hub_hall",
 	"cw_entry", "cw_shooter", "cw_brute", "cw_caster", "cw_altar",
 ]
 const ROOM_NAMES := {
+	"op_start": "입학 · 안뜰",
+	"op_hall": "입학 · 회랑",
 	"hub_plaza": "정문 마당",
 	"hub_hall": "본관 홀",
 	"cw_entry": "훈련 구역 · 입구",
@@ -39,6 +42,10 @@ static func room_name(id: String) -> String:
 
 static func get_room(id: String) -> Dictionary:
 	match id:
+		"op_start":
+			return _op_start()
+		"op_hall":
+			return _op_hall()
 		"hub_plaza":
 			return _hub_plaza()
 		"hub_hall":
@@ -107,6 +114,55 @@ static func _blk(rect: Rect2, name_kr: String, arrow: String) -> Dictionary:
 	return {"rect": rect, "name": name_kr, "arrow": arrow}
 
 
+static func _orb(
+	id: String, pos: Vector2, grants: Array, label: String, toast: String
+) -> Dictionary:
+	return {"id": id, "pos": pos, "grants": grants, "label": label, "toast": toast}
+
+
+# ── 입학(오프닝) — 소프트락 불가: 오브는 경로 위 습득, 능력은 선택 보상만 개방 ──
+
+static func _op_start() -> Dictionary:
+	return {
+		"name": "입학 · 안뜰",
+		"size": Vector2(1600, 720),
+		"entries": {"start": Vector2(120, 560), "from_right": Vector2(1500, 560)},
+		"solids": [_floor()],
+		"plats": [],
+		"orbs": [
+			_orb("orb_dash", Vector2(430, 560), ["dash_ground", "dash_air"],
+				"대시", "대시 습득! (C/Shift)"),
+		],
+		"signs": [
+			_sign(Vector2(120, 420),
+				"입학 · 안뜰\nC/Shift = 대시(짧은 순간이동)\n오른쪽 → 회랑"),
+		],
+		"exits": [_exit_right("op_hall")],
+	}
+
+
+static func _op_hall() -> Dictionary:
+	return {
+		"name": "입학 · 회랑",
+		"size": Vector2(1600, 720),
+		"entries": _entries_lr(),
+		"solids": [_floor()],
+		"plats": [Rect2(700, 490, 160, 20), Rect2(1080, 380, 200, 20)],
+		"orbs": [
+			_orb("orb_djump", Vector2(380, 560), ["double_jump"],
+				"이단점프", "이단점프 습득! (공중 Z)"),
+			_orb("orb_wallrun", Vector2(720, 560), ["wall_run"],
+				"벽달리기", "벽달리기 습득! (벽 향해+↑)"),
+		],
+		"rewards": [Vector2(1160, 355)],
+		"signs": [
+			_sign(Vector2(120, 400),
+				"입학 · 회랑\n공중 Z = 이단점프 · 벽 향해+↑ = 벽달리기\n높은 발판 보상 = 이단점프로 · 오른쪽 → 정문 마당"),
+		],
+		"exits": [_exit_left("op_start"), _exit_right("hub_plaza")],
+	}
+
+
 # ── 허브 ──────────────────────────────────────────────────────────
 
 static func _hub_plaza() -> Dictionary:
@@ -114,16 +170,15 @@ static func _hub_plaza() -> Dictionary:
 		"name": "정문 마당",
 		"size": Vector2(1600, 720),
 		"free_move": true,
-		"entries": {"start": Vector2(120, 560), "from_right": Vector2(1500, 560)},
+		"entries": _entries_lr(),
 		"solids": [_floor()],
 		"plats": [],
 		"essences": [_ess("불", Vector2(520, 560))],
 		"signs": [
-			_sign(Vector2(110, 350), "이름 없는 마법학교 — 정문 마당\n오른쪽: 본관 홀 (수업·거점)"),
+			_sign(Vector2(110, 350), "이름 없는 마법학교 — 정문 마당\n왼쪽: 입학 안뜰 · 오른쪽: 본관 홀"),
 			_sign(Vector2(440, 470), "불의 정수 — 밟아 획득\n1키로 무속성 칼날에 속성 부여"),
 		],
-		"blocked": [_blk(Rect2(20, 500, 44, 120), "정문(교외)", "left")],
-		"exits": [_exit_right("hub_hall")],
+		"exits": [_exit_left("op_hall"), _exit_right("hub_hall")],
 	}
 
 
