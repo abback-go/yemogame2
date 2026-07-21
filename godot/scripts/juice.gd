@@ -42,10 +42,15 @@ func hitstop(duration: float) -> void:
 	# 짧은 게임 정지 + unscaled 타이머 복귀 (상시 로직 영구 정지 금지, §6)
 	if duration <= 0.0:
 		return
+	# 씬 전환 찰나 등 트리 밖이면 get_tree()==null — 시간축을 건드리기 전에 중단
+	# (null.create_timer 크래시 + time_scale 0 잔류 동시 방지)
+	var st := get_tree()
+	if st == null:
+		return
 	_hitstop_token += 1
 	var tok := _hitstop_token
 	Engine.time_scale = hitstop_scale
-	var timer := get_tree().create_timer(duration, true, false, true)
+	var timer := st.create_timer(duration, true, false, true)
 	timer.timeout.connect(_end_hitstop.bind(tok))
 
 func _end_hitstop(tok: int) -> void:

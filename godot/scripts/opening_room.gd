@@ -46,6 +46,7 @@ var _bubble: SpeechBubble = null
 var _dialog_lines: Array = []
 var _dialog_idx := 0
 var _dialog_phase := ""  # "" / "intro" / "end"
+var _cutscene := false  # 게이지 파괴~정산 대화 사이(조작·R 차단)
 var _fade_rect: ColorRect = null
 var _artifact_prop: Node2D = null
 
@@ -231,6 +232,9 @@ func _begin_duel() -> void:
 
 func _on_gauge_broken() -> void:
 	# 사고: 유탄이 마도구를 스침 — 금 가는 연출 후 피니셔로.
+	if _reloading or not is_inside_tree():
+		return
+	_cutscene = true
 	_player.input_locked = true
 	_player.velocity = Vector2.ZERO
 	if _artifact_prop != null:
@@ -246,7 +250,11 @@ func _on_boss_stepped() -> void:
 
 
 func _on_finisher_done() -> void:
+	if _reloading or not is_inside_tree():
+		return
 	_flash(Color(1.0, 1.0, 1.0, 0.85), 0.5)
+	# 연출 패배가 실제 사망이 되면 안 됨 — 체력 바닥 보장(3-2=1 생존)
+	_player.health = maxi(_player.health, 3)
 	_player.invuln_t = 0.0
 	_player.take_damage(2, _boss.global_position)
 	_player.velocity = Vector2.ZERO
@@ -313,7 +321,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		return
 	if code == KEY_ESCAPE:
 		get_tree().change_scene_to_file("res://scenes/launcher.tscn")
-	elif code == KEY_R:
+	elif code == KEY_R and not _cutscene:
 		_restart_room()
 
 
