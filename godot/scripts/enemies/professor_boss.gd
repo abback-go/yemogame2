@@ -53,7 +53,7 @@ var _runes: Array = []  # [{"pos": Vector2, "t": float}] — 보스 내부 관�
 
 
 func _configure() -> void:
-	max_hp = 30
+	max_hp = 20  # EnemyBase._draw_hp 표시 임계(≤20) — 게이지가 보여야 '몰아붙이는 감각'이 산다
 	body_size = Vector2(30.0, 52.0)  # 우아하게 큼
 	body_color = Color(0.85, 0.82, 0.95)  # 밝은 귀족 톤(어두운 배경에서 또렷)
 	use_gravity = true
