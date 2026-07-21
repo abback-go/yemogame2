@@ -256,6 +256,41 @@ func _trigger_break() -> void:
 	gauge_broken.emit()
 
 
+# ── 실루엣 렌더 (베이스 사각형 대체 — 로브·머리·지팡이 + 미세 부유) ──
+func _draw() -> void:
+	var hw := body_size.x * 0.5
+	var hh := body_size.y * 0.5
+	var bob := sin(_anim_t * 1.6) * 2.0  # 미세 부유(우아한 정지 — 죽은 도형 방지)
+	var col := body_color
+	if flash_t > 0.0:
+		col = col.lerp(Color(1.0, 1.0, 1.0), clampf(flash_t / 0.12, 0.0, 1.0) * 0.8)
+	# 로브: 어깨에서 발밑으로 퍼지는 실루엣
+	draw_colored_polygon(
+		PackedVector2Array(
+			[
+				Vector2(-hw * 0.55, -hh + 13.0 + bob),
+				Vector2(hw * 0.55, -hh + 13.0 + bob),
+				Vector2(hw * 1.05, hh),
+				Vector2(-hw * 1.05, hh),
+			]
+		),
+		col
+	)
+	# 머리 + 옷깃 음영
+	draw_circle(Vector2(0.0, -hh + 3.0 + bob), 7.5, col)
+	draw_line(
+		Vector2(-hw * 0.5, -hh + 15.0 + bob), Vector2(hw * 0.5, -hh + 15.0 + bob),
+		Color(col.r * 0.75, col.g * 0.75, col.b * 0.85), 2.0)
+	# 지팡이(마도구 촉매) — 손 위치에서 바닥까지 + 끝 보석
+	var sx := _face * hw * 0.95
+	draw_line(
+		Vector2(sx, -hh + 10.0 + bob), Vector2(sx * 1.1, hh),
+		Color(0.6, 0.55, 0.7), 2.5)
+	draw_circle(Vector2(sx, -hh + 6.0 + bob), 3.5, Color(0.75, 0.7, 1.0, 0.95))
+	_draw_telegraph()
+	_draw_hp(hh)
+
+
 # ── 텔레그래프 그리기(로컬 좌표계 — 보스 부동이라 to_local 안전) ──
 func _draw_telegraph() -> void:
 	_draw_runes()

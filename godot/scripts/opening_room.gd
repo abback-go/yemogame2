@@ -1,9 +1,9 @@
 extends Node2D
-## 오프닝 튜토리얼 드라이버 — 콘티(docs/tutorial-conti.md) 6씬을 방 4개로 구동한다.
-## op_alley(잠입·마도구) → op_run(추격·대시) → op_dead_end(경비대장 미니보스)
-## → op_duel(교수 결투: 대화→P1→사고→피니셔→정산 대화) → world.tscn(학교) 인계.
-## 방 전환 = 씬 재로드(GameState.opening_*). 사망 = 현재 방 재시작(풀회복 — 오프닝은 관대).
-## 대사 = SpeechBubble(말풍선, Z/A로 진행). 조작 안내 = HUD 토스트. 4.7 조립 규칙 준수.
+## 오프닝 튜토리얼 드라이버 v2 — 콘티 6씬 + 연출 패스(주스 패스).
+## op_alley(잠입) → op_run(추격) → op_dead_end(경비대장) → op_duel(결투) → world.tscn 인계.
+## v2 연출: 컷씬 카메라(줌 포커스/펀치) · 전 인물 말풍선(타자기) · 앰비언트 한 줄 대사 ·
+## 시차 배경 실루엣(ParallaxBackground) · 씬 색조(CanvasModulate) · 결투장 달빛 스포트.
+## 방 전환 = 씬 재로드(GameState.opening_*). 사망 = 현재 방 재시작(풀회복).
 
 const PlayerScript := preload("res://scripts/player.gd")
 const HudScript := preload("res://scripts/debug_hud.gd")
@@ -13,6 +13,14 @@ const GuardScript := preload("res://scripts/enemies/brute.gd")
 const SPAWN_GRACE := 0.25
 const PICKUP_RADIUS := 46.0
 const FAMILY_RADIUS := 100.0
+const DUEL_TRIGGER_DIST := 340.0
+# 씬 색조(달밤 하층가 → 결투장은 옅게) — HUD(CanvasLayer)는 영향 없음
+const ROOM_TINT := {
+	"op_alley": Color(0.78, 0.83, 1.0),
+	"op_run": Color(0.75, 0.8, 1.0),
+	"op_dead_end": Color(0.72, 0.76, 0.95),
+	"op_duel": Color(0.88, 0.86, 1.0),
+}
 
 @export_group("주스 (combat-spec §6)")
 @export var shake_max_offset := 12.0
@@ -34,15 +42,22 @@ var _room_size := Vector2(1600, 720)
 var _exits: Array = []
 var _grace_t := 0.0
 var _reloading := false
+# 카메라(플레이어 추적 + 컷씬 오버라이드)
+var _cam: Camera2D = null
+var _cutcam: Camera2D = null
+var _cam_tw: Tween = null
 # 씬별 상태
 var _artifact_node: Node2D = null
 var _artifact_taken := false
 var _family_shown := false
 var _exit_hint_t := 0.0
+var _chaser: CharacterBody2D = null
 var _guard: CharacterBody2D = null
 var _guard_cleared := false
 var _boss: CharacterBody2D = null
+var _intro_done := false
 var _bubble: SpeechBubble = null
+var _ambient: SpeechBubble = null
 var _dialog_lines: Array = []
 var _dialog_idx := 0
 var _dialog_phase := ""  # "" / "intro" / "end"
@@ -58,23 +73,27 @@ func _ready() -> void:
 	_room_id = GameState.opening_room
 	var room := OpeningData.get_room(_room_id)
 	_room_size = room["size"]
+	_build_backdrop()
+	_build_tint()
 	_build_room(room)
 	_player = _spawn_player(_entry_pos(room["entries"], GameState.opening_entry))
 	_player.collision_layer = 2
 	_apply_opening_abilities()
 	_player.set_zones([] as Array[Rect2], [] as Array[Rect2])
 	_player.died.connect(_restart_room)
-	var cam := _setup_camera(_player)
+	_cam = _setup_camera(_player)
 	_juice = Juice.new()
 	_juice.configure(
 		shake_max_offset, trauma_decay, lookahead_dist, lookahead_speed, hitstop_scale)
-	_juice.bind_camera(cam)
+	_juice.bind_camera(_cam)
 	_juice.bind_target(_player)
 	add_child(_juice)
 	_player.set_juice(_juice)
 	_hud = _setup_hud(_player)
 	_hud.set_combat_mode(true)
 	_setup_fade_layer()
+	_bubble = _make_bubble()
+	_ambient = _make_bubble()
 	_setup_room_content(room)
 	_grace_t = SPAWN_GRACE
 
@@ -118,14 +137,15 @@ func _setup_alley(room: Dictionary) -> void:
 	_toast_later("move", 0.6)
 
 
-func _setup_run(_room: Dictionary) -> void:
-	var chaser: CharacterBody2D = GuardScript.new()
-	chaser.position = _room.get("chaser_spawn", Vector2(120, 560))
-	add_child(chaser)
-	_tune_guard(chaser)
-	chaser.set_target(_player)
-	_player.set_enemies([chaser])
-	_toast_later("dash", 0.6)
+func _setup_run(room: Dictionary) -> void:
+	_chaser = GuardScript.new()
+	_chaser.position = room.get("chaser_spawn", Vector2(120, 560))
+	add_child(_chaser)
+	_tune_guard(_chaser)
+	_chaser.set_target(_player)
+	_player.set_enemies([_chaser])
+	_say_later("guard", "guard_alarm", 0.4, 2.4)
+	_toast_later("dash", 1.6)
 
 
 func _setup_dead_end(room: Dictionary) -> void:
@@ -135,22 +155,21 @@ func _setup_dead_end(room: Dictionary) -> void:
 	_tune_guard(_guard)
 	_guard.set_target(_player)
 	_player.set_enemies([_guard])
-	_toast_later("blob", 0.6)
+	_say_later("guard", "guard_corner", 0.6, 2.6)
+	_toast_later("blob", 1.6)
 
 
 func _setup_duel(room: Dictionary) -> void:
+	var boss_pos: Vector2 = room.get("boss_spawn", Vector2(1000, 560))
+	_build_spotlight(Vector2(boss_pos.x, 612.0))
 	_boss = BossScript.new()
-	_boss.position = room.get("boss_spawn", Vector2(1000, 560))
+	_boss.position = boss_pos
 	add_child(_boss)
 	_boss.gauge_broken.connect(_on_gauge_broken)
 	_boss.stepped.connect(_on_boss_stepped)
 	_boss.finisher_done.connect(_on_finisher_done)
 	_artifact_prop = _build_crate_prop(room.get("artifact_prop", Vector2(1150, 585)))
-	_bubble = SpeechBubble.new()
-	_bubble.setup(_font)
-	add_child(_bubble)
-	_bubble.attach(_boss, Vector2(0.0, -78.0))
-	_start_dialog("intro", OpeningData.DUEL_INTRO)
+	# 대화는 접근 시 시작(_tick_duel) — 멀리서 시작하면 말풍선이 화면 밖이라 금지.
 
 
 func _tune_guard(g: CharacterBody2D) -> void:
@@ -171,6 +190,8 @@ func _tick_room() -> void:
 			_tick_alley()
 		"op_dead_end":
 			_tick_dead_end()
+		"op_duel":
+			_tick_duel()
 
 
 func _tick_alley() -> void:
@@ -179,12 +200,12 @@ func _tick_alley() -> void:
 		var room := OpeningData.get_room(_room_id)
 		if p.distance_to(room["sleepers_pos"]) < FAMILY_RADIUS:
 			_family_shown = true
-			_toast("family")
+			_say("player", "family", 2.6)
 	if not _artifact_taken and _artifact_node != null:
 		if p.distance_to(_artifact_node.position) < PICKUP_RADIUS:
 			_artifact_taken = true
 			_artifact_node.visible = false
-			_toast("artifact")
+			_say("player", "artifact", 2.0)
 			_flash(Color(1.0, 0.6, 0.3, 0.35), 0.25)
 			get_tree().create_timer(1.2).timeout.connect(_toast.bind("alarm"))
 
@@ -198,7 +219,17 @@ func _tick_dead_end() -> void:
 			_go_to.bind("op_duel", "start"))
 
 
-# ── 결투 시퀀스 (씬4~6) ──────────────────────────────────────────
+func _tick_duel() -> void:
+	# 씬4: 접근하면 결투 전 대화 시작(말풍선이 화면 안에 들어오는 거리에서).
+	if _intro_done or _boss == null:
+		return
+	if _player.global_position.distance_to(_boss.global_position) < DUEL_TRIGGER_DIST:
+		_intro_done = true
+		_cam_focus(_between(_player, _boss) + Vector2(0.0, -50.0), 1.85, 0.7)
+		_start_dialog("intro", OpeningData.DUEL_INTRO)
+
+
+# ── 대화 시스템 (컷씬 말풍선 — 화자별 부착·타자기·Z/A 진행) ──────
 
 func _start_dialog(phase: String, lines: Array) -> void:
 	_dialog_phase = phase
@@ -206,13 +237,24 @@ func _start_dialog(phase: String, lines: Array) -> void:
 	_dialog_idx = 0
 	_player.input_locked = true
 	_player.velocity = Vector2.ZERO
-	_bubble.show_line(String(lines[0]))
+	_show_dialog_line()
+
+
+func _show_dialog_line() -> void:
+	var ln: Dictionary = _dialog_lines[_dialog_idx]
+	var who := String(ln["who"])
+	var spk := _speaker_node(who)
+	_bubble.attach(spk, _bubble_offset(who))
+	_bubble.show_line(String(ln["text"]))
 
 
 func _advance_dialog() -> void:
+	if _bubble.is_typing():
+		_bubble.complete()  # 첫 입력 = 타자기 스킵, 두 번째 = 다음 줄
+		return
 	_dialog_idx += 1
 	if _dialog_idx < _dialog_lines.size():
-		_bubble.show_line(String(_dialog_lines[_dialog_idx]))
+		_show_dialog_line()
 		return
 	_bubble.hide_bubble()
 	var done := _dialog_phase
@@ -223,7 +265,43 @@ func _advance_dialog() -> void:
 		_fade_to_world()
 
 
+func _speaker_node(who: String) -> Node2D:
+	match who:
+		"prof":
+			return _boss
+		"guard":
+			if _guard != null and is_instance_valid(_guard):
+				return _guard
+			return _chaser
+	return _player
+
+
+func _bubble_offset(who: String) -> Vector2:
+	match who:
+		"prof":
+			return Vector2(0.0, -92.0)
+		"guard":
+			return Vector2(0.0, -64.0)
+	return Vector2(0.0, -52.0)
+
+
+func _say(who: String, key: String, dur: float) -> void:
+	# 앰비언트 한 줄(조작 잠금 없음·자동 숨김) — 인물 대사는 전부 말풍선으로.
+	var spk := _speaker_node(who)
+	if spk == null or not is_instance_valid(spk):
+		return
+	_ambient.attach(spk, _bubble_offset(who))
+	_ambient.show_ambient(String(OpeningData.AMBIENT_LINES.get(key, key)), dur)
+
+
+func _say_later(who: String, key: String, delay: float, dur: float) -> void:
+	get_tree().create_timer(delay).timeout.connect(_say.bind(who, key, dur))
+
+
+# ── 결투 시퀀스 (씬5~6) ──────────────────────────────────────────
+
 func _begin_duel() -> void:
+	_cam_release()
 	_player.input_locked = false
 	_boss.set_target(_player)
 	_player.set_enemies([_boss])
@@ -231,7 +309,7 @@ func _begin_duel() -> void:
 
 
 func _on_gauge_broken() -> void:
-	# 사고: 유탄이 마도구를 스침 — 금 가는 연출 후 피니셔로.
+	# 사고: 유탄이 마도구를 스침 — 카메라가 깨진 마도구로, 금 가는 연출 후 피니셔.
 	if _reloading or not is_inside_tree():
 		return
 	_cutscene = true
@@ -239,13 +317,15 @@ func _on_gauge_broken() -> void:
 	_player.velocity = Vector2.ZERO
 	if _artifact_prop != null:
 		_artifact_prop.modulate = Color(0.55, 0.4, 0.4)
+		_cam_focus(_artifact_prop.position + Vector2(0.0, -30.0), 2.0, 0.3)
 	_juice.add_trauma(0.35)
 	_flash(Color(1.0, 0.9, 0.6, 0.3), 0.2)
 	get_tree().create_timer(crack_beat).timeout.connect(_boss.begin_finisher)
 
 
 func _on_boss_stepped() -> void:
-	_juice.add_trauma(0.7)
+	# "한 발" — 보스 클로즈업 펀치 + 히트스톱.
+	_cam_punch(_boss.global_position + Vector2(0.0, -24.0), 2.15)
 	_juice.hitstop(0.08)
 
 
@@ -259,8 +339,14 @@ func _on_finisher_done() -> void:
 	_player.take_damage(2, _boss.global_position)
 	_player.velocity = Vector2.ZERO
 	_player.input_locked = true
-	get_tree().create_timer(down_beat).timeout.connect(
-		_start_dialog.bind("end", OpeningData.DUEL_END))
+	get_tree().create_timer(down_beat).timeout.connect(_begin_end_dialog)
+
+
+func _begin_end_dialog() -> void:
+	if _reloading or not is_inside_tree():
+		return
+	_cam_focus(_between(_player, _boss) + Vector2(0.0, -50.0), 1.85, 0.8)
+	_start_dialog("end", OpeningData.DUEL_END)
 
 
 func _fade_to_world() -> void:
@@ -274,8 +360,57 @@ func _fade_to_world() -> void:
 
 
 func _enter_world() -> void:
-	# 학교(연속 월드) 인계 — 진행 상태는 런처에서 이미 리셋됨(hub_plaza 시작).
 	get_tree().change_scene_to_file("res://scenes/world.tscn")
+
+
+# ── 컷씬 카메라 (플레이어 캠 ↔ 연출 캠 전환) ─────────────────────
+
+func _ensure_cutcam() -> Camera2D:
+	if _cutcam != null:
+		return _cutcam
+	_cutcam = Camera2D.new()
+	_cutcam.limit_left = 0
+	_cutcam.limit_top = 0
+	_cutcam.limit_right = int(_room_size.x)
+	_cutcam.limit_bottom = int(_room_size.y)
+	add_child(_cutcam)
+	return _cutcam
+
+
+func _cam_focus(pos: Vector2, zoom: float, dur: float) -> void:
+	# 현재 뷰에서 목표 지점/줌으로 부드럽게 이동(연출 캠 활성).
+	var c := _ensure_cutcam()
+	if not c.is_current():
+		c.global_position = _cam.get_screen_center_position()
+		c.zoom = _cam.zoom
+		c.make_current()
+	if _cam_tw != null and _cam_tw.is_valid():
+		_cam_tw.kill()
+	_cam_tw = create_tween()
+	_cam_tw.set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+	_cam_tw.tween_property(c, "global_position", pos, dur)
+	_cam_tw.parallel().tween_property(c, "zoom", Vector2(zoom, zoom), dur)
+
+
+func _cam_punch(pos: Vector2, zoom: float) -> void:
+	# 즉시 컷(펀치인) — "한 발" 같은 순간용.
+	var c := _ensure_cutcam()
+	if _cam_tw != null and _cam_tw.is_valid():
+		_cam_tw.kill()
+	c.global_position = pos
+	c.zoom = Vector2(zoom, zoom)
+	c.make_current()
+
+
+func _cam_release() -> void:
+	if _cam_tw != null and _cam_tw.is_valid():
+		_cam_tw.kill()
+	if _cam != null and is_instance_valid(_cam):
+		_cam.make_current()
+
+
+func _between(a: Node2D, b: Node2D) -> Vector2:
+	return (a.global_position + b.global_position) * 0.5
 
 
 # ── 이동·전환·입력 ───────────────────────────────────────────────
@@ -303,7 +438,6 @@ func _go_to(room: String, entry: String) -> void:
 
 
 func _restart_room() -> void:
-	# 사망 — 현재 방 재시작(오프닝은 체크포인트 = 방).
 	if _reloading:
 		return
 	_reloading = true
@@ -351,6 +485,86 @@ func _bind(action: StringName, keycodes: Array) -> void:
 		InputMap.action_add_event(action, ev)
 
 
+# ── 배경·색조 (주스 패스: 시차 실루엣·달·씬 틴트·스포트) ─────────
+
+func _build_backdrop() -> void:
+	# 시차 스크롤 실루엣 2겹 + 달 — ParallaxBackground(월드 뒤 자체 레이어).
+	var pb := ParallaxBackground.new()
+	add_child(pb)
+	var far := ParallaxLayer.new()
+	far.motion_scale = Vector2(0.18, 0.05)
+	far.motion_mirroring = Vector2(3200.0, 0.0)
+	pb.add_child(far)
+	far.add_child(_make_moon(Vector2(520.0, 120.0)))
+	for i in 10:
+		var h := 200.0 + float((i * 97) % 180)
+		var w := 200.0 + float((i * 53) % 140)
+		var x := float(i) * 320.0
+		far.add_child(_make_building(Rect2(x, 640.0 - h, w, h), Color(0.085, 0.095, 0.155)))
+	var near := ParallaxLayer.new()
+	near.motion_scale = Vector2(0.45, 0.12)
+	near.motion_mirroring = Vector2(3200.0, 0.0)
+	pb.add_child(near)
+	for i in 8:
+		var h := 130.0 + float((i * 71) % 120)
+		var w := 240.0 + float((i * 89) % 130)
+		var x := float(i) * 410.0
+		near.add_child(_make_building(Rect2(x, 660.0 - h, w, h), Color(0.115, 0.13, 0.2)))
+
+
+func _make_building(rect: Rect2, col: Color) -> Polygon2D:
+	var b := Polygon2D.new()
+	b.polygon = PackedVector2Array([
+		rect.position,
+		rect.position + Vector2(rect.size.x, 0.0),
+		rect.position + rect.size,
+		rect.position + Vector2(0.0, rect.size.y),
+	])
+	b.color = col
+	return b
+
+
+func _make_moon(pos: Vector2) -> Node2D:
+	var root := Node2D.new()
+	root.position = pos
+	var halo := Polygon2D.new()
+	halo.polygon = _circle_pts(52.0)
+	halo.color = Color(0.9, 0.93, 1.0, 0.14)
+	root.add_child(halo)
+	var disc := Polygon2D.new()
+	disc.polygon = _circle_pts(32.0)
+	disc.color = Color(0.93, 0.95, 1.0, 0.9)
+	root.add_child(disc)
+	return root
+
+
+func _build_tint() -> void:
+	# 씬 색조 — 월드 캔버스만 물들임(HUD·배경 레이어는 별개 캔버스).
+	var cmod := CanvasModulate.new()
+	cmod.color = ROOM_TINT.get(_room_id, Color(1.0, 1.0, 1.0))
+	add_child(cmod)
+
+
+func _build_spotlight(pos: Vector2) -> void:
+	# 결투장 달빛 스포트 — 보스 바닥에 옅은 동심원 3겹(보스보다 먼저 추가 = 뒤에 깔림).
+	var radii := [210.0, 140.0, 80.0]
+	var alphas := [0.05, 0.08, 0.12]
+	for i in 3:
+		var ring := Polygon2D.new()
+		ring.position = pos
+		ring.polygon = _circle_pts(radii[i])
+		ring.color = Color(0.86, 0.89, 1.0, alphas[i])
+		add_child(ring)
+
+
+func _circle_pts(r: float) -> PackedVector2Array:
+	var pts := PackedVector2Array()
+	for i in 20:
+		var a := TAU * float(i) / 20.0
+		pts.append(Vector2(cos(a), sin(a)) * r)
+	return pts
+
+
 # ── 빌드 (RoomBuilder 재사용 + 오프닝 소품) ──────────────────────
 
 func _build_room(room: Dictionary) -> void:
@@ -375,7 +589,7 @@ func _build_outer_walls(size: Vector2) -> void:
 
 
 func _build_sleepers(pos: Vector2) -> void:
-	# 잠든 식구들 — 어두운 실루엣 덩어리 2개 + 담요 톤(대사 없음, 한 컷 절제).
+	# 잠든 식구들 — 어두운 실루엣 덩어리 2개(대사는 앰비언트 말풍선 한 줄).
 	var root := Node2D.new()
 	root.position = pos
 	for i in 2:
@@ -415,7 +629,6 @@ func _build_artifact(pos: Vector2, with_tag: bool) -> Node2D:
 
 
 func _build_crate_prop(pos: Vector2) -> Node2D:
-	# 결투장 궤짝 + 그 위 마도구(싸움 내내 보이는 상품/긴장 장치).
 	var crate := Polygon2D.new()
 	crate.position = pos
 	crate.polygon = PackedVector2Array([
@@ -450,7 +663,14 @@ func _hide_fade() -> void:
 		_fade_rect.visible = false
 
 
-# ── 토스트 헬퍼 ──────────────────────────────────────────────────
+func _make_bubble() -> SpeechBubble:
+	var b := SpeechBubble.new()
+	b.setup(_font)
+	add_child(b)
+	return b
+
+
+# ── 토스트 헬퍼 (UI 안내 전용 — 인물 대사는 말풍선) ──────────────
 
 func _toast(key: String) -> void:
 	_hud.show_toast(String(OpeningData.OPENING_TOASTS.get(key, key)))

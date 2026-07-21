@@ -23,16 +23,25 @@ const OPENING_TOASTS := {
 	"dash": "C — 대시",
 	"blob": "A — 마력 덩어리",
 }
-const DUEL_INTRO: Array[String] = [
-	"…그거, 꽤 비싼 건데.",
-	"내기 하나 하자. 내가 이 자리에서 한 발이라도 움직이면, 네가 이긴 거다.",
-	"이기면 — 평생 먹고살 걱정은 없을 거다.",
+# 컷씬 대사(말풍선·타자기·Z/A 진행) — who: "prof"(교수) / "player"(주인공) / "guard"(경비대장)
+const DUEL_INTRO := [
+	{"who": "prof", "text": "…그거, 꽤 비싼 건데."},
+	{"who": "prof", "text": "내기 하나 하자. 내가 이 자리에서 한 발이라도 움직이면, 네가 이긴 거다."},
+	{"who": "player", "text": "…뭐든."},
+	{"who": "prof", "text": "이기면 — 평생 먹고살 걱정은 없을 거다."},
 ]
-const DUEL_END: Array[String] = [
-	"…졌네.",
-	"약속은 지킨다. 학교로 와. 먹고사는 건 거기서 해결된다.",
-	"저건 별도다. 네가 갚아.",
+const DUEL_END := [
+	{"who": "prof", "text": "…졌네."},
+	{"who": "prof", "text": "약속은 지킨다. 학교로 와. 먹고사는 건 거기서 해결된다."},
+	{"who": "prof", "text": "저건 별도다. 네가 갚아."},
 ]
+# 지나가는 한 줄(앰비언트 말풍선 — 조작 잠금 없음, 자동 숨김)
+const AMBIENT_LINES := {
+	"family": "이거 하나면… 다들 겨울을 난다.",
+	"artifact": "챙겼다. 튀자.",
+	"guard_alarm": "도둑이다! 거기 서라!",
+	"guard_corner": "막다른 골목이다. 끝났어, 꼬마.",
+}
 
 
 func _init() -> void:

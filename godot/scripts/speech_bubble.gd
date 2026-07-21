@@ -14,6 +14,8 @@ const BG_COLOR := Color(0.05, 0.06, 0.1, 0.92)
 const TEXT_COLOR := Color(0.96, 0.97, 1.0, 1.0)
 const LINE_COLOR := Color(0.6, 0.65, 0.8, 0.35)
 
+const CHARS_PER_SEC := 26.0  # 타자기 속도(한 자씩)
+
 var _panel: ColorRect
 var _border: Line2D
 var _tail: Polygon2D
@@ -23,6 +25,10 @@ var _font: SystemFont
 var _speaker: Node2D
 var _offset: Vector2 = Vector2.ZERO
 var _blink_t: float = 0.0
+var _typing := false  # 타자기 진행 중(▼ 숨김)
+var _reveal_t := 0.0  # 타자기 누적 시간
+var _char_count := 0  # 전체 글자 수
+var _auto_t := -1.0  # 앰비언트 자동 숨김 타이머(-1 = 수동)
 
 
 # ── API (씬 드라이버 전용, 시그니처 고정) ─────────────────────────
@@ -71,11 +77,17 @@ func attach(speaker: Node2D, offset: Vector2) -> void:
 
 
 func show_line(text: String) -> void:
-	# 말풍선 표시 + 텍스트 교체 + 크기 재계산.
+	# 말풍선 표시 + 텍스트 교체 + 크기 재계산 + 타자기 시작.
+	# 판 크기는 전체 텍스트 기준으로 먼저 잡고, 글자만 한 자씩 공개(리사이즈 튐 방지).
 	if _label == null:
 		return
 	visible = true
 	_label.text = text
+	_char_count = text.length()
+	_typing = true
+	_reveal_t = 0.0
+	_auto_t = -1.0
+	_label.visible_characters = 0
 
 	# 자연 폭(줄바꿈 없이) 측정 → MAX_W 상한으로 래핑 폭 결정.
 	_label.autowrap_mode = TextServer.AUTOWRAP_OFF
@@ -118,18 +130,49 @@ func show_line(text: String) -> void:
 	)
 
 
+func show_ambient(text: String, duration: float) -> void:
+	# 지나가는 한 줄(조작 잠금 없음) — 타자 완료 후 duration 뒤 자동 숨김.
+	show_line(text)
+	_auto_t = duration
+
+
+func is_typing() -> bool:
+	return _typing
+
+
+func complete() -> void:
+	# 타자기 스킵 — 전체 글자 즉시 공개.
+	_typing = false
+	if _label != null:
+		_label.visible_characters = -1
+
+
 func hide_bubble() -> void:
 	visible = false
+	_auto_t = -1.0
+	_typing = false
 
 
 # ── 내부 ──────────────────────────────────────────────────────────
 
 func _process(delta: float) -> void:
-	# 화자 추적(없거나 무효면 위치 유지) + ▼ 알파 깜빡임(Time 금지, 누적 변수).
+	# 화자 추적 + 타자기 진행 + 앰비언트 자동 숨김 + ▼ 깜빡임(누적 변수).
 	if is_instance_valid(_speaker):
 		global_position = _speaker.global_position + _offset
+	if _typing:
+		_reveal_t += delta
+		var shown := int(_reveal_t * CHARS_PER_SEC)
+		if shown >= _char_count:
+			complete()
+		else:
+			_label.visible_characters = shown
+	elif _auto_t > 0.0 and visible:
+		_auto_t -= delta
+		if _auto_t <= 0.0:
+			hide_bubble()
 	_blink_t += delta
 	if _marker != null:
+		_marker.visible = not _typing and _auto_t < 0.0 and visible
 		var pulse: float = 0.5 + 0.5 * sin(_blink_t * 4.0)
 		_marker.modulate = Color(1.0, 1.0, 1.0, 0.35 + 0.6 * pulse)
 
