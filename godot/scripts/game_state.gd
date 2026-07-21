@@ -53,7 +53,7 @@ static var arena_slots: Array[String] = ["", ""]  # 각인 2슬롯 (재진입 �
 # ── 연속 월드 (world_room.gd) — 학교 허브+전투 통합 진행 상태 ──
 # 방 전환=씬 재로드 방식. 네비게이션·플레이어 상태·이동 능력 획득은 world_*,
 # 전투 인벤토리(재화·정수·배운스킬·등급)는 arena_* 재사용(단일 출처).
-static var world_room := "op_start"  # 현재 월드 방 id (WorldData 키)
+static var world_room := "hub_plaza"  # 현재 월드 방 id (WorldData 키)
 static var world_entry := "start"  # 입장 문 id
 static var world_mana := 100.0
 static var world_health := 5
@@ -63,6 +63,17 @@ static var world_respawn_room := "hub_hall"  # 거점(세이브) 방 — 사망 
 static var visited_world: Array[String] = []  # 방문 방 id (발견 N/총)
 static var world_abilities_granted: Array[String] = []  # 오브로 획득한 이동 능력
 static var world_orbs_taken: Array[String] = []  # 이미 먹은 오브 id (재생성 방지)
+
+# ── 오프닝 튜토리얼 (opening_room.gd) — 콘티 6씬 선형 진행 상태 ──
+# 방 전환=씬 재로드. 사망 시 현재 방 재시작(오프닝은 관대하게 — 풀회복).
+static var opening_room := "op_alley"  # 현재 오프닝 방 id (OpeningData 키)
+static var opening_entry := "start"  # 입장 문 id
+
+
+static func reset_opening() -> void:
+	# 런처 "시작" 진입 초기화 — 오프닝 첫 방부터.
+	opening_room = "op_alley"
+	opening_entry = "start"
 
 
 static func reset_arena() -> void:
@@ -83,7 +94,7 @@ static func skill_level(id: String) -> int:
 static func reset_world() -> void:
 	# 런처 "시작" 진입 초기화 — 오프닝 첫 방·풀피/풀마나·빈 각인·능력/방문 리셋
 	# + 전투 인벤토리(arena_*)도 초기화(단일 출처).
-	world_room = "op_start"
+	world_room = "hub_plaza"
 	world_entry = "start"
 	world_mana = 100.0
 	world_health = 5
