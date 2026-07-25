@@ -650,6 +650,7 @@ function render(){
   ctx.save();
   ctx.translate(W/2,H/2); ctx.translate(-(G.cam.x-OFF.x),-(G.cam.y-OFF.y));
   drawSolids(); drawWaves(); drawEnemy(); drawMeteors(); drawJavelins(); drawPlayer(); drawParts();
+  drawEnemyDanger();   // 위험 레이어 = 항상 최상단 (내 이펙트에 덮이지 않게)
   ctx.restore();
   drawHUD();
   if(G.flash.a>0){ctx.globalAlpha=G.flash.a;ctx.fillStyle=G.flash.c;ctx.fillRect(0,0,W,H);ctx.globalAlpha=1;}
@@ -876,7 +877,8 @@ function drawEnemy(){
   // 화상 중이면 몸이 달아오른다
   const bn=e.burn?clamp(e.burn.n/TUNE.burnMax,0,1):0;
   const base=e.hurt>0?'#9a6a56':(e.state==='stagger'?'#5a5060':'#454d5e');
-  ctx.fillStyle=bn>0?'rgb('+Math.round(69+120*bn)+','+Math.round(77+30*bn)+','+Math.round(94-30*bn)+')':base;
+  // 화상 틴트는 '어두운 잉걸'로 — 밝은 주황이면 내 불꽃 VFX와 섞여 적 실루엣이 사라진다
+  ctx.fillStyle=bn>0?'rgb('+Math.round(69+71*bn)+','+Math.round(77-15*bn)+','+Math.round(94-46*bn)+')':base;
   roundRect(e.x+4,e.y+16,e.w-8,e.h-30,6);ctx.fill();
   ctx.fillStyle='#39404e';ctx.fillRect(cx-4,e.y+20,8,e.h-34);
   ctx.fillStyle='#525b6e';ctx.beginPath();ctx.ellipse(e.x+8,e.y+22,10,8,0,0,6.283);ctx.fill();
@@ -889,28 +891,13 @@ function drawEnemy(){
     ctx.fillStyle=g;ctx.beginPath();ctx.arc(cx,e.y+34,50,0,6.283);ctx.fill();}
   // 화상 아지랑이
   if(bn>0){ const g=ctx.createRadialGradient(cx,e.y+34,6,cx,e.y+34,52);
-    g.addColorStop(0,'rgba(255,140,50,'+(0.26*bn)+')');g.addColorStop(1,'rgba(255,110,30,0)');
+    g.addColorStop(0,'rgba(255,140,50,'+(0.15*bn)+')');g.addColorStop(1,'rgba(255,110,30,0)');
     ctx.fillStyle=g;ctx.beginPath();ctx.arc(cx,e.y+34,52,0,6.283);ctx.fill(); }
   // 무기
   ctx.save();ctx.translate(cx+e.face*15,e.y+26);
   ctx.rotate(e.face*(e.state==='melee'?1.5:-0.5)+(e.tel==='melee'?-1.3:0));
   ctx.fillStyle='#5a4636';ctx.fillRect(0,-4,9,-38);ctx.fillStyle='#6b5442';ctx.fillRect(-6,-50,20,17);ctx.restore();
-  // 텔레그래프
-  if(tel>0){
-    const label={melee:'휘두르기',charge:'돌진',bolt:'투사체',nova:'광역 폭발'}[e.tel]||'';
-    const col=e.tel==='nova'?'rgba(190,120,255,':'rgba(255,140,60,';
-    ctx.strokeStyle=col+(0.45+0.5*tel)+')';ctx.lineWidth=3;
-    roundRect(e.x+2,e.y+14,e.w-4,e.h-28,7);ctx.stroke();
-    ctx.fillStyle=e.tel==='nova'?'#c89aff':'#ffcf66';ctx.font='12px sans-serif';ctx.textAlign='center';
-    ctx.fillText(label,cx,e.y-30);ctx.textAlign='left';
-    if(e.tel==='charge'){ctx.strokeStyle='rgba(255,140,60,'+(0.3+0.4*tel)+')';ctx.lineWidth=2;
-      ctx.beginPath();ctx.moveTo(cx,bot-6);ctx.lineTo(cx+e.face*260,bot-6);ctx.stroke();}
-    if(e.tel==='nova'){ctx.strokeStyle='rgba(190,120,255,'+(0.25+0.35*tel)+')';ctx.lineWidth=2;
-      ctx.beginPath();ctx.arc(cx,e.y+e.h/2,190,0,6.283);ctx.stroke();}
-  }
-  if(e.state==='stagger'){ctx.fillStyle='#ffcf66';ctx.font='12px sans-serif';ctx.textAlign='center';
-    ctx.fillText('경직',cx,e.y-30);ctx.textAlign='left';}
-  // 낙인 — 몸에 룬이 붙어 점점 빨리 맥동 (스택만큼 커진다)
+  // 낙인 — 몸에 룬이 붙어 점점 빨리 맥동 (스택만큼 커진다). 내 마법이므로 난색 유지
   if(e.brand){ const q=1-clamp(e.brand.t/e.brand.dur,0,1);
     const pulse=0.5+0.5*Math.sin(G.t*(8+22*q));
     const st=e.brand.stacks;
@@ -920,17 +907,52 @@ function drawEnemy(){
     ctx.strokeStyle='rgba(255,225,190,'+(0.35+0.45*pulse)+')';ctx.lineWidth=1.2;
     drawRunePoly(15+4*pulse+st,3,0.3);
     ctx.restore(); }
-  // 적 HP/마나 바
-  const s=w2s(cx,e.y-16);
-  const bw=90;
-  ctx.fillStyle='rgba(0,0,0,.6)';ctx.fillRect(s.x-bw/2-1,s.y-1,bw+2,13);
-  ctx.fillStyle='#7a2230';ctx.fillRect(s.x-bw/2,s.y,bw,7);
-  ctx.fillStyle='#e0556a';ctx.fillRect(s.x-bw/2,s.y,bw*clamp(e.hp/e.maxhp,0,1),7);
-  ctx.fillStyle='#1d2b45';ctx.fillRect(s.x-bw/2,s.y+8,bw,4);
-  ctx.fillStyle='#4aa3e0';ctx.fillRect(s.x-bw/2,s.y+8,bw*clamp(e.mana/Math.max(1,e.maxmana),0,1),4);
-  // 화상 스택
-  if(e.burn&&e.burn.n>0){ ctx.fillStyle='#ff9440';ctx.font='bold 11px sans-serif';ctx.textAlign='center';
-    ctx.fillText('화상 x'+e.burn.n,s.x,s.y-6);ctx.textAlign='left'; }
+}
+
+/* ---------- 위험 레이어 (항상 최상단) ----------
+   가독성 원칙 2건:
+   ① 색 채널 분리 — 내 마법 = 난색(주황·적) / 적의 위험 신호 = 한색(시안·보라). 난색 절대 금지.
+   ② 렌더 순서 — 내 이펙트·파티클 위에 그린다. 무엇이 덮여도 예비동작은 읽혀야 한다.        */
+const DANGER_CYAN='120,225,255', DANGER_VIOLET='185,130,255';
+function drawEnemyDanger(){
+  const e=G.enemy; if(!e||!e.alive)return;
+  const cx=e.x+e.w/2, bot=e.y+e.h;
+  const tel=e.tel!==''?(0.5+0.5*Math.sin(G.t*30)):0;
+  if(tel>0){
+    const label={melee:'휘두르기',charge:'돌진',bolt:'투사체',nova:'광역 폭발'}[e.tel]||'';
+    const rgb=e.tel==='nova'?DANGER_VIOLET:DANGER_CYAN;
+    // 본체 외곽선 — 채우지 않고 테두리로(덮여도 읽히게)
+    ctx.strokeStyle='rgba('+rgb+','+(0.5+0.5*tel)+')';ctx.lineWidth=3;
+    roundRect(e.x+2,e.y+14,e.w-4,e.h-28,7);ctx.stroke();
+    ctx.strokeStyle='rgba(255,255,255,'+(0.25+0.35*tel)+')';ctx.lineWidth=1;
+    roundRect(e.x+2,e.y+14,e.w-4,e.h-28,7);ctx.stroke();
+    if(e.tel==='charge'){ ctx.strokeStyle='rgba('+DANGER_CYAN+','+(0.35+0.45*tel)+')';ctx.lineWidth=2;
+      ctx.beginPath();ctx.moveTo(cx,bot-6);ctx.lineTo(cx+e.face*260,bot-6);ctx.stroke(); }
+    if(e.tel==='nova'){ ctx.strokeStyle='rgba('+DANGER_VIOLET+','+(0.3+0.4*tel)+')';ctx.lineWidth=2;
+      ctx.beginPath();ctx.arc(cx,e.y+e.h/2,190,0,6.283);ctx.stroke(); }
+    // 라벨 — 어두운 판을 깔아 불길 위에서도 읽히게
+    dangerLabel(cx,e.y-30,label,'rgb('+rgb+')');
+  }
+  if(e.state==='stagger') dangerLabel(cx,e.y-30,'경직','#d8f4ff');
+  // 적 HP/마나 바 (월드 좌표 — 카메라 변환 안에서 그린다.
+  //  구버전은 변환 안에서 w2s()를 또 써 이중 변환됐고, 그래서 바가 적 옆으로 밀려 있었다)
+  const bx=cx, by=e.y-16, bw=90;
+  ctx.fillStyle='rgba(0,0,0,.6)';ctx.fillRect(bx-bw/2-1,by-1,bw+2,13);
+  ctx.fillStyle='#7a2230';ctx.fillRect(bx-bw/2,by,bw,7);
+  ctx.fillStyle='#e0556a';ctx.fillRect(bx-bw/2,by,bw*clamp(e.hp/e.maxhp,0,1),7);
+  ctx.fillStyle='#1d2b45';ctx.fillRect(bx-bw/2,by+8,bw,4);
+  ctx.fillStyle='#4aa3e0';ctx.fillRect(bx-bw/2,by+8,bw*clamp(e.mana/Math.max(1,e.maxmana),0,1),4);
+  // 화상 스택 — 바 오른쪽에 (위쪽은 텔레그래프 라벨 자리라 겹쳤음)
+  if(e.burn&&e.burn.n>0){ ctx.fillStyle='#ff9440';ctx.font='bold 11px sans-serif';ctx.textAlign='left';
+    ctx.fillText('화상 x'+e.burn.n,bx+bw/2+6,by+9); }
+  ctx.textAlign='left';
+}
+function dangerLabel(wx,wy,txt,col){
+  ctx.font='bold 12px "Malgun Gothic",sans-serif'; ctx.textAlign='center';
+  const w=ctx.measureText(txt).width+14;
+  ctx.fillStyle='rgba(6,10,18,.82)'; roundRect(wx-w/2,wy-12,w,17,4); ctx.fill();
+  ctx.fillStyle=col; ctx.fillText(txt,wx,wy);
+  ctx.textAlign='left';
 }
 function drawParts(){
   for(const p of G.parts){const k=1-p.age/p.life;ctx.globalAlpha=k;ctx.fillStyle=p.c;
