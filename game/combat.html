@@ -59,7 +59,7 @@ const TUNE={
   // 기본공격 — 화염창 투척
   javWind:0.07, javRec:0.11, javRec3:0.20, javCombo:0.50,
   javSpeed:1020, javDmg1:9, javDmg2:10, javDmg3:17,
-  javPierce:1, javRange:640, javBurn:1, javMoveMult:0.45, javKick:60,
+  javPierce:1, javRange:340, javBurn:1, javMoveMult:0.45, javKick:60,
   javAimAng:0.52,
   // 화상 (불 속성 정체성)
   burnDps:3, burnDur:3.0, burnMax:6,
@@ -90,7 +90,7 @@ const TUNE_SPEC=[
  ['기본공격 — 화염창',[
    ['javWind','빚는 시간(선딜)',.01,.30,.005],['javRec','후딜(1·2연)',.03,.40,.01],
    ['javRec3','후딜(3연)',.05,.60,.01],['javCombo','연타 유지창',.15,1.2,.02],
-   ['javSpeed','창 속도',300,1800,20],['javRange','사거리',150,900,10],
+   ['javSpeed','창 속도',300,1800,20],['javRange','사거리',80,900,10],
    ['javDmg1','1연 데미지',1,40,1],['javDmg2','2연 데미지',1,40,1],['javDmg3','3연 데미지',1,60,1],
    ['javPierce','관통 수',1,6,1],['javBurn','화상 부여',0,3,1],
    ['javMoveMult','시전 중 이동',0,1,.05],['javKick','발사 반동',0,240,10],
@@ -375,7 +375,14 @@ function javImpact(j){
   burst(j.x,j.y,4,{c:'#fff4dd',r:2,life:.18,spMin:120,spMax:300});
   G.waves.push({type:'sparkring',x:j.x,y:j.y,age:0,life:.22,r:j.big?34:24});
 }
-function javFizzle(j){ for(let i=0;i<4;i++)ember(j.x,j.y,1,4); }
+// 사거리 소진 — 창이 형태를 잃고 흩어진다 (왜 사라졌는지 읽혀야 함)
+function javFizzle(j){
+  const n=j.big?12:8;
+  for(let i=0;i<n;i++) part(j.x-j.vx*0.02*rnd(0,1),j.y-j.vy*0.02*rnd(0,1),
+    {c:Math.random()<.5?'#ffb163':'#ff7a2a',r:rnd(1.6,3.4),life:rnd(.28,.55),
+     vx:j.vx*rnd(.04,.14)+rnd(-40,40),vy:-rnd(20,70),g:-50});
+  G.waves.push({type:'fizzle',x:j.x,y:j.y,ang:Math.atan2(j.vy,j.vx),age:0,life:.26,big:j.big});
+}
 
 /* ---------- 화상 ---------- */
 function applyBurn(e,stacks){
@@ -703,12 +710,15 @@ function drawJavelins(){
       ctx.beginPath();ctx.arc(tp.x,tp.y,(j.big?6:4.4)*k,0,6.283);ctx.fill(); }
     ctx.globalAlpha=1;
     const ang=Math.atan2(j.vy,j.vx);
+    // 사거리 끝이 가까울수록 창이 사위어간다 — 도달 한계를 눈으로 알 수 있게
+    const rk=clamp(j.travelled/Math.max(1,TUNE.javRange),0,1);
+    const fade=rk<0.7?1:lerp(1,0.35,(rk-0.7)/0.3);
     ctx.save(); ctx.translate(j.x,j.y); ctx.rotate(ang);
     // 외곽 열기
-    const gl=ctx.createRadialGradient(0,0,2,0,0,j.big?34:24);
-    gl.addColorStop(0,'rgba(255,190,110,.45)');gl.addColorStop(1,'rgba(255,120,40,0)');
-    ctx.fillStyle=gl;ctx.beginPath();ctx.arc(0,0,j.big?34:24,0,6.283);ctx.fill();
-    drawLanceShape(j.big?76:56, j.big?9:6.5, 1, j.big);
+    const gl=ctx.createRadialGradient(0,0,2,0,0,(j.big?34:24)*fade);
+    gl.addColorStop(0,'rgba(255,190,110,'+(.45*fade)+')');gl.addColorStop(1,'rgba(255,120,40,0)');
+    ctx.fillStyle=gl;ctx.beginPath();ctx.arc(0,0,(j.big?34:24)*fade,0,6.283);ctx.fill();
+    drawLanceShape((j.big?76:56)*(0.55+0.45*fade), (j.big?9:6.5)*fade, fade, j.big);
     ctx.restore();
   }
 }
@@ -745,6 +755,11 @@ function drawWaves(){
       ctx.fillStyle=g;ctx.beginPath();ctx.arc(0,0,(w.big?46:32)*(0.6+0.6*(1-k)),0,6.283);ctx.fill();
       ctx.strokeStyle='rgba(255,220,160,'+(k*.9)+')';ctx.lineWidth=2;
       drawRunePoly((w.big?22:16)*(0.7+0.7*(1-k)),5,0.22);
+      ctx.restore();ctx.globalAlpha=1;
+    } else if(w.type==='fizzle'){
+      // 사거리 소진 — 창날이 앞으로 늘어지며 흩어진다
+      ctx.save();ctx.translate(w.x,w.y);ctx.rotate(w.ang);ctx.globalAlpha=k*.7;
+      drawLanceShape((w.big?76:56)*(0.5+0.8*(1-k)),(w.big?7:5)*k,k*.8,false);
       ctx.restore();ctx.globalAlpha=1;
     } else if(w.type==='sparkring'){
       ctx.globalAlpha=k*.8;
