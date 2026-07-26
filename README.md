@@ -12,7 +12,7 @@
 | `TODO.md` | 현황·다음 액션·결정 로그 — **새 세션은 여기부터** |
 | `CLAUDE.md` | 작업 규칙 (세션 프로토콜·저장소 규칙) |
 | `docs/game-design.md` | 본 게임 기획서 (정본) |
-| `docs/story-track.md` | 스토리 트랙 (유저 뼈대 제시 대기) |
+| `docs/story-track.md` | 스토리 트랙 — 뼈대 v2 "징표와 용사" (전개 완주 · 세부 숙성 중) |
 | `docs/movement-spec.md` | 이동 수치 정본 (유저 검증 완료) |
 
 ## 바로 플레이 (GitHub Pages)
