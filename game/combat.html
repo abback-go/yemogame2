@@ -96,7 +96,7 @@ const TUNE={
   el:{
     /* ---------- 불: 관통·화상. 기준점(유저 손맛 확인 완료) ---------- */
     fire:{ javWind:0.07, javRec:0.11, javRec3:0.20, javCombo:0.50,
-      javSpeed:1020, javRange:340, javGrav:0, javPierce:1, javKick:60, javMoveMult:0.45,
+      javSpeed:1020, javRange:340, javGrav:0, javLob:0, javPierce:1, javKick:60, javMoveMult:0.45,
       javDmg1:9, javDmg2:10, javDmg3:17, javStat:1, javImpactR:0, javStagger:1.0,
       stDps:3, stDur:3.0, stMax:6,
       s1Cost:28,s1Cd:5.0, s2Cost:32,s2Cd:7.0, s3Cost:25,s3Cd:9.0,
@@ -105,7 +105,7 @@ const TUNE={
       s3Iframe:0.85, s3Dmg:18, s3Boom:125, s3Knock:26, s3MoveMult:0.6 },
     /* ---------- 물: 느리고 둔화 누적 ---------- */
     water:{ javWind:0.09, javRec:0.13, javRec3:0.22, javCombo:0.55,
-      javSpeed:700, javRange:360, javGrav:0, javPierce:1, javKick:40, javMoveMult:0.5,
+      javSpeed:700, javRange:360, javGrav:0, javLob:0, javPierce:1, javKick:40, javMoveMult:0.5,
       javDmg1:8, javDmg2:9, javDmg3:16, javStat:1, javImpactR:0, javStagger:1.0,
       stDps:0, stDur:4.0, stMax:5, stSlow:0.10,          // 스택당 10% 둔화
       s1Cost:26,s1Cd:6.0, s2Cost:34,s2Cd:9.0, s3Cost:24,s3Cd:10.0,
@@ -114,7 +114,7 @@ const TUNE={
       s3Shield:60, s3Dur:8.0, s3Boom:130, s3Chill:3 },
     /* ---------- 바람: 빠른 다연사·낱발 약함 ---------- */
     wind:{ javWind:0.04, javRec:0.07, javRec3:0.14, javCombo:0.60,
-      javSpeed:1450, javRange:400, javGrav:0, javPierce:2, javKick:20, javMoveMult:0.8,
+      javSpeed:1450, javRange:400, javGrav:0, javLob:0, javPierce:2, javKick:20, javMoveMult:0.8,
       javDmg1:5, javDmg2:6, javDmg3:11, javStat:0, javImpactR:0, javStagger:0.5,
       s1Cost:24,s1Cd:6.0, s2Cost:30,s2Cd:7.0, s3Cost:22,s3Cd:8.0,
       s1Dmg:8, s1Radius:150, s1Pull:520, s1Dur:0.9, s1Range:210,
@@ -122,7 +122,7 @@ const TUNE={
       s3Dist:520, s3Time:0.34, s3Iframe:0.42, s3Dmg:12 },
     /* ---------- 땅: 포물선·낙하 충격·큰 경직 ---------- */
     earth:{ javWind:0.11, javRec:0.16, javRec3:0.28, javCombo:0.55,
-      javSpeed:640, javRange:420, javGrav:900, javPierce:1, javKick:90, javMoveMult:0.3,
+      javSpeed:720, javRange:480, javGrav:1040, javLob:200, javPierce:1, javKick:90, javMoveMult:0.3,
       javDmg1:13, javDmg2:14, javDmg3:24, javStat:0, javImpactR:52, javStagger:2.2,
       s1Cost:28,s1Cd:6.5, s2Cost:34,s2Cd:9.0, s3Cost:22,s3Cd:11.0,
       s1Count:5, s1Dmg:13, s1Step:78, s1Interval:0.09, s1Up:70,
@@ -147,6 +147,7 @@ const SPEC_COMMON=[
 const SPEC_JAV=[['javWind','빚는 시간(선딜)',.01,.30,.005],['javRec','후딜(1·2연)',.03,.40,.01],
   ['javRec3','후딜(3연)',.05,.60,.01],['javCombo','연타 유지창',.15,1.2,.02],
   ['javSpeed','투척 속도',300,1800,20],['javRange','사거리',80,900,10],['javGrav','중력(포물선)',0,2000,50],
+  ['javLob','던지는 각도(상승)',0,500,10],
   ['javDmg1','1연 데미지',1,40,1],['javDmg2','2연 데미지',1,40,1],['javDmg3','3연 데미지',1,60,1],
   ['javPierce','관통 수',1,6,1],['javImpactR','착탄 충격 반경',0,140,4],['javStagger','경직 배율',0,4,.1],
   ['javStat','상태이상 부여',0,3,1],['javMoveMult','시전 중 이동',0,1,.05],['javKick','발사 반동',0,240,10]]
@@ -425,7 +426,8 @@ function fireJavelin(p){
   const t=T(), c=C(), last=p.comboIdx>=3, o=javOrigin(p);
   const ang=p.aim*TUNE.javAimAng;
   const dirx=Math.cos(ang)*p.face, diry=Math.sin(ang);
-  G.javs.push({x:o.x,y:o.y,vx:dirx*t.javSpeed,vy:diry*t.javSpeed,
+  // javLob = 살짝 위로 던지는 초기 상승 (중력형 투사체의 사거리를 벌어준다)
+  G.javs.push({x:o.x,y:o.y,vx:dirx*t.javSpeed,vy:diry*t.javSpeed-(t.javLob||0),
     dmg:last?t.javDmg3:(p.comboIdx===2?t.javDmg2:t.javDmg1),
     pierce:t.javPierce+(last?1:0), big:last, el:CUR, spin:0,
     face:p.face, hit:new Set(), travelled:0, age:0, trail:[]});
