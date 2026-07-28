@@ -111,8 +111,8 @@ const TUNE={
   meleeStep:240, meleeStep3:580,   // 한 발 크게 내딛으며 벤다
   meleeWindPull:0.62,              // 예비동작에서 뒤로 당기는 각(rad) — 짧아도 당김은 크게
   meleeSwingEase:0.26,             // 스윙 커브(작을수록 순간적으로 지나간다)
-  meleeSlow:0.16,                  // 타격 시 슬로우 꼬리 추가 배율 (과하면 둔해진다)
-  bladeLen:74, bladeIdleAng:-0.30, dashSlashMult:1.55,// 검 길이 · 대기 각 · 대시 직후 강화 배율
+  meleeNoSlow:1,                   // 1 = 근접 타격에 화면 슬로우를 걸지 않는다(기본공격이므로)
+  bladeLen:74, bladeIdleAng:-1.15, dashSlashMult:1.55,// 검 길이 · 대기 각 · 대시 직후 강화 배율
   bladeForge:0.10,                 // 검을 빚는 연출 — 선딜 안에 압축된다
 
   el:{
@@ -184,7 +184,7 @@ const SPEC_COMMON=[
    ['meleeStagger','경직 배율',0,6,.1],['meleeStep','전진(1·2타)',0,500,10],
    ['meleeStep3','전진(3타)',0,900,10],['dashSlashMult','대시 직후 배율',1,3,.05],
    ['meleeWindPull','예비 당김(각)',0,2,.05],['meleeSwingEase','스윙 순간성',.1,1,.02],
-   ['meleeSlow','타격 슬로우 추가',0,1.5,.02],
+   ['meleeNoSlow','슬로우 끄기',0,1,1],
    ['bladeForge','검 빚는 연출 길이',.03,.5,.01]]],
  ['기타',[['playerHp','플레이어 체력',20,300,10]]],
 ];
@@ -294,10 +294,10 @@ function shake(a,dx,dy){
     G.shakeV.x=clamp(G.shakeV.x+dx*m,-34,34);
     G.shakeV.y=clamp(G.shakeV.y+(dy||0)*m,-26,26); } }
 // 히트스톱 + 슬로우 꼬리 + 줌 펀치를 한 번에. z=줌 배율(0이면 줌 없음)
-function hitstop(s,z){
+function hitstop(s,z,noSlow){
   G.hitstop=Math.max(G.hitstop,s);
-  const ratio=s/Math.max(.001,TUNE.hitstop);
-  G.slow=Math.max(G.slow,TUNE.slowTail*clamp(ratio,.5,2.2));
+  if(!noSlow){ const ratio=s/Math.max(.001,TUNE.hitstop);
+    G.slow=Math.max(G.slow,TUNE.slowTail*clamp(ratio,.5,2.2)); }
   if(z) G.zoom=Math.max(G.zoom,TUNE.zoomPunch*z); }
 // 임팩트 방사선 — 타격 지점에서 짧고 굵게 뻗었다 사라진다
 function impact(x,y,dir,heavy,el){
@@ -491,8 +491,17 @@ function collide(p,dt){
 /* =================== 근접 「불의 검」 (시험 구현) ===================
    판정: 사거리 안에 들어오면 손에 검이 잡힌다 → 누르기 전에 뭐가 나올지 보인다.
    히스테리시스로 경계 깜빡임을 막고, 애매하면 근접 쪽으로 기운다.       */
-// 가로 베기 — 세로로 둥글게 돌리지 않는다. 얕은 각으로 앞을 쓸어 벤다.
-const SWING={1:{from:0.40,to:-0.26},2:{from:-0.38,to:0.30},3:{from:0.52,to:-0.44}};
+/* 가로로 휘둘러 벤다 — 회전이 아니라 「칼날이 서서 옆으로 지나가는 것」이다.
+   각도만 바꾸면 찌르기로 보인다. 칼을 세로로 세우고 x를 뒤→앞으로 옮긴다. */
+const SWING={
+  1:{a0:-1.98,a1:-1.10,x0:-22,x1: 50,y0:-7,y1: 3},   // 위에서 앞으로
+  2:{a0: 1.98,a1: 1.10,x0:-22,x1: 50,y0: 7,y1:-3},   // 아래에서 앞으로
+  3:{a0:-2.20,a1: 1.35,x0:-30,x1: 62,y0: 0,y1: 0}    // 크게 훑는다
+};
+function swingPose(A,prog,pull){
+  const ang=A.a0+(A.a1-A.a0)*prog - (A.a0<0?-1:1)*pull*TUNE.meleeWindPull;
+  return {ang, x:A.x0+(A.x1-A.x0)*prog - pull*16, y:A.y0+(A.y1-A.y0)*prog};
+}
 function bladeCheck(p){
   const was=p.bladeOn;
   let on=false;
@@ -512,14 +521,14 @@ function bladeCheck(p){
 function forgeBlade(p){
   const c=C(), ox=p.x+p.w/2+p.face*8, oy=p.y+24;
   p.bladeSpawn=TUNE.bladeForge;
-  G.waves.push({type:'forge',x:ox,y:oy,age:0,life:TUNE.bladeForge*2.0,
-    r:TUNE.bladeLen*1.5,face:p.face,el:CUR,seed:Math.floor(Math.random()*997)});
-  G.waves.push({type:'impact',x:ox,y:oy,age:0,life:.22,r:96,n:11,ang:0,el:CUR,big:true});
-  for(let i=0;i<20;i++){ const a=rnd(0,6.283), d=rnd(44,120);
+  // 기본공격이므로 절제한다 — 존재감은 주되 화면을 먹지 않는다
+  G.waves.push({type:'forge',x:ox,y:oy,age:0,life:TUNE.bladeForge*1.7,
+    r:TUNE.bladeLen*0.85,face:p.face,el:CUR,seed:Math.floor(Math.random()*997)});
+  for(let i=0;i<10;i++){ const a=rnd(0,6.283), d=rnd(30,72);
     part(ox+Math.cos(a)*d,oy+Math.sin(a)*d,
-      {c:i%3?c.mid:c.core,r:rnd(1.6,3.4),life:TUNE.bladeForge*1.5,
-       vx:-Math.cos(a)*d*11,vy:-Math.sin(a)*d*11}); }
-  shake(.45,0,0); edgePunch(CUR,.20); sfx('craft');
+      {c:i%3?c.mid:c.core,r:rnd(1.3,2.6),life:TUNE.bladeForge*1.3,
+       vx:-Math.cos(a)*d*12,vy:-Math.sin(a)*d*12}); }
+  shake(.20,0,0); sfx('craft');
 }
 function startMelee(p){
   p.meleeIdx=(p.meleeT>0&&p.meleeIdx<3)?p.meleeIdx+1:1;
@@ -536,7 +545,7 @@ function meleeStrike(p){
   const c=C(), e=G.enemy, last=p.meleeIdx>=3, boost=p.dashSlash?TUNE.dashSlashMult:1;
   const ox=p.x+p.w/2, oy=p.y+22;
   const reach=TUNE.meleeReach*(last?1.22:1)*(p.dashSlash?1.15:1);
-  G.waves.push({type:'slash',x:ox,y:oy,age:0,life:last?.26:.19,r:reach,
+  G.waves.push({type:'slash',x:p.x+p.w/2,y:p.y+24,age:0,life:last?.24:.17,r:reach,
     face:p.face,el:CUR,idx:p.meleeIdx,big:last,boost:p.dashSlash?1:0});
   p.vx += p.face*(last?TUNE.meleeStep3:TUNE.meleeStep)*(p.dashSlash?1.25:1);
   sfx('throw');
@@ -544,15 +553,13 @@ function meleeStrike(p){
     const dx=(e.x+e.w/2-ox)*p.face, dy=(e.y+e.h/2)-oy;
     if(dx>-40 && dx<reach && Math.abs(dy)<82){
       const base=last?TUNE.meleeDmg3:(p.meleeIdx===2?TUNE.meleeDmg2:TUNE.meleeDmg1);
-      dealDamage(e,Math.round(base*boost),p.face,true,CUR,TUNE.meleeStagger);
-      // 묵직함 = 히트스톱보다 그 뒤의 슬로우 꼬리에서 나온다
-      hitstop(TUNE.hitstop*(last?3.2:1.9), last?1.6:.85);
-      G.slow=Math.max(G.slow,TUNE.slowTail*(1+TUNE.meleeSlow*(last?2.2:1)));
-      shake(last?1.6:1.0, p.face, p.meleeIdx===1?-.6:p.meleeIdx===2?.6:0);
-      sfx(last?'boom':'hit3');
-      edgePunch(CUR,last?.55:.32);
-      G.waves.push({type:'boom',x:e.x+e.w/2,y:e.y+e.h*.45,age:0,life:last?.42:.30,
-        r:last?110:74,el:CUR});
+      dealDamage(e,Math.round(base*boost),p.face,last,CUR,TUNE.meleeStagger);
+      // 기본공격이다 — 화면 슬로우는 걸지 않는다(매 타 걸리면 피곤하다). 정지만 짧게.
+      hitstop(TUNE.hitstop*(last?2.4:1.5), last?1.1:.5, !!TUNE.meleeNoSlow);
+      shake(last?1.15:.7, p.face, p.meleeIdx===1?-.5:p.meleeIdx===2?.5:0);
+      sfx(last?'hit3':'hit');
+      if(last){ edgePunch(CUR,.30);
+        G.waves.push({type:'boom',x:e.x+e.w/2,y:e.y+e.h*.45,age:0,life:.32,r:86,el:CUR}); }
     }
   }
 }
@@ -1331,7 +1338,7 @@ function drawWaves(late){
       ctx.save();ctx.translate(w.x,w.y);ctx.scale(w.face,1);
       ctx.globalAlpha=1;
       // ① 세로 광선
-      const vh=w.r*1.55*(0.25+0.75*g2), vw=5.5*k;
+      const vh=w.r*1.05*(0.25+0.75*g2), vw=4*k;
       const vg=ctx.createLinearGradient(0,-vh,0,vh);
       vg.addColorStop(0,'rgba('+c.glow+',0)');
       vg.addColorStop(.42,'rgba(255,236,160,'+(k*.75)+')');
@@ -1342,8 +1349,8 @@ function drawWaves(late){
       // ② 날카로운 방사 스파이크 — 뻗었다 수축
       ctx.lineCap='round';
       // 선이 아니라 뾰족한 쐐기로 — "날카롭다"는 건 끝이 가늘어진다는 뜻이다
-      for(let i=0;i<12;i++){
-        const a=i/12*6.283+(sd%10)*0.11;
+      for(let i=0;i<7;i++){
+        const a=i/7*6.283+(sd%10)*0.11;
         const L=w.r*(0.30+1.00*g2)*(0.50+((i*7919)%89)/89*0.90);
         const bw=((i%2)?7.0:3.6)*k, s0=w.r*0.07;
         ctx.fillStyle=(i%2)?('rgba(255,255,255,'+k+')'):('rgba('+c.glow+','+k+')');
@@ -1354,10 +1361,8 @@ function drawWaves(late){
         ctx.closePath();ctx.fill();
         ctx.restore(); }
       // ③ 백열 링 2겹
-      for(let i=0;i<2;i++){
-        const rr=w.r*(0.14+0.72*g2)*(1+i*0.38);
-        ctx.strokeStyle=i?('rgba('+c.glow+','+(k*.45)+')'):('rgba(255,255,255,'+(k*.85)+')');
-        ctx.lineWidth=(3.8-i*1.6)*k;
+      { const rr=w.r*(0.14+0.72*g2);
+        ctx.strokeStyle='rgba(255,255,255,'+(k*.7)+')'; ctx.lineWidth=2.6*k;
         ctx.beginPath();ctx.arc(0,0,rr,0,6.283);ctx.stroke(); }
       // ④ 룬 — 수축하며 회전
       ctx.save();ctx.rotate(-g2*1.5);
@@ -1373,12 +1378,11 @@ function drawWaves(late){
     } else if(w.type==='slash'){
       // 검이 지나간 길에 칼을 여러 장 겹쳐 그린다 — 궤적이 곧 잔상
       const grow=Math.pow(1-k,0.34), A=SWING[w.idx]||SWING[1];
-      const cur=A.from+(A.to-A.from)*Math.pow(grow,0.65);
       ctx.save();ctx.translate(w.x,w.y);ctx.scale(w.face,1);
       // ① 가로 참격 — 앞으로 뻗는 렌즈. 세로 원호가 아니라 "쓸고 지나간 자국"
-      const yy = w.idx===1?-13 : w.idx===2?13 : 0;
+      const yy = w.idx===1?-11 : w.idx===2?11 : 0;
       const len = w.r*(0.55+0.80*grow), back=-w.r*0.22;
-      const th = (w.big?30:19)*k;
+      const th = (w.big?21:13)*k;
       const lg=ctx.createLinearGradient(back,0,len,0);
       lg.addColorStop(0,'rgba('+c.glow+',0)');
       lg.addColorStop(.28,'rgba('+c.glow+','+(k*.55)+')');
@@ -1395,22 +1399,22 @@ function drawWaves(late){
       cg2.addColorStop(0,'rgba(255,255,255,0)');
       cg2.addColorStop(.35,'rgba(255,255,255,'+(k*.95)+')');
       cg2.addColorStop(1,'rgba(255,255,255,0)');
-      ctx.strokeStyle=cg2; ctx.lineWidth=(w.big?4.5:3)*k; ctx.lineCap='round';
+      ctx.strokeStyle=cg2; ctx.lineWidth=(w.big?3.4:2.2)*k; ctx.lineCap='round';
       ctx.beginPath();ctx.moveTo(back,yy);
       ctx.quadraticCurveTo(len*.5,yy-th*.28,len,yy);ctx.stroke();
-      // ③ 칼 잔상 — 적게, 옅게. 지금 칼은 별도로 그려진다
-      const N=w.big?5:4;
+      // ③ 칼이 실제로 지나간 경로를 그대로 되짚는다 — 회전 + 이동
+      const N=w.big?5:4, pr=Math.pow(grow,0.65);
       for(let i=0;i<N;i++){
-        const t2=i/(N-1), a=A.from+(cur-A.from)*t2;
-        ctx.save();ctx.rotate(a);
-        drawBlade(TUNE.bladeLen*(w.big?1.05:.95), k*(0.05+0.26*t2)*(w.boost?1.4:1), c);
+        const t2=i/(N-1), P3=swingPose(A,pr*t2,0);
+        ctx.save();ctx.translate(P3.x,P3.y);ctx.rotate(P3.ang);
+        drawBlade(TUNE.bladeLen*(w.big?1.02:.94), k*(0.04+0.20*t2)*(w.boost?1.4:1), c);
         ctx.restore(); }
       // ④ 대시 강화판 — 앞으로 튀는 불티
       if(w.boost&&k>.6){ ctx.globalAlpha=k;
-        ctx.strokeStyle='rgba(255,255,255,'+(k*.85)+')';ctx.lineWidth=2.6*k;
-        for(let i=0;i<5;i++){ const oy2=yy+(i-2)*7;
+        ctx.strokeStyle='rgba(255,255,255,'+(k*.8)+')';ctx.lineWidth=2.2*k;
+        for(let i=0;i<4;i++){ const oy2=yy+(i-1.5)*7;
           ctx.beginPath();ctx.moveTo(len*.85,oy2);
-          ctx.lineTo(len*(1.22+(i%2)*0.14),oy2+(i-2)*2);ctx.stroke(); } }
+          ctx.lineTo(len*(1.16+(i%2)*0.12),oy2+(i-1.5)*2);ctx.stroke(); } }
       ctx.restore();ctx.globalAlpha=1;
     } else if(w.type==='dash'){
       // 쉐도우 어썰트 결 — ①늘어난 글로우 ②수평 속도선 ③뾰족한 창 코어+톱니 ④균열선
@@ -1560,10 +1564,12 @@ function drawPlayer(){
     const since=p.meleeDur-p.melee;
     const w1=clamp(since/Math.max(.001,TUNE.meleeWind),0,1);
     const sw=p.meleeFired?clamp((since-TUNE.meleeWind)/Math.max(.001,p.meleeDur-TUNE.meleeWind),0,1):0;
-    const ang = p.meleeFired ? A.from+(A.to-A.from)*Math.pow(sw,TUNE.meleeSwingEase)
-                             : A.from+TUNE.meleeWindPull*Math.pow(1-w1,0.6);  // 예비 = 뒤로 크게 당김
+    const prog=p.meleeFired?Math.pow(sw,TUNE.meleeSwingEase):0;
+    const pull=p.meleeFired?0:Math.pow(1-w1,0.6);
+    const P2=swingPose(A,prog,pull);
     const gw=p.bladeSpawn>0?1-p.bladeSpawn/Math.max(.001,TUNE.bladeForge):1;
-    ctx.save();ctx.translate(p.x+p.w/2+p.face*8,p.y+22);ctx.scale(p.face,1);ctx.rotate(ang);
+    ctx.save();ctx.translate(p.x+p.w/2,p.y+24);ctx.scale(p.face,1);
+    ctx.translate(P2.x,P2.y);ctx.rotate(P2.ang);
     // 첫 타는 칼이 빚어지면서 그대로 휘둘러진다
     drawBlade(TUNE.bladeLen, p.meleeFired?1:(0.72+0.28*w1), c, gw);
     ctx.restore();
