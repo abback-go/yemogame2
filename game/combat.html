@@ -105,15 +105,15 @@ const TUNE={
   meleeRange:104, meleeHyst:30,    // 진입 사거리 · 히스테리시스(나갈 땐 +30 — 경계 깜빡임 방지)
   /* 묵직하게 벤다 — 연타가 아니다. 예비동작이 길고, 스윙은 순간이고, 끝에서 멈춘다.
      빠른 난사를 원하면 원거리를 쓰라는 것이 이 무기의 답이다. */
-  meleeReach:112, meleeWind:0.135, meleeRec:0.245, meleeRec3:0.44, meleeCombo:0.80,
+  meleeReach:112, meleeWind:0.058, meleeRec:0.145, meleeRec3:0.255, meleeCombo:0.62,
   meleeDmg1:32, meleeDmg2:38, meleeDmg3:72,   // 원거리(9/10/17)의 3~4배 — 느린 만큼 세다
   meleeStagger:3.4,                // 경직 배율 — 진짜 메리트는 데미지보다 여기다
   meleeStep:240, meleeStep3:580,   // 한 발 크게 내딛으며 벤다
-  meleeWindPull:0.55,              // 예비동작에서 뒤로 당기는 각(rad) — 묵직함의 8할
+  meleeWindPull:0.62,              // 예비동작에서 뒤로 당기는 각(rad) — 짧아도 당김은 크게
   meleeSwingEase:0.26,             // 스윙 커브(작을수록 순간적으로 지나간다)
-  meleeSlow:0.34,                  // 타격 시 슬로우 꼬리 추가 배율
+  meleeSlow:0.16,                  // 타격 시 슬로우 꼬리 추가 배율 (과하면 둔해진다)
   bladeLen:74, bladeIdleAng:-0.30, dashSlashMult:1.55,// 검 길이 · 대기 각 · 대시 직후 강화 배율
-  bladeForge:0.26, bladeForgeCd:0.7,// 검을 빚는 연출 길이 · 재연출 최소 간격
+  bladeForge:0.10,                 // 검을 빚는 연출 — 선딜 안에 압축된다
 
   el:{
     /* ---------- 불: 관통·화상. 기준점(유저 손맛 확인 완료) ---------- */
@@ -185,7 +185,7 @@ const SPEC_COMMON=[
    ['meleeStep3','전진(3타)',0,900,10],['dashSlashMult','대시 직후 배율',1,3,.05],
    ['meleeWindPull','예비 당김(각)',0,2,.05],['meleeSwingEase','스윙 순간성',.1,1,.02],
    ['meleeSlow','타격 슬로우 추가',0,1.5,.02],
-   ['bladeForge','검 빚는 연출 길이',.05,.8,.02],['bladeForgeCd','재연출 최소 간격',0,3,.1]]],
+   ['bladeForge','검 빚는 연출 길이',.03,.5,.01]]],
  ['기타',[['playerHp','플레이어 체력',20,300,10]]],
 ];
 const SPEC_JAV=[['javWind','빚는 시간(선딜)',.01,.30,.005],['javRec','후딜(1·2연)',.03,.40,.01],
@@ -329,7 +329,7 @@ function makePlayer(){
     coyote:0,buffer:0,dashT:0,dashCd:0,iframe:0,dashPrep:0,dashStart:0,dashPassed:false,
     cast:0,castDur:0,castFired:false,comboT:0,comboIdx:0,queued:false,aim:0,
     melee:0,meleeDur:0,meleeFired:false,meleeT:0,meleeIdx:0,meleeQ:false,
-    bladeOn:false,dashSlash:false,bladeSpawn:0,bladeFxCd:0,
+    bladeOn:false,dashSlash:false,bladeSpawn:0,bladeAlive:false,
     skill:'',skillT:0,skillDur:0,skillHit:null,
     cd1:0,cd2:0,cd3:0,shroud:0,shield:0,shieldT:0,gale:0,galeDir:1,
     hp:TUNE.playerHp,mana:TUNE.manaStart,hurt:0,dead:false,
@@ -384,8 +384,10 @@ function updatePlayer(dt){
     if(p.gale<=0){ p.gale=0; p.vx*=.25; }
   }
 
-  p.meleeT=Math.max(0,p.meleeT-dt); if(p.meleeT<=0&&p.melee<=0)p.meleeIdx=0;
-  p.bladeSpawn=Math.max(0,p.bladeSpawn-dt); p.bladeFxCd=Math.max(0,p.bladeFxCd-dt);
+  p.meleeT=Math.max(0,p.meleeT-dt);
+  if(p.meleeT<=0&&p.melee<=0){ p.meleeIdx=0;
+    if(p.bladeAlive){ p.bladeAlive=false; bladeFade(p); } }
+  p.bladeSpawn=Math.max(0,p.bladeSpawn-dt);
   bladeCheck(p);
   const busy = p.skill!=='' || p.cast>0 || p.melee>0 || p.dashPrep>0 || p.shroud>0 || p.gale>0;
   const canAct = !p.dead;
@@ -504,21 +506,20 @@ function bladeCheck(p){
         on = dx>-38 && dx<R && dy<76; } }
   }
   p.bladeOn=on;
-  if(on&&!was&&p.bladeFxCd<=0) forgeBlade(p);
-  if(!on&&was&&p.bladeSpawn>0) p.bladeSpawn=0;
 }
 // 검이 생겨나는 연출 — 그냥 나타나지 않는다. 불티가 모이고, 광선이 서고, 스파이크가 터진다
+// 검은 「X를 누른 순간」 빚어진다 — 다가간다고 생기지 않는다
 function forgeBlade(p){
-  const c=C(), ox=p.x+p.w/2+p.face*6, oy=p.y+24;
-  p.bladeSpawn=TUNE.bladeForge; p.bladeFxCd=TUNE.bladeForgeCd;
-  G.waves.push({type:'forge',x:ox,y:oy,age:0,life:TUNE.bladeForge*1.25,
-    r:TUNE.bladeLen,face:p.face,el:CUR,seed:Math.floor(Math.random()*997)});
-  G.waves.push({type:'impact',x:ox,y:oy,age:0,life:.26,r:104,n:11,ang:0,el:CUR,big:true});
-  for(let i=0;i<24;i++){ const a=rnd(0,6.283), d=rnd(48,130);
+  const c=C(), ox=p.x+p.w/2+p.face*8, oy=p.y+24;
+  p.bladeSpawn=TUNE.bladeForge;
+  G.waves.push({type:'forge',x:ox,y:oy,age:0,life:TUNE.bladeForge*2.0,
+    r:TUNE.bladeLen*1.5,face:p.face,el:CUR,seed:Math.floor(Math.random()*997)});
+  G.waves.push({type:'impact',x:ox,y:oy,age:0,life:.22,r:96,n:11,ang:0,el:CUR,big:true});
+  for(let i=0;i<20;i++){ const a=rnd(0,6.283), d=rnd(44,120);
     part(ox+Math.cos(a)*d,oy+Math.sin(a)*d,
-      {c:i%3?c.mid:c.core,r:rnd(1.6,3.6),life:TUNE.bladeForge*0.95,
-       vx:-Math.cos(a)*d*6.5,vy:-Math.sin(a)*d*6.5}); }
-  shake(.5,0,0); edgePunch(CUR,.22); sfx('craft');
+      {c:i%3?c.mid:c.core,r:rnd(1.6,3.4),life:TUNE.bladeForge*1.5,
+       vx:-Math.cos(a)*d*11,vy:-Math.sin(a)*d*11}); }
+  shake(.45,0,0); edgePunch(CUR,.20); sfx('craft');
 }
 function startMelee(p){
   p.meleeIdx=(p.meleeT>0&&p.meleeIdx<3)?p.meleeIdx+1:1;
@@ -527,14 +528,9 @@ function startMelee(p){
   p.dashSlash = p.dashCd>TUNE.dashCd-0.30;   // 대시 직후 = 강화판
   p.meleeDur=TUNE.meleeWind+(last?TUNE.meleeRec3:TUNE.meleeRec);
   p.melee=p.meleeDur; p.meleeFired=false;
-  p.vx*=0.25;                       // 발을 붙이고 당긴다 — 예비동작에 체중이 실린다
-  sfx('craft');
-  // 예비동작 동안 검으로 불티가 빨려 들어온다
-  const c=C(), hx=p.x+p.w/2-p.face*10, hy=p.y+24;
-  for(let i=0;i<12;i++){ const a=rnd(0,6.283), d=rnd(34,80);
-    part(hx+Math.cos(a)*d,hy+Math.sin(a)*d,
-      {c:i%2?c.mid:c.core,r:rnd(1.8,3.4),life:TUNE.meleeWind+.04,
-       vx:-Math.cos(a)*d*7,vy:-Math.sin(a)*d*7}); }
+  p.vx*=0.45;                       // 발을 붙이고 당긴다 — 예비동작에 체중이 실린다
+  if(!p.bladeAlive){ p.bladeAlive=true; forgeBlade(p); }   // 첫 타 = 검이 생겨나는 순간
+  else sfx('craft');
 }
 function meleeStrike(p){
   const c=C(), e=G.enemy, last=p.meleeIdx>=3, boost=p.dashSlash?TUNE.dashSlashMult:1;
@@ -550,7 +546,7 @@ function meleeStrike(p){
       const base=last?TUNE.meleeDmg3:(p.meleeIdx===2?TUNE.meleeDmg2:TUNE.meleeDmg1);
       dealDamage(e,Math.round(base*boost),p.face,true,CUR,TUNE.meleeStagger);
       // 묵직함 = 히트스톱보다 그 뒤의 슬로우 꼬리에서 나온다
-      hitstop(TUNE.hitstop*(last?4.2:2.6), last?1.7:.9);
+      hitstop(TUNE.hitstop*(last?3.2:1.9), last?1.6:.85);
       G.slow=Math.max(G.slow,TUNE.slowTail*(1+TUNE.meleeSlow*(last?2.2:1)));
       shake(last?1.6:1.0, p.face, p.meleeIdx===1?-.6:p.meleeIdx===2?.6:0);
       sfx(last?'boom':'hit3');
@@ -559,6 +555,14 @@ function meleeStrike(p){
         r:last?110:74,el:CUR});
     }
   }
+}
+// 콤보가 끊기면 검이 흩어진다
+function bladeFade(p){
+  const c=C(), ox=p.x+p.w/2+p.face*8, oy=p.y+24;
+  for(let i=0;i<10;i++){ const a=rnd(-.9,.9);
+    part(ox+rnd(-6,30)*p.face,oy+rnd(-8,8),
+      {c:i%2?c.mid:c.core,r:rnd(1.4,2.6),life:.30,g:120,
+       vx:Math.cos(a)*rnd(40,150)*p.face,vy:Math.sin(a)*rnd(40,150)-60}); }
 }
 // 레퍼런스: 긴 발광 직검 — 방사형 스파이크 가드 · 뾰족한 끝 · 중앙 코어 라인
 function drawBlade(len,al,c,grow){
@@ -1533,9 +1537,19 @@ function drawPlayer(){
   if(p.bladeOn&&p.melee<=0&&p.cast<=0&&p.skill===''){
     const bob=Math.sin(G.t*6)*0.06;
     ctx.save();ctx.translate(p.x+p.w/2+p.face*6,p.y+24);ctx.scale(p.face,1);
-    const gw=p.bladeSpawn>0?1-p.bladeSpawn/Math.max(.001,TUNE.bladeForge):1;
-    ctx.rotate(TUNE.bladeIdleAng+bob-(1-gw)*0.5);
-    drawBlade(TUNE.bladeLen*0.90, .95, c, gw);
+    if(p.bladeAlive){                    // 콤보 중 = 검을 든 채 대기
+      ctx.rotate(TUNE.bladeIdleAng+bob);
+      drawBlade(TUNE.bladeLen*0.92, .95, c);
+    } else {                             // 아직 안 뽑았다 — 손끝의 불씨만 예고
+      const pl=0.55+0.45*Math.sin(G.t*9);
+      const eg=ctx.createRadialGradient(6,0,0.5,6,0,11+3*pl);
+      eg.addColorStop(0,'rgba(255,255,255,'+(.75*pl)+')');
+      eg.addColorStop(.45,'rgba(255,214,120,'+(.45*pl)+')');
+      eg.addColorStop(1,'rgba('+c.glow+',0)');
+      ctx.fillStyle=eg;ctx.beginPath();ctx.arc(6,0,11+3*pl,0,6.283);ctx.fill();
+      ctx.strokeStyle='rgba(255,232,150,'+(.5*pl)+')';ctx.lineWidth=1.6;
+      drawRunePoly(7+2*pl,4,0.2);
+    }
     ctx.restore();
   }
   if(p.hurt>0&&Math.floor(G.t*30)%2===0)ctx.globalAlpha=.45;
@@ -1548,9 +1562,10 @@ function drawPlayer(){
     const sw=p.meleeFired?clamp((since-TUNE.meleeWind)/Math.max(.001,p.meleeDur-TUNE.meleeWind),0,1):0;
     const ang = p.meleeFired ? A.from+(A.to-A.from)*Math.pow(sw,TUNE.meleeSwingEase)
                              : A.from+TUNE.meleeWindPull*Math.pow(1-w1,0.6);  // 예비 = 뒤로 크게 당김
+    const gw=p.bladeSpawn>0?1-p.bladeSpawn/Math.max(.001,TUNE.bladeForge):1;
     ctx.save();ctx.translate(p.x+p.w/2+p.face*8,p.y+22);ctx.scale(p.face,1);ctx.rotate(ang);
-    // 예비동작 동안 칼이 달아오른다
-    drawBlade(TUNE.bladeLen, p.meleeFired?1:(0.72+0.28*w1), c);
+    // 첫 타는 칼이 빚어지면서 그대로 휘둘러진다
+    drawBlade(TUNE.bladeLen, p.meleeFired?1:(0.72+0.28*w1), c, gw);
     ctx.restore();
   }
   // 빚는 중 — 손 앞에서 형태가 잡혀간다 (2박자의 첫 박)
