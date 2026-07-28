@@ -105,14 +105,14 @@ const TUNE={
   meleeRange:104, meleeHyst:30,    // 진입 사거리 · 히스테리시스(나갈 땐 +30 — 경계 깜빡임 방지)
   /* 묵직하게 벤다 — 연타가 아니다. 예비동작이 길고, 스윙은 순간이고, 끝에서 멈춘다.
      빠른 난사를 원하면 원거리를 쓰라는 것이 이 무기의 답이다. */
-  meleeReach:142, meleeWind:0.135, meleeRec:0.245, meleeRec3:0.44, meleeCombo:0.80,
+  meleeReach:112, meleeWind:0.135, meleeRec:0.245, meleeRec3:0.44, meleeCombo:0.80,
   meleeDmg1:32, meleeDmg2:38, meleeDmg3:72,   // 원거리(9/10/17)의 3~4배 — 느린 만큼 세다
   meleeStagger:3.4,                // 경직 배율 — 진짜 메리트는 데미지보다 여기다
   meleeStep:240, meleeStep3:580,   // 한 발 크게 내딛으며 벤다
-  meleeWindPull:0.95,              // 예비동작에서 뒤로 당기는 각(rad) — 묵직함의 8할
+  meleeWindPull:0.55,              // 예비동작에서 뒤로 당기는 각(rad) — 묵직함의 8할
   meleeSwingEase:0.26,             // 스윙 커브(작을수록 순간적으로 지나간다)
   meleeSlow:0.34,                  // 타격 시 슬로우 꼬리 추가 배율
-  bladeLen:146, dashSlashMult:1.55,// 검 길이 · 대시 직후 강화 배율
+  bladeLen:74, bladeIdleAng:-0.30, dashSlashMult:1.55,// 검 길이 · 대기 각 · 대시 직후 강화 배율
   bladeForge:0.26, bladeForgeCd:0.7,// 검을 빚는 연출 길이 · 재연출 최소 간격
 
   el:{
@@ -176,7 +176,8 @@ const SPEC_COMMON=[
  ['근접 「불의 검」 (불 속성 전용 · 시험)',[
    ['meleeOn','근접 켜기',0,1,1],['meleeMode','판정 0자동/1대시후/2↓홀드',0,2,1],
    ['meleeRange','검이 잡히는 거리',40,240,4],['meleeHyst','히스테리시스',0,80,2],
-   ['meleeReach','타격 도달',40,260,4],['bladeLen','검 길이',40,240,4],
+   ['meleeReach','타격 도달',40,260,4],['bladeLen','검 길이',24,200,2],
+   ['bladeIdleAng','대기 각도',-1.5,1.5,.05],
    ['meleeWind','선딜',.01,.20,.005],['meleeRec','후딜(1·2타)',.03,.35,.005],
    ['meleeRec3','후딜(3타)',.05,.50,.005],['meleeCombo','연타 유지창',.2,1.2,.02],
    ['meleeDmg1','1타 피해',1,80,1],['meleeDmg2','2타 피해',1,80,1],['meleeDmg3','3타 피해',1,120,1],
@@ -488,7 +489,8 @@ function collide(p,dt){
 /* =================== 근접 「불의 검」 (시험 구현) ===================
    판정: 사거리 안에 들어오면 손에 검이 잡힌다 → 누르기 전에 뭐가 나올지 보인다.
    히스테리시스로 경계 깜빡임을 막고, 애매하면 근접 쪽으로 기운다.       */
-const SWING={1:{from:1.25,to:-0.75},2:{from:-1.15,to:0.95},3:{from:1.45,to:-1.25}};
+// 가로 베기 — 세로로 둥글게 돌리지 않는다. 얕은 각으로 앞을 쓸어 벤다.
+const SWING={1:{from:0.40,to:-0.26},2:{from:-0.38,to:0.30},3:{from:0.52,to:-0.44}};
 function bladeCheck(p){
   const was=p.bladeOn;
   let on=false;
@@ -1369,32 +1371,42 @@ function drawWaves(late){
       const grow=Math.pow(1-k,0.34), A=SWING[w.idx]||SWING[1];
       const cur=A.from+(A.to-A.from)*Math.pow(grow,0.65);
       ctx.save();ctx.translate(w.x,w.y);ctx.scale(w.face,1);
-      // ① 칼끝이 쓸고 간 넓은 띠
-      const r0=Math.min(A.from,cur), r1=Math.max(A.from,cur);
-      ctx.strokeStyle='rgba('+c.glow+','+(k*.38)+')';
-      ctx.lineWidth=(w.big?15:10)*k; ctx.lineCap='butt';
-      ctx.beginPath();ctx.arc(0,0,w.r*.80,r0,r1);ctx.stroke();
-      ctx.strokeStyle='rgba(255,236,160,'+(k*.62)+')';
-      ctx.lineWidth=(w.big?6:4)*k;
-      ctx.beginPath();ctx.arc(0,0,w.r*.92,r0,r1);ctx.stroke();
-      // ② 선단 백열선 — 칼끝이 지나간 정확한 선
-      ctx.strokeStyle='rgba(255,255,255,'+(k*.95)+')';
-      ctx.lineWidth=(w.big?3.6:2.4)*k;
-      ctx.beginPath();ctx.arc(0,0,w.r*.99,r0,r1);ctx.stroke();
+      // ① 가로 참격 — 앞으로 뻗는 렌즈. 세로 원호가 아니라 "쓸고 지나간 자국"
+      const yy = w.idx===1?-13 : w.idx===2?13 : 0;
+      const len = w.r*(0.55+0.80*grow), back=-w.r*0.22;
+      const th = (w.big?30:19)*k;
+      const lg=ctx.createLinearGradient(back,0,len,0);
+      lg.addColorStop(0,'rgba('+c.glow+',0)');
+      lg.addColorStop(.28,'rgba('+c.glow+','+(k*.55)+')');
+      lg.addColorStop(.7,'rgba(255,236,160,'+(k*.8)+')');
+      lg.addColorStop(1,'rgba(255,255,255,0)');
+      ctx.fillStyle=lg;
+      ctx.beginPath();
+      ctx.moveTo(back,yy);
+      ctx.quadraticCurveTo(len*.42,yy-th,len,yy);
+      ctx.quadraticCurveTo(len*.42,yy+th,back,yy);
+      ctx.closePath();ctx.fill();
+      // ② 참격 코어 — 가늘고 흰 선 한 줄
+      const cg2=ctx.createLinearGradient(back,0,len,0);
+      cg2.addColorStop(0,'rgba(255,255,255,0)');
+      cg2.addColorStop(.35,'rgba(255,255,255,'+(k*.95)+')');
+      cg2.addColorStop(1,'rgba(255,255,255,0)');
+      ctx.strokeStyle=cg2; ctx.lineWidth=(w.big?4.5:3)*k; ctx.lineCap='round';
+      ctx.beginPath();ctx.moveTo(back,yy);
+      ctx.quadraticCurveTo(len*.5,yy-th*.28,len,yy);ctx.stroke();
       // ③ 칼 잔상 — 적게, 옅게. 지금 칼은 별도로 그려진다
       const N=w.big?5:4;
       for(let i=0;i<N;i++){
         const t2=i/(N-1), a=A.from+(cur-A.from)*t2;
         ctx.save();ctx.rotate(a);
-        drawBlade(w.r*(w.big?.95:.88), k*(0.04+0.22*t2)*(w.boost?1.4:1), c);
+        drawBlade(TUNE.bladeLen*(w.big?1.05:.95), k*(0.05+0.26*t2)*(w.boost?1.4:1), c);
         ctx.restore(); }
       // ④ 대시 강화판 — 앞으로 튀는 불티
       if(w.boost&&k>.6){ ctx.globalAlpha=k;
-        ctx.strokeStyle='rgba(255,255,255,'+(k*.8)+')';ctx.lineWidth=3*k;
-        for(let i=0;i<5;i++){ const a=cur+(i-2)*0.13;
-          ctx.beginPath();ctx.moveTo(Math.cos(a)*w.r*.9,Math.sin(a)*w.r*.9);
-          ctx.lineTo(Math.cos(a)*w.r*(1.30+i%2*0.16),Math.sin(a)*w.r*(1.30+i%2*0.16));
-          ctx.stroke(); } }
+        ctx.strokeStyle='rgba(255,255,255,'+(k*.85)+')';ctx.lineWidth=2.6*k;
+        for(let i=0;i<5;i++){ const oy2=yy+(i-2)*7;
+          ctx.beginPath();ctx.moveTo(len*.85,oy2);
+          ctx.lineTo(len*(1.22+(i%2)*0.14),oy2+(i-2)*2);ctx.stroke(); } }
       ctx.restore();ctx.globalAlpha=1;
     } else if(w.type==='dash'){
       // 쉐도우 어썰트 결 — ①늘어난 글로우 ②수평 속도선 ③뾰족한 창 코어+톱니 ④균열선
@@ -1522,7 +1534,7 @@ function drawPlayer(){
     const bob=Math.sin(G.t*6)*0.06;
     ctx.save();ctx.translate(p.x+p.w/2+p.face*6,p.y+24);ctx.scale(p.face,1);
     const gw=p.bladeSpawn>0?1-p.bladeSpawn/Math.max(.001,TUNE.bladeForge):1;
-    ctx.rotate(SWING[1].from-0.10+bob-(1-gw)*0.5);
+    ctx.rotate(TUNE.bladeIdleAng+bob-(1-gw)*0.5);
     drawBlade(TUNE.bladeLen*0.90, .95, c, gw);
     ctx.restore();
   }
