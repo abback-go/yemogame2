@@ -99,6 +99,21 @@ const TUNE={
   shakeDir:1.0, shakeHz:52,             // 방향성 셰이크 · 진동수(큰 타격일수록 저주파)
   impactLines:7, impactLen:62,          // 임팩트 방사선 (0=끔)
   dashFxLen:190, dashFxLife:0.30,       // 대시 이펙트 — 가로로 뻗는 창(쉐도우 어썰트 결)
+  /* 근접 「불의 검」 — 2026-07-27 시험 구현. 현재 불 속성에서만 켜진다.
+     빚은 것을 던지지 않고 쥔 채 휘두른다 = 마법이지 검술이 아니다(§1.8 위계 유지). */
+  meleeOn:1, meleeMode:0,          // 모드 0=자동(거리) 1=대시 직후만 2=수동(↓홀드)
+  meleeRange:104, meleeHyst:30,    // 진입 사거리 · 히스테리시스(나갈 땐 +30 — 경계 깜빡임 방지)
+  /* 묵직하게 벤다 — 연타가 아니다. 예비동작이 길고, 스윙은 순간이고, 끝에서 멈춘다.
+     빠른 난사를 원하면 원거리를 쓰라는 것이 이 무기의 답이다. */
+  meleeReach:142, meleeWind:0.135, meleeRec:0.245, meleeRec3:0.44, meleeCombo:0.80,
+  meleeDmg1:32, meleeDmg2:38, meleeDmg3:72,   // 원거리(9/10/17)의 3~4배 — 느린 만큼 세다
+  meleeStagger:3.4,                // 경직 배율 — 진짜 메리트는 데미지보다 여기다
+  meleeStep:240, meleeStep3:580,   // 한 발 크게 내딛으며 벤다
+  meleeWindPull:0.95,              // 예비동작에서 뒤로 당기는 각(rad) — 묵직함의 8할
+  meleeSwingEase:0.26,             // 스윙 커브(작을수록 순간적으로 지나간다)
+  meleeSlow:0.34,                  // 타격 시 슬로우 꼬리 추가 배율
+  bladeLen:146, dashSlashMult:1.55,// 검 길이 · 대시 직후 강화 배율
+  bladeForge:0.26, bladeForgeCd:0.7,// 검을 빚는 연출 길이 · 재연출 최소 간격
 
   el:{
     /* ---------- 불: 관통·화상. 기준점(유저 손맛 확인 완료) ---------- */
@@ -158,6 +173,18 @@ const SPEC_COMMON=[
    ['knockDecay','넉백 감쇠',3,30,1],['impactLines','임팩트 방사선 수',0,14,1],
    ['impactLen','방사선 길이',10,140,2],['dashFxLen','대시 이펙트 길이',0,400,10],
    ['dashFxLife','대시 이펙트 지속',.08,.7,.02]]],
+ ['근접 「불의 검」 (불 속성 전용 · 시험)',[
+   ['meleeOn','근접 켜기',0,1,1],['meleeMode','판정 0자동/1대시후/2↓홀드',0,2,1],
+   ['meleeRange','검이 잡히는 거리',40,240,4],['meleeHyst','히스테리시스',0,80,2],
+   ['meleeReach','타격 도달',40,260,4],['bladeLen','검 길이',40,240,4],
+   ['meleeWind','선딜',.01,.20,.005],['meleeRec','후딜(1·2타)',.03,.35,.005],
+   ['meleeRec3','후딜(3타)',.05,.50,.005],['meleeCombo','연타 유지창',.2,1.2,.02],
+   ['meleeDmg1','1타 피해',1,80,1],['meleeDmg2','2타 피해',1,80,1],['meleeDmg3','3타 피해',1,120,1],
+   ['meleeStagger','경직 배율',0,6,.1],['meleeStep','전진(1·2타)',0,500,10],
+   ['meleeStep3','전진(3타)',0,900,10],['dashSlashMult','대시 직후 배율',1,3,.05],
+   ['meleeWindPull','예비 당김(각)',0,2,.05],['meleeSwingEase','스윙 순간성',.1,1,.02],
+   ['meleeSlow','타격 슬로우 추가',0,1.5,.02],
+   ['bladeForge','검 빚는 연출 길이',.05,.8,.02],['bladeForgeCd','재연출 최소 간격',0,3,.1]]],
  ['기타',[['playerHp','플레이어 체력',20,300,10]]],
 ];
 const SPEC_JAV=[['javWind','빚는 시간(선딜)',.01,.30,.005],['javRec','후딜(1·2연)',.03,.40,.01],
@@ -300,6 +327,8 @@ function makePlayer(){
   return {x:220,y:400,w:26,h:44,vx:0,vy:0,face:1,onGround:false,
     coyote:0,buffer:0,dashT:0,dashCd:0,iframe:0,dashPrep:0,dashStart:0,dashPassed:false,
     cast:0,castDur:0,castFired:false,comboT:0,comboIdx:0,queued:false,aim:0,
+    melee:0,meleeDur:0,meleeFired:false,meleeT:0,meleeIdx:0,meleeQ:false,
+    bladeOn:false,dashSlash:false,bladeSpawn:0,bladeFxCd:0,
     skill:'',skillT:0,skillDur:0,skillHit:null,
     cd1:0,cd2:0,cd3:0,shroud:0,shield:0,shieldT:0,gale:0,galeDir:1,
     hp:TUNE.playerHp,mana:TUNE.manaStart,hurt:0,dead:false,
@@ -354,7 +383,10 @@ function updatePlayer(dt){
     if(p.gale<=0){ p.gale=0; p.vx*=.25; }
   }
 
-  const busy = p.skill!=='' || p.cast>0 || p.dashPrep>0 || p.shroud>0 || p.gale>0;
+  p.meleeT=Math.max(0,p.meleeT-dt); if(p.meleeT<=0&&p.melee<=0)p.meleeIdx=0;
+  p.bladeSpawn=Math.max(0,p.bladeSpawn-dt); p.bladeFxCd=Math.max(0,p.bladeFxCd-dt);
+  bladeCheck(p);
+  const busy = p.skill!=='' || p.cast>0 || p.melee>0 || p.dashPrep>0 || p.shroud>0 || p.gale>0;
   const canAct = !p.dead;
 
   if(canAct&&!busy&&p.dashT<=0){
@@ -385,8 +417,10 @@ function updatePlayer(dt){
 
   // 기본공격
   if(canAct&&P('attack')&&p.skill===''&&p.dashPrep<=0&&p.shroud<=0&&p.gale<=0){
-    if(p.cast<=0) startCast(p);
-    else { const since=p.castDur-p.cast; if(since>=t.javWind*0.8) p.queued=true; }
+    if(p.melee>0){ const since=p.meleeDur-p.melee; if(since>=TUNE.meleeWind*0.8) p.meleeQ=true; }
+    else if(p.cast>0){ const since=p.castDur-p.cast; if(since>=t.javWind*0.8) p.queued=true; }
+    else if(p.bladeOn) startMelee(p);   // 손에 검이 쥐어져 있으면 휘두른다
+    else startCast(p);
   }
   // 점프
   if(canAct&&P('jump'))p.buffer=TUNE.jumpBuffer;
@@ -423,6 +457,11 @@ function updatePlayer(dt){
     p.vy+=TUNE.gravity*dt;
   }
 
+  // 근접 진행
+  if(p.melee>0){ p.melee-=dt; const since=p.meleeDur-p.melee;
+    if(!p.meleeFired&&since>=TUNE.meleeWind){ p.meleeFired=true; meleeStrike(p); }
+    if(p.melee<=0){ p.melee=0; if(p.meleeQ&&p.meleeIdx<3){ p.meleeQ=false; startMelee(p); } else p.meleeQ=false; }
+  }
   // 시전 진행
   if(p.cast>0){ p.cast-=dt; const since=p.castDur-p.cast;
     if(!p.castFired&&since>=t.javWind){ p.castFired=true; fireJavelin(p); }
@@ -444,6 +483,121 @@ function collide(p,dt){
     if(p.vy>0){p.y=s.y-p.h;p.onGround=true;if(p.vy>420)p.squash=.74;p.vy=0;p.coyote=TUNE.coyote;}
     else if(p.vy<0){p.y=s.y+s.h;p.vy=0;}}}
   if(p.onGround)p.coyote=TUNE.coyote;
+}
+
+/* =================== 근접 「불의 검」 (시험 구현) ===================
+   판정: 사거리 안에 들어오면 손에 검이 잡힌다 → 누르기 전에 뭐가 나올지 보인다.
+   히스테리시스로 경계 깜빡임을 막고, 애매하면 근접 쪽으로 기운다.       */
+const SWING={1:{from:1.25,to:-0.75},2:{from:-1.15,to:0.95},3:{from:1.45,to:-1.25}};
+function bladeCheck(p){
+  const was=p.bladeOn;
+  let on=false;
+  if(TUNE.meleeOn&&CUR==='fire'&&!p.dead){
+    if(TUNE.meleeMode===2) on=!!KEY.down;
+    else if(TUNE.meleeMode===1) on=p.dashCd>TUNE.dashCd-0.32;
+    else { const e=G.enemy;
+      if(e&&e.alive){ const px=p.x+p.w/2, dx=(e.x+e.w/2-px)*p.face,
+        dy=Math.abs((e.y+e.h/2)-(p.y+p.h/2));
+        const R=TUNE.meleeRange+(was?TUNE.meleeHyst:0);
+        on = dx>-38 && dx<R && dy<76; } }
+  }
+  p.bladeOn=on;
+  if(on&&!was&&p.bladeFxCd<=0) forgeBlade(p);
+  if(!on&&was&&p.bladeSpawn>0) p.bladeSpawn=0;
+}
+// 검이 생겨나는 연출 — 그냥 나타나지 않는다. 불티가 모이고, 광선이 서고, 스파이크가 터진다
+function forgeBlade(p){
+  const c=C(), ox=p.x+p.w/2+p.face*6, oy=p.y+24;
+  p.bladeSpawn=TUNE.bladeForge; p.bladeFxCd=TUNE.bladeForgeCd;
+  G.waves.push({type:'forge',x:ox,y:oy,age:0,life:TUNE.bladeForge*1.25,
+    r:TUNE.bladeLen,face:p.face,el:CUR,seed:Math.floor(Math.random()*997)});
+  G.waves.push({type:'impact',x:ox,y:oy,age:0,life:.26,r:104,n:11,ang:0,el:CUR,big:true});
+  for(let i=0;i<24;i++){ const a=rnd(0,6.283), d=rnd(48,130);
+    part(ox+Math.cos(a)*d,oy+Math.sin(a)*d,
+      {c:i%3?c.mid:c.core,r:rnd(1.6,3.6),life:TUNE.bladeForge*0.95,
+       vx:-Math.cos(a)*d*6.5,vy:-Math.sin(a)*d*6.5}); }
+  shake(.5,0,0); edgePunch(CUR,.22); sfx('craft');
+}
+function startMelee(p){
+  p.meleeIdx=(p.meleeT>0&&p.meleeIdx<3)?p.meleeIdx+1:1;
+  p.meleeT=TUNE.meleeCombo; p.meleeQ=false;
+  const last=p.meleeIdx>=3;
+  p.dashSlash = p.dashCd>TUNE.dashCd-0.30;   // 대시 직후 = 강화판
+  p.meleeDur=TUNE.meleeWind+(last?TUNE.meleeRec3:TUNE.meleeRec);
+  p.melee=p.meleeDur; p.meleeFired=false;
+  p.vx*=0.25;                       // 발을 붙이고 당긴다 — 예비동작에 체중이 실린다
+  sfx('craft');
+  // 예비동작 동안 검으로 불티가 빨려 들어온다
+  const c=C(), hx=p.x+p.w/2-p.face*10, hy=p.y+24;
+  for(let i=0;i<12;i++){ const a=rnd(0,6.283), d=rnd(34,80);
+    part(hx+Math.cos(a)*d,hy+Math.sin(a)*d,
+      {c:i%2?c.mid:c.core,r:rnd(1.8,3.4),life:TUNE.meleeWind+.04,
+       vx:-Math.cos(a)*d*7,vy:-Math.sin(a)*d*7}); }
+}
+function meleeStrike(p){
+  const c=C(), e=G.enemy, last=p.meleeIdx>=3, boost=p.dashSlash?TUNE.dashSlashMult:1;
+  const ox=p.x+p.w/2, oy=p.y+22;
+  const reach=TUNE.meleeReach*(last?1.22:1)*(p.dashSlash?1.15:1);
+  G.waves.push({type:'slash',x:ox,y:oy,age:0,life:last?.26:.19,r:reach,
+    face:p.face,el:CUR,idx:p.meleeIdx,big:last,boost:p.dashSlash?1:0});
+  p.vx += p.face*(last?TUNE.meleeStep3:TUNE.meleeStep)*(p.dashSlash?1.25:1);
+  sfx('throw');
+  if(e&&e.alive){
+    const dx=(e.x+e.w/2-ox)*p.face, dy=(e.y+e.h/2)-oy;
+    if(dx>-40 && dx<reach && Math.abs(dy)<82){
+      const base=last?TUNE.meleeDmg3:(p.meleeIdx===2?TUNE.meleeDmg2:TUNE.meleeDmg1);
+      dealDamage(e,Math.round(base*boost),p.face,true,CUR,TUNE.meleeStagger);
+      // 묵직함 = 히트스톱보다 그 뒤의 슬로우 꼬리에서 나온다
+      hitstop(TUNE.hitstop*(last?4.2:2.6), last?1.7:.9);
+      G.slow=Math.max(G.slow,TUNE.slowTail*(1+TUNE.meleeSlow*(last?2.2:1)));
+      shake(last?1.6:1.0, p.face, p.meleeIdx===1?-.6:p.meleeIdx===2?.6:0);
+      sfx(last?'boom':'hit3');
+      edgePunch(CUR,last?.55:.32);
+      G.waves.push({type:'boom',x:e.x+e.w/2,y:e.y+e.h*.45,age:0,life:last?.42:.30,
+        r:last?110:74,el:CUR});
+    }
+  }
+}
+// 레퍼런스: 긴 발광 직검 — 방사형 스파이크 가드 · 뾰족한 끝 · 중앙 코어 라인
+function drawBlade(len,al,c,grow){
+  if(al<=0.01)return;
+  grow=(grow===undefined)?1:clamp(grow,0,1);
+  const ease=Math.pow(grow,0.5);
+  const w0=10*(0.35+0.65*ease), tip=len*ease;
+  const spk=1+(1-grow)*2.6;          // 가드 스파이크가 크게 터졌다 수축한다
+  const g=ctx.createLinearGradient(0,0,tip,0);
+  g.addColorStop(0,'rgba('+c.glow+','+(al*.85)+')');
+  g.addColorStop(.35,'rgba(255,206,96,'+(al*.95)+')');
+  g.addColorStop(.8,'rgba(255,236,160,'+(al*.95)+')');
+  g.addColorStop(1,'rgba(255,255,255,'+(al*.5)+')');
+  ctx.fillStyle=g;
+  ctx.beginPath();
+  ctx.moveTo(-16,0);
+  ctx.lineTo(4,-w0*.5); ctx.lineTo(tip*.80,-w0*.30); ctx.lineTo(tip,0);
+  ctx.lineTo(tip*.80,w0*.30); ctx.lineTo(4,w0*.5);
+  ctx.closePath(); ctx.fill();
+  // 외곽 열기
+  ctx.strokeStyle='rgba('+c.glow+','+(al*.45)+')'; ctx.lineWidth=5; ctx.stroke();
+  // 중앙 코어 라인
+  ctx.strokeStyle='rgba(255,255,255,'+(al*.95)+')'; ctx.lineWidth=2.2;
+  ctx.beginPath(); ctx.moveTo(2,0); ctx.lineTo(tip*.96,0); ctx.stroke();
+  // 방사형 가드 스파이크 — 레퍼런스의 별 모양
+  ctx.lineCap='round';
+  for(let i=0;i<9;i++){
+    const a=i/9*6.283+0.35, L=((i%2)?23:14)*spk;
+    ctx.strokeStyle='rgba(255,232,150,'+(al*.9)+')'; ctx.lineWidth=(i%2)?3.2:2;
+    ctx.beginPath(); ctx.moveTo(0,0); ctx.lineTo(Math.cos(a)*L,Math.sin(a)*L); ctx.stroke(); }
+  // 가드 백열
+  const cg=ctx.createRadialGradient(0,0,1,0,0,18);
+  cg.addColorStop(0,'rgba(255,255,255,'+al+')');
+  cg.addColorStop(.5,'rgba(255,210,110,'+(al*.5)+')');
+  cg.addColorStop(1,'rgba('+c.glow+',0)');
+  ctx.fillStyle=cg; ctx.beginPath(); ctx.arc(0,0,18,0,6.283); ctx.fill();
+  // 자루 + 끝의 뾰족한 것
+  ctx.strokeStyle='rgba(255,178,84,'+(al*.85)+')'; ctx.lineWidth=4.5;
+  ctx.beginPath(); ctx.moveTo(-5,0); ctx.lineTo(-22,0); ctx.stroke();
+  ctx.strokeStyle='rgba(255,232,150,'+(al*.7)+')'; ctx.lineWidth=2;
+  ctx.beginPath(); ctx.moveTo(-22,0); ctx.lineTo(-32,-4); ctx.stroke();
 }
 
 /* ================= 기본공격 — 속성별 "빚어서 던진다" ================= */
@@ -1149,7 +1303,7 @@ function drawMeteors(){
 // late=true면 임팩트 방사선만 그린다 — 타격 표시는 적보다 위에 있어야 보인다
 function drawWaves(late){
   for(const w of G.waves){
-    if(!!late !== (w.type==='impact')) continue;
+    if(!!late !== (w.type==='impact'||w.type==='slash'||w.type==='forge')) continue;
     const k=1-w.age/w.life, c=EL[w.el||CUR].col;
     if(w.type==='muzzle'){
       ctx.save();ctx.translate(w.x,w.y);ctx.rotate(w.ang*(w.face>0?1:-1));ctx.scale(w.face,1);
@@ -1164,6 +1318,83 @@ function drawWaves(late){
     } else if(w.type==='fizzle'){
       ctx.save();ctx.translate(w.x,w.y);ctx.rotate(w.ang);ctx.globalAlpha=k*.7;
       drawProjShape(w.el||CUR,(w.big?76:56)*(0.5+0.8*(1-k)),(w.big?7:5)*k,k*.8,false,0);
+      ctx.restore();ctx.globalAlpha=1;
+    } else if(w.type==='forge'){
+      // 검이 빚어지는 자리 — 세로 광선 · 날카로운 방사 스파이크 · 백열 링 · 룬
+      const g2=Math.pow(1-k,0.48), sd=w.seed||0;
+      ctx.save();ctx.translate(w.x,w.y);ctx.scale(w.face,1);
+      ctx.globalAlpha=1;
+      // ① 세로 광선
+      const vh=w.r*1.55*(0.25+0.75*g2), vw=5.5*k;
+      const vg=ctx.createLinearGradient(0,-vh,0,vh);
+      vg.addColorStop(0,'rgba('+c.glow+',0)');
+      vg.addColorStop(.42,'rgba(255,236,160,'+(k*.75)+')');
+      vg.addColorStop(.5,'rgba(255,255,255,'+(k*.95)+')');
+      vg.addColorStop(.58,'rgba(255,236,160,'+(k*.75)+')');
+      vg.addColorStop(1,'rgba('+c.glow+',0)');
+      ctx.fillStyle=vg;ctx.fillRect(-vw,-vh,vw*2,vh*2);
+      // ② 날카로운 방사 스파이크 — 뻗었다 수축
+      ctx.lineCap='round';
+      // 선이 아니라 뾰족한 쐐기로 — "날카롭다"는 건 끝이 가늘어진다는 뜻이다
+      for(let i=0;i<12;i++){
+        const a=i/12*6.283+(sd%10)*0.11;
+        const L=w.r*(0.30+1.00*g2)*(0.50+((i*7919)%89)/89*0.90);
+        const bw=((i%2)?7.0:3.6)*k, s0=w.r*0.07;
+        ctx.fillStyle=(i%2)?('rgba(255,255,255,'+k+')'):('rgba('+c.glow+','+k+')');
+        ctx.save();ctx.rotate(a);
+        ctx.beginPath();
+        ctx.moveTo(L,0); ctx.lineTo(s0,-bw*.5);
+        ctx.lineTo(s0-bw*.35,0); ctx.lineTo(s0,bw*.5);
+        ctx.closePath();ctx.fill();
+        ctx.restore(); }
+      // ③ 백열 링 2겹
+      for(let i=0;i<2;i++){
+        const rr=w.r*(0.14+0.72*g2)*(1+i*0.38);
+        ctx.strokeStyle=i?('rgba('+c.glow+','+(k*.45)+')'):('rgba(255,255,255,'+(k*.85)+')');
+        ctx.lineWidth=(3.8-i*1.6)*k;
+        ctx.beginPath();ctx.arc(0,0,rr,0,6.283);ctx.stroke(); }
+      // ④ 룬 — 수축하며 회전
+      ctx.save();ctx.rotate(-g2*1.5);
+      ctx.strokeStyle='rgba(255,232,150,'+(k*.9)+')';ctx.lineWidth=2.6*k;
+      drawRunePoly(w.r*0.32*(1.7-0.7*g2),6,0.18);
+      ctx.restore();
+      // ⑤ 중심 백열
+      const fg=ctx.createRadialGradient(0,0,1,0,0,w.r*0.30*k);
+      fg.addColorStop(0,'rgba(255,255,255,'+k+')');
+      fg.addColorStop(1,'rgba('+c.glow+',0)');
+      ctx.fillStyle=fg;ctx.beginPath();ctx.arc(0,0,w.r*0.30*k,0,6.283);ctx.fill();
+      ctx.restore();ctx.globalAlpha=1;
+    } else if(w.type==='slash'){
+      // 검이 지나간 길에 칼을 여러 장 겹쳐 그린다 — 궤적이 곧 잔상
+      const grow=Math.pow(1-k,0.34), A=SWING[w.idx]||SWING[1];
+      const cur=A.from+(A.to-A.from)*Math.pow(grow,0.65);
+      ctx.save();ctx.translate(w.x,w.y);ctx.scale(w.face,1);
+      // ① 칼끝이 쓸고 간 넓은 띠
+      const r0=Math.min(A.from,cur), r1=Math.max(A.from,cur);
+      ctx.strokeStyle='rgba('+c.glow+','+(k*.38)+')';
+      ctx.lineWidth=(w.big?15:10)*k; ctx.lineCap='butt';
+      ctx.beginPath();ctx.arc(0,0,w.r*.80,r0,r1);ctx.stroke();
+      ctx.strokeStyle='rgba(255,236,160,'+(k*.62)+')';
+      ctx.lineWidth=(w.big?6:4)*k;
+      ctx.beginPath();ctx.arc(0,0,w.r*.92,r0,r1);ctx.stroke();
+      // ② 선단 백열선 — 칼끝이 지나간 정확한 선
+      ctx.strokeStyle='rgba(255,255,255,'+(k*.95)+')';
+      ctx.lineWidth=(w.big?3.6:2.4)*k;
+      ctx.beginPath();ctx.arc(0,0,w.r*.99,r0,r1);ctx.stroke();
+      // ③ 칼 잔상 — 적게, 옅게. 지금 칼은 별도로 그려진다
+      const N=w.big?5:4;
+      for(let i=0;i<N;i++){
+        const t2=i/(N-1), a=A.from+(cur-A.from)*t2;
+        ctx.save();ctx.rotate(a);
+        drawBlade(w.r*(w.big?.95:.88), k*(0.04+0.22*t2)*(w.boost?1.4:1), c);
+        ctx.restore(); }
+      // ④ 대시 강화판 — 앞으로 튀는 불티
+      if(w.boost&&k>.6){ ctx.globalAlpha=k;
+        ctx.strokeStyle='rgba(255,255,255,'+(k*.8)+')';ctx.lineWidth=3*k;
+        for(let i=0;i<5;i++){ const a=cur+(i-2)*0.13;
+          ctx.beginPath();ctx.moveTo(Math.cos(a)*w.r*.9,Math.sin(a)*w.r*.9);
+          ctx.lineTo(Math.cos(a)*w.r*(1.30+i%2*0.16),Math.sin(a)*w.r*(1.30+i%2*0.16));
+          ctx.stroke(); } }
       ctx.restore();ctx.globalAlpha=1;
     } else if(w.type==='dash'){
       // 쉐도우 어썰트 결 — ①늘어난 글로우 ②수평 속도선 ③뾰족한 창 코어+톱니 ④균열선
@@ -1285,8 +1516,31 @@ function drawPlayer(){
   const p=G.player;if(!p)return; const c=C(), t=T();
   for(const a of p.afterimg){const k=1-a.age/.24;ctx.globalAlpha=k*k*.62;body(a.x,a.y,a.face,p,true);}
   ctx.globalAlpha=1;
+  // 손에 쥔 불의 검 — 사거리 안이면 누르기 전에 이미 보인다(무엇이 나갈지 알려주는 유일한 장치)
+  // 몸보다 먼저 그려 캐릭터를 가리지 않는다. 각도는 1타 시작 각과 맞춰 이어지게.
+  if(p.bladeOn&&p.melee<=0&&p.cast<=0&&p.skill===''){
+    const bob=Math.sin(G.t*6)*0.06;
+    ctx.save();ctx.translate(p.x+p.w/2+p.face*6,p.y+24);ctx.scale(p.face,1);
+    const gw=p.bladeSpawn>0?1-p.bladeSpawn/Math.max(.001,TUNE.bladeForge):1;
+    ctx.rotate(SWING[1].from-0.10+bob-(1-gw)*0.5);
+    drawBlade(TUNE.bladeLen*0.90, .95, c, gw);
+    ctx.restore();
+  }
   if(p.hurt>0&&Math.floor(G.t*30)%2===0)ctx.globalAlpha=.45;
   body(p.x,p.y,p.face,p,false);ctx.globalAlpha=1;
+  // 휘두르는 중 — 손에 든 칼 자체
+  if(p.melee>0){
+    const A=SWING[p.meleeIdx]||SWING[1];
+    const since=p.meleeDur-p.melee;
+    const w1=clamp(since/Math.max(.001,TUNE.meleeWind),0,1);
+    const sw=p.meleeFired?clamp((since-TUNE.meleeWind)/Math.max(.001,p.meleeDur-TUNE.meleeWind),0,1):0;
+    const ang = p.meleeFired ? A.from+(A.to-A.from)*Math.pow(sw,TUNE.meleeSwingEase)
+                             : A.from+TUNE.meleeWindPull*Math.pow(1-w1,0.6);  // 예비 = 뒤로 크게 당김
+    ctx.save();ctx.translate(p.x+p.w/2+p.face*8,p.y+22);ctx.scale(p.face,1);ctx.rotate(ang);
+    // 예비동작 동안 칼이 달아오른다
+    drawBlade(TUNE.bladeLen, p.meleeFired?1:(0.72+0.28*w1), c);
+    ctx.restore();
+  }
   // 빚는 중 — 손 앞에서 형태가 잡혀간다 (2박자의 첫 박)
   if(p.cast>0&&!p.castFired){
     const prog=clamp((p.castDur-p.cast)/Math.max(.001,t.javWind),0,1), o=javOrigin(p);
@@ -1494,6 +1748,10 @@ function drawHUD(){
   }
   if(p.comboIdx>0&&p.comboT>0){ctx.fillStyle=c.mid;ctx.font='bold 14px sans-serif';
     ctx.fillText('연타 '+p.comboIdx,22,128);}
+  if(p.meleeIdx>0&&p.meleeT>0){ctx.fillStyle='#ffe08a';ctx.font='bold 14px sans-serif';
+    ctx.fillText('검 '+p.meleeIdx+(p.dashSlash?'  돌진!':''),22,146);}
+  if(p.bladeOn&&p.melee<=0){ctx.fillStyle='#ffcf6b';ctx.font='bold 13px sans-serif';
+    ctx.fillText('◆ 근접 — X로 벤다',22,164);}
   ctx.fillStyle='rgba(200,215,240,.45)';ctx.font='11px sans-serif';ctx.textAlign='right';
   ctx.fillText((G.dummy?'[더미] ':'')+'시간 '+G.killTimer.toFixed(1)+'s · 피해 '+Math.round(G.dmgDealt)+
     '  |  0 약점변경 · F1 튜닝 · H 도움말 · R 리셋 · T 더미',W-14,H-12);ctx.textAlign='left';
