@@ -91,7 +91,7 @@ const TUNE={
   eMeleeDmg:14, eBoltDmg:11, eNovaDmg:20, eBoltCost:25, eNovaCost:40, eChargeDmg:18,
   eStaggerAt:60, eKnock:8,
   // 주스 — 타격감 레이어 (2026-07-27 대개정)
-  hitstop:0.075, shakeAmt:0.70, playerHp:120,
+  hitstop:0.075, shakeAmt:0.38, playerHp:120,
   slowTail:0.11, slowScale:0.28,        // 히트스톱 직후 슬로우 꼬리 — "멈췄다 풀리는" 맛
   knockVel:280, knockDecay:11,          // 넉백 = 순간이동이 아니라 속도
   hitFlash:0.075, punchAmt:0.40, punchDecay:12,  // 순백 플래시 + 피격 스쿼시
@@ -109,6 +109,11 @@ const TUNE={
   meleeDmg1:32, meleeDmg2:38, meleeDmg3:72,   // 원거리(9/10/17)의 3~4배 — 느린 만큼 세다
   meleeStagger:0.35,               // 경직 배율 — 기본공격이라 아주 얕게만 쌓는다
   meleeKnock:0.20,                 // 넉백 배율 — 적을 밀어내지 않는다(붙어서 계속 벤다)
+  /* 근접을 쓸 이유 — 데미지만으로는 안 붙는다. 원거리로는 못 하는 일을 준다.
+     ① 근접 히트가 스킬 쿨을 깎는다 → "붙어서 벌고 스킬로 터뜨린다" 루프
+     ② 근접으로만 적 투사체를 쳐낼 수 있다 → 3막 패링의 씨앗(§4 시스템 훅) */
+  meleeCdCut:0.40, meleeCdCut3:1.10,
+  meleeParryCd:1.20, meleeParryMana:14,
   meleeStep:240, meleeStep3:580,   // 한 발 크게 내딛으며 벤다
   meleeWindPull:0.62,              // 예비동작에서 뒤로 당기는 각(rad) — 짧아도 당김은 크게
   meleeSwingEase:0.26,             // 스윙 커브(작을수록 순간적으로 지나간다)
@@ -183,6 +188,8 @@ const SPEC_COMMON=[
    ['meleeRec3','후딜(3타)',.05,.50,.005],['meleeCombo','연타 유지창',.2,1.2,.02],
    ['meleeDmg1','1타 피해',1,80,1],['meleeDmg2','2타 피해',1,80,1],['meleeDmg3','3타 피해',1,120,1],
    ['meleeStagger','경직 배율',0,6,.05],['meleeKnock','넉백 배율',0,2,.05],
+   ['meleeCdCut','히트당 쿨 감소',0,1.5,.05],['meleeCdCut3','3타 쿨 감소',0,3,.05],
+   ['meleeParryCd','쳐내기 쿨 감소',0,4,.1],['meleeParryMana','쳐내기 마나',0,50,1],
    ['meleeStep','전진(1·2타)',0,500,10],
    ['meleeStep3','전진(3타)',0,900,10],['dashSlashMult','대시 직후 배율',1,3,.05],
    ['meleeWindPull','예비 당김(각)',0,2,.05],['meleeSwingEase','스윙 순간성',.1,1,.02],
@@ -418,7 +425,7 @@ function updatePlayer(dt){
         seed:Math.floor(Math.random()*997)});
       cone(p.x+p.w/2-p.face*20,p.y+26,-p.face,12,
         {c:C().mid,r:2.6,life:.30,g:120,spMin:180,spMax:520});
-      shake(.30,p.face,0); } }
+      shake(.20,p.face,0); } }
 
   // 기본공격
   if(canAct&&P('attack')&&p.skill===''&&p.dashPrep<=0&&p.shroud<=0&&p.gale<=0){
@@ -530,7 +537,7 @@ function forgeBlade(p){
     part(ox+Math.cos(a)*d,oy+Math.sin(a)*d,
       {c:i%3?c.mid:c.core,r:rnd(1.3,2.6),life:TUNE.bladeForge*1.3,
        vx:-Math.cos(a)*d*12,vy:-Math.sin(a)*d*12}); }
-  shake(.20,0,0); sfx('craft');
+  shake(.12,0,0); sfx('craft');
 }
 function startMelee(p){
   p.meleeIdx=(p.meleeT>0&&p.meleeIdx<3)?p.meleeIdx+1:1;
@@ -543,6 +550,8 @@ function startMelee(p){
   if(!p.bladeAlive){ p.bladeAlive=true; forgeBlade(p); }   // 첫 타 = 검이 생겨나는 순간
   else sfx('craft');
 }
+function cutCd(p,v){ if(v<=0)return;
+  p.cd1=Math.max(0,p.cd1-v); p.cd2=Math.max(0,p.cd2-v); p.cd3=Math.max(0,p.cd3-v); }
 function meleeStrike(p){
   const c=C(), e=G.enemy, last=p.meleeIdx>=3, boost=p.dashSlash?TUNE.dashSlashMult:1;
   const ox=p.x+p.w/2, oy=p.y+22;
@@ -560,11 +569,28 @@ function meleeStrike(p){
       // ⚠ 시간 배율 슬로우는 이미 0이다. 「느리다」의 정체는 히트스톱 정지 길이였다
       //    (2.4×75ms = 180ms). 기본공격에는 과하므로 절반 이하로 줄인다.
       hitstop(TUNE.hitstop*(last?1.25:0.72), last?.65:.22, !!TUNE.meleeNoSlow);
-      shake(last?1.15:.7, p.face, p.meleeIdx===1?-.5:p.meleeIdx===2?.5:0);
+      shake(last?.72:.40, p.face, p.meleeIdx===1?-.35:p.meleeIdx===2?.35:0);
       sfx(last?'hit3':'hit');
       if(last){ edgePunch(CUR,.30);
         G.waves.push({type:'boom',x:e.x+e.w/2,y:e.y+e.h*.45,age:0,life:.32,r:86,el:CUR}); }
+      // ① 붙어서 벌고 스킬로 터뜨린다 — 근접의 첫 번째 존재 이유
+      const cut=last?TUNE.meleeCdCut3:TUNE.meleeCdCut;
+      if(cut>0&&(p.cd1>0||p.cd2>0||p.cd3>0)){ cutCd(p,cut);
+        fnum(p.x+p.w/2,p.y-6,'쿨 -'+cut.toFixed(2)+'s','#8fd8ff'); }
     }
+    // ② 적 투사체를 쳐낸다 — 원거리로는 못 하는 일
+    for(let i=(e.bolts||[]).length-1;i>=0;i--){ const bl=e.bolts[i];
+      const bdx=(bl.x-ox)*p.face, bdy=bl.y-oy;
+      if(bdx>-46 && bdx<reach+16 && Math.abs(bdy)<88){
+        e.bolts.splice(i,1);
+        burst(bl.x,bl.y,12,{c:'#cbb0ff',r:2.8,life:.32,spMin:140,spMax:420});
+        burst(bl.x,bl.y,6,{c:'#fff',r:2,life:.18,spMin:220,spMax:600});
+        G.waves.push({type:'sparkring',x:bl.x,y:bl.y,age:0,life:.24,r:30,el:CUR});
+        fnum(bl.x,bl.y-16,'쳐냄!','#ffe08a',true);
+        cutCd(p,TUNE.meleeParryCd);
+        p.mana=Math.min(TUNE.manaMax,p.mana+TUNE.meleeParryMana);
+        hitstop(TUNE.hitstop*1.1,.5,true); shake(.45,p.face,0); sfx('hit3');
+      } }
   }
 }
 // 콤보가 끊기면 검이 흩어진다
@@ -1788,7 +1814,7 @@ function drawHUD(){
   if(p.meleeIdx>0&&p.meleeT>0){ctx.fillStyle='#ffe08a';ctx.font='bold 14px sans-serif';
     ctx.fillText('검 '+p.meleeIdx+(p.dashSlash?'  돌진!':''),22,146);}
   if(p.bladeOn&&p.melee<=0){ctx.fillStyle='#ffcf6b';ctx.font='bold 13px sans-serif';
-    ctx.fillText('◆ 근접 — X로 벤다',22,164);}
+    ctx.fillText('◆ 근접 — X로 벤다  (히트마다 스킬 쿨↓ · 투사체 쳐냄)',22,164);}
   ctx.fillStyle='rgba(200,215,240,.45)';ctx.font='11px sans-serif';ctx.textAlign='right';
   ctx.fillText((G.dummy?'[더미] ':'')+'시간 '+G.killTimer.toFixed(1)+'s · 피해 '+Math.round(G.dmgDealt)+
     '  |  0 약점변경 · F1 튜닝 · H 도움말 · R 리셋 · T 더미',W-14,H-12);ctx.textAlign='left';
