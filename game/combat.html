@@ -1178,11 +1178,20 @@ function render(){
   if(G.zoom>0.0005){ const z=1+G.zoom;
     ctx.translate(W/2,H/2); ctx.scale(z,z); ctx.translate(-W/2,-H/2); }
   ctx.translate(W/2,H/2); ctx.translate(-(G.cam.x-OFF.x),-(G.cam.y-OFF.y));
-  drawSolids(); drawWalls(); drawFields(); drawWaves(false); drawEnemy();
+  drawSolids(); drawLights(); drawWalls(); drawFields(); drawWaves(false); drawEnemy();
   drawPillars(); drawMeteors(); drawJavelins(); drawPlayer(); drawParts();
   drawWaves(true);   // 임팩트 방사선 — 적·파티클 위
   drawEnemyDanger();   // 위험 레이어 = 항상 최상단
   ctx.restore();
+  // ── 최종 그레이딩: 깊은 비네트 + 따뜻한 필름 틴트 (화면 공간)
+  const vg=ctx.createRadialGradient(W/2,H*0.52,110,W/2,H*0.52,H*1.02);
+  vg.addColorStop(0,'rgba(0,0,0,0)');vg.addColorStop(.46,'rgba(0,0,0,.40)');
+  vg.addColorStop(1,'rgba(0,0,0,.94)');
+  ctx.fillStyle=vg;ctx.fillRect(0,0,W,H);
+  ctx.save();ctx.globalCompositeOperation='lighter';
+  const tg=ctx.createLinearGradient(0,0,0,H);
+  tg.addColorStop(0,'rgba(40,26,44,.055)');tg.addColorStop(1,'rgba(70,34,16,.055)');
+  ctx.fillStyle=tg;ctx.fillRect(0,0,W,H);ctx.restore();
   drawHUD();
   if(G.edge.a>0){
     const eg=ctx.createRadialGradient(W/2,H/2,H*0.30,W/2,H/2,H*0.85);
@@ -1192,106 +1201,206 @@ function render(){
   if(G.flash.a>0){ctx.globalAlpha=G.flash.a;ctx.fillStyle=G.flash.c;ctx.fillRect(0,0,W,H);ctx.globalAlpha=1;}
   if(G.help)drawHelp();
 }
+/* ===================== 배경 · 조명 (2026-07-27 대개정) =====================
+   레퍼런스와의 격차는 「광원이 기하를 비추지 않는다」와 「깊이가 없다」였다.
+   ① 시차 4겹 + 대기 원근(멀수록 옅고 푸르다)
+   ② 랜턴이 실제로 발판·벽을 비춘다(월드 좌표 · 가산 합성 · 클리핑)
+   ③ 트러스 골조·체인·난간 — 사각형이 아니라 실루엣이 읽히는 구조물
+   ④ 달빛 광선 · 헤이즈 밴드 · 떠도는 불티                                  */
+const CAMX0=480, CAMY0=300;
+const parX=f=>-(G.cam.x-CAMX0)*f, parY=f=>-(G.cam.y-CAMY0)*f;
+// 랜턴 — 월드 좌표. drawLights()가 이 값으로 실제 조명을 계산한다
+const LAMPS=[{x:120,y:330,r:236},{x:398,y:210,r:170},{x:622,y:210,r:170},
+             {x:902,y:330,r:236},{x:252,y:120,r:130},{x:768,y:120,r:130},
+             {x:508,y:420,r:210}];
+const lampFlick=(i)=>0.82+0.18*Math.sin(G.t*(5.1+i*1.27)+i*2.3)
+                        +0.05*Math.sin(G.t*(17+i*3.1));
+
+// 트러스 골조 — X자 브레이스. 레퍼런스 구조물의 정체
+function truss(x,y,w,h,seg,col,lw){
+  ctx.strokeStyle=col; ctx.lineWidth=lw;
+  ctx.strokeRect(x,y,w,h);
+  const step=w/seg;
+  for(let i=0;i<seg;i++){ const a=x+i*step, b=a+step;
+    ctx.beginPath();ctx.moveTo(a,y);ctx.lineTo(b,y+h);
+    ctx.moveTo(b,y);ctx.lineTo(a,y+h);
+    ctx.moveTo(b,y);ctx.lineTo(b,y+h);ctx.stroke(); }
+}
 function drawBG(){
-  /* 아트 방향 (2026-07-27 · 유저 레퍼런스): 거의 검은 바탕 + 작은 앰버 점광 +
-     붉은 배너 + 차가운 달. 환경은 어둡고 좁게 빛나고, 마법만 크고 밝게 터진다.
-     §6.7 가독성 1원칙(환경은 한색)을 "환경은 어둡다"로 갱신한 것. */
+  // ── 하늘
   const g=ctx.createLinearGradient(0,0,0,H);
-  g.addColorStop(0,'#07060a'); g.addColorStop(.55,'#0d0a0d'); g.addColorStop(1,'#140e10');
+  g.addColorStop(0,'#050407'); g.addColorStop(.45,'#0a070b'); g.addColorStop(1,'#130d10');
   ctx.fillStyle=g;ctx.fillRect(0,0,W,H);
 
-  // ① 달 — 유일한 차가운 광원. 따뜻한 실내와 대비를 만든다
-  const mx=W*0.845, my=H*0.135, mr=26;
-  const mh=ctx.createRadialGradient(mx,my,mr*0.6,mx,my,mr*5.2);
-  mh.addColorStop(0,'rgba(196,214,238,.20)'); mh.addColorStop(1,'rgba(150,180,220,0)');
-  ctx.fillStyle=mh;ctx.beginPath();ctx.arc(mx,my,mr*5.2,0,6.283);ctx.fill();
-  ctx.fillStyle='#c9d6ea';ctx.beginPath();ctx.arc(mx,my,mr,0,6.283);ctx.fill();
-  ctx.fillStyle='rgba(120,140,170,.28)';
-  ctx.beginPath();ctx.arc(mx-8,my-5,5.5,0,6.283);ctx.fill();
-  ctx.beginPath();ctx.arc(mx+7,my+8,4,0,6.283);ctx.fill();
+  // ── 달 (시차 0.03) + 달빛 광선
+  const mx=W*0.845+parX(.03), my=H*0.135+parY(.03), mr=25;
+  const mh=ctx.createRadialGradient(mx,my,mr*.5,mx,my,mr*7);
+  mh.addColorStop(0,'rgba(190,210,240,.16)');mh.addColorStop(1,'rgba(140,170,215,0)');
+  ctx.fillStyle=mh;ctx.beginPath();ctx.arc(mx,my,mr*7,0,6.283);ctx.fill();
+  ctx.save();ctx.globalCompositeOperation='lighter';
+  for(let i=0;i<5;i++){ const a=1.30+i*0.085, L=H*1.5, wsp=16+i*7;
+    const rg=ctx.createLinearGradient(mx,my,mx+Math.cos(a)*L,my+Math.sin(a)*L);
+    rg.addColorStop(0,'rgba(150,178,220,'+(0.052-i*0.007)+')');
+    rg.addColorStop(1,'rgba(120,150,200,0)');
+    ctx.fillStyle=rg;ctx.beginPath();ctx.moveTo(mx,my);
+    ctx.lineTo(mx+Math.cos(a-0.02)*L-wsp,my+Math.sin(a-0.02)*L);
+    ctx.lineTo(mx+Math.cos(a+0.02)*L+wsp,my+Math.sin(a+0.02)*L);
+    ctx.closePath();ctx.fill(); }
+  ctx.restore();
+  ctx.fillStyle='#c6d3e8';ctx.beginPath();ctx.arc(mx,my,mr,0,6.283);ctx.fill();
+  ctx.fillStyle='rgba(118,138,170,.30)';
+  ctx.beginPath();ctx.arc(mx-8,my-5,5.2,0,6.283);ctx.fill();
+  ctx.beginPath();ctx.arc(mx+7,my+8,3.8,0,6.283);ctx.fill();
 
-  // ② 원경 아치
-  ctx.fillStyle='#15111a';
-  for(let i=0;i<3;i++){ const ax=170+i*300, ay=H*0.30, aw=150, ah=220;
-    ctx.beginPath();
-    ctx.moveTo(ax-aw/2,ay+ah); ctx.lineTo(ax-aw/2,ay+aw*0.42);
-    ctx.arc(ax,ay+aw*0.42,aw/2,Math.PI,0); ctx.lineTo(ax+aw/2,ay+ah);
-    ctx.closePath(); ctx.fill(); }
-
-  // ③ 중경 톱니바퀴
-  const gx=W*0.5, gy=H*0.30, gr=104;
-  ctx.save();ctx.translate(gx,gy);ctx.rotate(G.t*0.045);
-  ctx.fillStyle='#1c1418';
-  for(let i=0;i<16;i++){ ctx.save();ctx.rotate(i/16*6.283);
-    ctx.fillRect(-11,-gr-16,22,22);ctx.restore(); }
-  ctx.strokeStyle='#1c1418';ctx.lineWidth=17;
-  ctx.beginPath();ctx.arc(0,0,gr,0,6.283);ctx.stroke();
-  ctx.lineWidth=9;
-  for(let i=0;i<6;i++){ const a=i/6*6.283;
-    ctx.beginPath();ctx.moveTo(0,0);ctx.lineTo(Math.cos(a)*gr,Math.sin(a)*gr);ctx.stroke(); }
-  ctx.fillStyle='#241a1e';ctx.beginPath();ctx.arc(0,0,24,0,6.283);ctx.fill();
+  // ── 원경 (시차 0.10) — 대기 원근으로 옅고 푸르다
+  ctx.save();ctx.translate(parX(.10),parY(.10));
+  ctx.fillStyle='#141320';
+  for(let i=0;i<4;i++){ const ax=110+i*280, ay=H*0.26, aw=136, ah=260;
+    ctx.beginPath();ctx.moveTo(ax-aw/2,ay+ah);ctx.lineTo(ax-aw/2,ay+aw*.42);
+    ctx.arc(ax,ay+aw*.42,aw/2,Math.PI,0);ctx.lineTo(ax+aw/2,ay+ah);
+    ctx.closePath();ctx.fill(); }
+  truss(-40,H*0.19,W+80,26,14,'rgba(26,25,40,1)',3);
   ctx.restore();
 
-  // ④ 기둥 — 어둡고 무겁게, 상단에 아치
-  for(let i=0;i<5;i++){ const x=52+i*212;
-    ctx.fillStyle='#1a1216';
-    ctx.fillRect(x,96,58,H);
-    ctx.beginPath();ctx.arc(x+29,96,29,Math.PI,0);ctx.fill();
-    ctx.fillStyle='#241a1f'; ctx.fillRect(x-6,90,70,12); }
+  // ── 중경 (시차 0.24) — 대형 톱니 + 아치 살
+  ctx.save();ctx.translate(parX(.24),parY(.24));
+  const gx=W*.5, gy=H*.28, gr=112;
+  ctx.save();ctx.translate(gx,gy);ctx.rotate(G.t*.04);
+  ctx.fillStyle='#1a1219';
+  for(let i=0;i<18;i++){ctx.save();ctx.rotate(i/18*6.283);ctx.fillRect(-10,-gr-15,20,21);ctx.restore();}
+  ctx.strokeStyle='#1a1219';ctx.lineWidth=16;
+  ctx.beginPath();ctx.arc(0,0,gr,0,6.283);ctx.stroke();
+  ctx.lineWidth=8;
+  for(let i=0;i<8;i++){const a=i/8*6.283;
+    ctx.beginPath();ctx.moveTo(0,0);ctx.lineTo(Math.cos(a)*gr,Math.sin(a)*gr);ctx.stroke();}
+  ctx.fillStyle='#221820';ctx.beginPath();ctx.arc(0,0,22,0,6.283);ctx.fill();
+  ctx.restore();
+  // 큰 아치 + 방사 살 (레퍼런스의 중앙 구조)
+  ctx.strokeStyle='#1d1520';ctx.lineWidth=13;
+  ctx.beginPath();ctx.arc(gx,gy+58,196,Math.PI*1.06,Math.PI*1.94);ctx.stroke();
+  ctx.lineWidth=5;
+  for(let i=0;i<11;i++){const a=Math.PI*1.06+(i/10)*(Math.PI*0.88);
+    ctx.beginPath();ctx.moveTo(gx+Math.cos(a)*150,gy+58+Math.sin(a)*150);
+    ctx.lineTo(gx+Math.cos(a)*196,gy+58+Math.sin(a)*196);ctx.stroke();}
+  ctx.restore();
 
-  // ⑤ 붉은 배너 + 금 문장
-  const BAN=[{x:W*0.5,y:118,w:74,h:150},{x:W*0.185,y:150,w:52,h:104},{x:W*0.815,y:150,w:52,h:104}];
+  // ── 근경 기둥 · 배너 (시차 0.45)
+  ctx.save();ctx.translate(parX(.45),parY(.45));
+  for(let i=0;i<5;i++){ const x=46+i*214;
+    ctx.fillStyle='#150f14';ctx.fillRect(x,86,60,H+120);
+    ctx.beginPath();ctx.arc(x+30,86,30,Math.PI,0);ctx.fill();
+    ctx.fillStyle='#20161d';ctx.fillRect(x-7,80,74,13);
+    ctx.fillStyle='rgba(210,150,90,.05)';ctx.fillRect(x+3,92,4,H); }
+  const BAN=[{x:W*.5,y:112,w:76,h:158},{x:W*.185,y:146,w:52,h:106},{x:W*.815,y:146,w:52,h:106}];
   for(const b of BAN){
-    ctx.fillStyle='#4d1013';
-    ctx.beginPath();
-    ctx.moveTo(b.x-b.w/2,b.y); ctx.lineTo(b.x+b.w/2,b.y);
-    ctx.lineTo(b.x+b.w/2,b.y+b.h); ctx.lineTo(b.x,b.y+b.h-b.w*0.34);
-    ctx.lineTo(b.x-b.w/2,b.y+b.h); ctx.closePath(); ctx.fill();
-    ctx.fillStyle='#61171a';ctx.fillRect(b.x-b.w/2,b.y,b.w,7);
-    ctx.save();ctx.translate(b.x,b.y+b.h*0.36);
-    ctx.fillStyle='#a8792c'; const q=b.w*0.19;
+    ctx.fillStyle='#460e12';
+    ctx.beginPath();ctx.moveTo(b.x-b.w/2,b.y);ctx.lineTo(b.x+b.w/2,b.y);
+    ctx.lineTo(b.x+b.w/2,b.y+b.h);ctx.lineTo(b.x,b.y+b.h-b.w*.34);
+    ctx.lineTo(b.x-b.w/2,b.y+b.h);ctx.closePath();ctx.fill();
+    const bg2=ctx.createLinearGradient(b.x-b.w/2,0,b.x+b.w/2,0);
+    bg2.addColorStop(0,'rgba(0,0,0,.42)');bg2.addColorStop(.42,'rgba(0,0,0,0)');
+    bg2.addColorStop(1,'rgba(0,0,0,.30)');
+    ctx.fillStyle=bg2;ctx.fill();
+    ctx.fillStyle='#5c1519';ctx.fillRect(b.x-b.w/2,b.y,b.w,7);
+    ctx.save();ctx.translate(b.x,b.y+b.h*.36);
+    ctx.fillStyle='#9d7029';const q=b.w*.19;
     ctx.beginPath();ctx.moveTo(0,-q);ctx.lineTo(q*.62,0);ctx.lineTo(0,q);ctx.lineTo(-q*.62,0);
     ctx.closePath();ctx.fill();
     ctx.fillRect(-q*1.35,-2.2,q*2.7,4.4);
+    ctx.fillStyle='rgba(230,180,90,.5)';ctx.fillRect(-q*1.35,-2.2,q*2.7,1.4);
     ctx.restore(); }
+  ctx.restore();
 
-  // ⑥ 앰버 랜턴 — 작고 흔들리는 점광. 화면의 유일한 따뜻함
-  const LAMP=[{x:118,y:210},{x:352,y:246},{x:608,y:246},{x:842,y:210},{x:238,y:126},{x:722,y:126}];
-  for(let i=0;i<LAMP.length;i++){
-    const L=LAMP[i], fl=0.80+0.20*Math.sin(G.t*(5.5+i*1.3)+i*2.1), rr=64*fl;
-    const lg=ctx.createRadialGradient(L.x,L.y,2,L.x,L.y,rr);
-    lg.addColorStop(0,'rgba(255,206,128,'+(0.30*fl)+')');
-    lg.addColorStop(.35,'rgba(224,140,58,'+(0.13*fl)+')');
-    lg.addColorStop(1,'rgba(180,90,30,0)');
-    ctx.fillStyle=lg;ctx.beginPath();ctx.arc(L.x,L.y,rr,0,6.283);ctx.fill();
-    ctx.strokeStyle='#241a1e';ctx.lineWidth=2;
-    ctx.beginPath();ctx.moveTo(L.x,L.y-24);ctx.lineTo(L.x,L.y-9);ctx.stroke();
-    ctx.fillStyle='#2a1f22';ctx.fillRect(L.x-6,L.y-9,12,15);
-    ctx.fillStyle='rgba(255,214,140,'+(0.85*fl)+')';ctx.fillRect(L.x-3.5,L.y-6,7,10); }
-
-  // ⑦ 비네트 — 레퍼런스만큼 깊게
-  const vg=ctx.createRadialGradient(W/2,H*0.54,120,W/2,H*0.54,H*0.98);
-  vg.addColorStop(0,'rgba(0,0,0,0)');vg.addColorStop(.48,'rgba(0,0,0,.40)');
-  vg.addColorStop(1,'rgba(0,0,0,.93)');
-  ctx.fillStyle=vg;ctx.fillRect(0,0,W,H);
+  // ── 헤이즈 밴드 — 깊이를 만든다
+  ctx.save();ctx.globalCompositeOperation='lighter';
+  for(let i=0;i<3;i++){ const yy=H*(0.34+i*0.19)+parY(.06);
+    const hz=ctx.createLinearGradient(0,yy-46,0,yy+46);
+    hz.addColorStop(0,'rgba(120,80,50,0)');
+    hz.addColorStop(.5,'rgba(130,84,50,'+(0.035-i*0.008)+')');
+    hz.addColorStop(1,'rgba(120,80,50,0)');
+    ctx.fillStyle=hz;ctx.fillRect(0,yy-46,W,92); }
+  ctx.restore();
 }
 function drawSolids(){
-  // 금속 격자 발판 — 어두운 실루엣에 상단만 앰버 림라이트로 읽힌다
+  // 금속 격자 발판 — 어두운 실루엣 + 리벳. 밝기는 drawLights()가 얹는다
   for(const s of G.solids){
-    ctx.fillStyle='#15100f'; ctx.fillRect(s.x,s.y,s.w,s.h);
+    ctx.fillStyle='#120e0d'; ctx.fillRect(s.x,s.y,s.w,s.h);
     ctx.save();ctx.beginPath();ctx.rect(s.x,s.y,s.w,s.h);ctx.clip();
-    ctx.strokeStyle='rgba(120,84,52,.07)';ctx.lineWidth=1;
-    for(let x=s.x;x<s.x+s.w;x+=(s.h>60?26:14)){
-      ctx.beginPath();ctx.moveTo(x,s.y);ctx.lineTo(x,s.y+s.h);ctx.stroke(); }
-    if(s.h>26) for(let y=s.y+13;y<s.y+s.h;y+=13){
-      ctx.beginPath();ctx.moveTo(s.x,y);ctx.lineTo(s.x+s.w,y);ctx.stroke(); }
+    ctx.strokeStyle='rgba(120,84,52,.06)';ctx.lineWidth=1;
+    const st=s.h>60?28:14;
+    for(let x=s.x;x<s.x+s.w;x+=st){ctx.beginPath();ctx.moveTo(x,s.y);ctx.lineTo(x,s.y+s.h);ctx.stroke();}
+    if(s.h>26) for(let y=s.y+14;y<s.y+s.h;y+=14){
+      ctx.beginPath();ctx.moveTo(s.x,y);ctx.lineTo(s.x+s.w,y);ctx.stroke();}
+    // 얇은 발판은 X 브레이스로 골조가 보이게
+    if(s.h<=26&&s.w>60){ ctx.strokeStyle='rgba(140,98,62,.16)';ctx.lineWidth=1.4;
+      for(let x=s.x;x<s.x+s.w-18;x+=18){
+        ctx.beginPath();ctx.moveTo(x,s.y+2);ctx.lineTo(x+18,s.y+s.h-2);
+        ctx.moveTo(x+18,s.y+2);ctx.lineTo(x,s.y+s.h-2);ctx.stroke(); } }
     ctx.restore();
-    ctx.fillStyle='#4a3220'; ctx.fillRect(s.x,s.y,s.w,3);
-    ctx.fillStyle='rgba(255,186,104,.52)'; ctx.fillRect(s.x,s.y,s.w,1.4);
-    ctx.fillStyle='rgba(150,104,62,.30)';
-    for(let x=s.x+8;x<s.x+s.w-4;x+=34) ctx.fillRect(x,s.y+6,2.5,2.5);
-    ctx.fillStyle='rgba(0,0,0,.55)'; ctx.fillRect(s.x,s.y+s.h-5,s.w,5);
+    ctx.fillStyle='#3d2a1c'; ctx.fillRect(s.x,s.y,s.w,3);
+    ctx.fillStyle='rgba(160,110,64,.35)';
+    for(let x=s.x+9;x<s.x+s.w-4;x+=32) ctx.fillRect(x,s.y+6,2.5,2.5);
+    ctx.fillStyle='rgba(0,0,0,.6)'; ctx.fillRect(s.x,s.y+s.h-5,s.w,5);
   }
+}
+/* 조명 — 랜턴이 실제로 기하를 비춘다.
+   가산 합성으로 발판 표면에 빛 웅덩이를 만들고, 상단 모서리에 림라이트를 얹는다.
+   레퍼런스와 우리를 가르던 가장 큰 차이가 이것이었다. */
+function drawLights(){
+  ctx.save(); ctx.globalCompositeOperation='lighter';
+  // ① 표면에 고이는 빛
+  for(let i=0;i<LAMPS.length;i++){
+    const L=LAMPS[i], fl=lampFlick(i), rr=L.r*fl;
+    const lg=ctx.createRadialGradient(L.x,L.y,3,L.x,L.y,rr);
+    lg.addColorStop(0,'rgba(255,208,132,'+(0.36*fl)+')');
+    lg.addColorStop(.26,'rgba(236,156,70,'+(0.16*fl)+')');
+    lg.addColorStop(.60,'rgba(196,100,36,'+(0.055*fl)+')');
+    lg.addColorStop(1,'rgba(150,70,20,0)');
+    ctx.fillStyle=lg;ctx.beginPath();ctx.arc(L.x,L.y,rr,0,6.283);ctx.fill();
+  }
+  // ② 발판 윗면 림라이트 — 가장 가까운 램프까지의 거리로 밝기가 갈린다
+  for(const s of G.solids){
+    for(let x=s.x;x<s.x+s.w;x+=16){
+      let best=0;
+      for(let i=0;i<LAMPS.length;i++){ const L=LAMPS[i];
+        const dx=(x+8)-L.x, dy=s.y-L.y, d=Math.sqrt(dx*dx+dy*dy);
+        const k=Math.max(0,1-d/(L.r*1.45*lampFlick(i)));
+        if(k>best)best=k; }
+      if(best<=0.02)continue;
+      ctx.fillStyle='rgba(255,190,110,'+(best*best*0.78)+')';
+      ctx.fillRect(x,s.y,Math.min(16,s.x+s.w-x),2.4);
+      ctx.fillStyle='rgba(218,136,60,'+(best*best*0.26)+')';
+      ctx.fillRect(x,s.y+2.4,Math.min(16,s.x+s.w-x),11);
+    }
+  }
+  ctx.restore();
+  // ③ 등 기구 + 체인
+  for(let i=0;i<LAMPS.length;i++){
+    const L=LAMPS[i], fl=lampFlick(i);
+    ctx.strokeStyle='#241a1c';ctx.lineWidth=2;
+    ctx.beginPath();ctx.moveTo(L.x,L.y-64);ctx.lineTo(L.x,L.y-11);ctx.stroke();
+    ctx.fillStyle='#2b1f22';
+    for(let y=L.y-60;y<L.y-12;y+=9) ctx.fillRect(L.x-2.5,y,5,5);
+    ctx.fillStyle='#241a1e';ctx.fillRect(L.x-8,L.y-13,16,4);
+    ctx.fillRect(L.x-7,L.y-9,14,17);
+    ctx.fillStyle='rgba(255,222,152,'+(0.92*fl)+')';ctx.fillRect(L.x-4,L.y-6,8,12);
+    ctx.fillStyle='rgba(255,255,255,'+(0.5*fl)+')';ctx.fillRect(L.x-2,L.y-4,4,6);
+  }
+  // ④ 떠도는 불티 — 랜턴에서 올라온다
+  if(!G.embers){ G.embers=[];
+    for(let i=0;i<34;i++){ const L=LAMPS[i%LAMPS.length];
+      G.embers.push({x:L.x+rnd(-50,50),y:L.y+rnd(-40,90),
+        vx:rnd(-9,9),vy:rnd(-22,-6),r:rnd(.8,2.0),a:rnd(.15,.55),ph:rnd(0,6.3),src:i%LAMPS.length}); } }
+  ctx.save();ctx.globalCompositeOperation='lighter';
+  for(const e of G.embers){
+    e.x+=e.vx*G.dt+Math.sin(G.t*1.6+e.ph)*8*G.dt; e.y+=e.vy*G.dt;
+    if(e.y< LAMPS[e.src].y-150){ const L=LAMPS[e.src];
+      e.x=L.x+rnd(-46,46); e.y=L.y+rnd(20,70); }
+    const tw=0.55+0.45*Math.sin(G.t*3.1+e.ph);
+    ctx.fillStyle='rgba(255,190,110,'+(e.a*tw)+')';
+    ctx.beginPath();ctx.arc(e.x,e.y,e.r,0,6.283);ctx.fill();
+  }
+  ctx.restore();
 }
 function drawWalls(){
   const c=EL.earth.col;
