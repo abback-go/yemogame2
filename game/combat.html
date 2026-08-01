@@ -1193,23 +1193,104 @@ function render(){
   if(G.help)drawHelp();
 }
 function drawBG(){
-  // 환경은 한색 유지 — 속성 이펙트가 튀어 보이게 하는 대비축 (§6.7 가독성 1원칙)
-  const g=ctx.createLinearGradient(0,0,0,H); g.addColorStop(0,'#0d1220');g.addColorStop(1,'#161d2c');
+  /* 아트 방향 (2026-07-27 · 유저 레퍼런스): 거의 검은 바탕 + 작은 앰버 점광 +
+     붉은 배너 + 차가운 달. 환경은 어둡고 좁게 빛나고, 마법만 크고 밝게 터진다.
+     §6.7 가독성 1원칙(환경은 한색)을 "환경은 어둡다"로 갱신한 것. */
+  const g=ctx.createLinearGradient(0,0,0,H);
+  g.addColorStop(0,'#07060a'); g.addColorStop(.55,'#0d0a0d'); g.addColorStop(1,'#140e10');
   ctx.fillStyle=g;ctx.fillRect(0,0,W,H);
-  ctx.strokeStyle='rgba(90,120,170,.06)';ctx.lineWidth=1;
-  for(let x=0;x<W;x+=48){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke();}
-  for(let y=0;y<H;y+=48){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke();}
-  ctx.fillStyle='rgba(24,32,48,.85)';
-  for(let i=0;i<5;i++){const x=60+i*210; ctx.fillRect(x,120,52,340);}
-  const vg=ctx.createRadialGradient(W/2,H/2,140,W/2,H/2,520);
-  vg.addColorStop(0,'rgba(0,0,0,0)');vg.addColorStop(1,'rgba(0,0,0,.58)');
+
+  // ① 달 — 유일한 차가운 광원. 따뜻한 실내와 대비를 만든다
+  const mx=W*0.845, my=H*0.135, mr=26;
+  const mh=ctx.createRadialGradient(mx,my,mr*0.6,mx,my,mr*5.2);
+  mh.addColorStop(0,'rgba(196,214,238,.20)'); mh.addColorStop(1,'rgba(150,180,220,0)');
+  ctx.fillStyle=mh;ctx.beginPath();ctx.arc(mx,my,mr*5.2,0,6.283);ctx.fill();
+  ctx.fillStyle='#c9d6ea';ctx.beginPath();ctx.arc(mx,my,mr,0,6.283);ctx.fill();
+  ctx.fillStyle='rgba(120,140,170,.28)';
+  ctx.beginPath();ctx.arc(mx-8,my-5,5.5,0,6.283);ctx.fill();
+  ctx.beginPath();ctx.arc(mx+7,my+8,4,0,6.283);ctx.fill();
+
+  // ② 원경 아치
+  ctx.fillStyle='#15111a';
+  for(let i=0;i<3;i++){ const ax=170+i*300, ay=H*0.30, aw=150, ah=220;
+    ctx.beginPath();
+    ctx.moveTo(ax-aw/2,ay+ah); ctx.lineTo(ax-aw/2,ay+aw*0.42);
+    ctx.arc(ax,ay+aw*0.42,aw/2,Math.PI,0); ctx.lineTo(ax+aw/2,ay+ah);
+    ctx.closePath(); ctx.fill(); }
+
+  // ③ 중경 톱니바퀴
+  const gx=W*0.5, gy=H*0.30, gr=104;
+  ctx.save();ctx.translate(gx,gy);ctx.rotate(G.t*0.045);
+  ctx.fillStyle='#1c1418';
+  for(let i=0;i<16;i++){ ctx.save();ctx.rotate(i/16*6.283);
+    ctx.fillRect(-11,-gr-16,22,22);ctx.restore(); }
+  ctx.strokeStyle='#1c1418';ctx.lineWidth=17;
+  ctx.beginPath();ctx.arc(0,0,gr,0,6.283);ctx.stroke();
+  ctx.lineWidth=9;
+  for(let i=0;i<6;i++){ const a=i/6*6.283;
+    ctx.beginPath();ctx.moveTo(0,0);ctx.lineTo(Math.cos(a)*gr,Math.sin(a)*gr);ctx.stroke(); }
+  ctx.fillStyle='#241a1e';ctx.beginPath();ctx.arc(0,0,24,0,6.283);ctx.fill();
+  ctx.restore();
+
+  // ④ 기둥 — 어둡고 무겁게, 상단에 아치
+  for(let i=0;i<5;i++){ const x=52+i*212;
+    ctx.fillStyle='#1a1216';
+    ctx.fillRect(x,96,58,H);
+    ctx.beginPath();ctx.arc(x+29,96,29,Math.PI,0);ctx.fill();
+    ctx.fillStyle='#241a1f'; ctx.fillRect(x-6,90,70,12); }
+
+  // ⑤ 붉은 배너 + 금 문장
+  const BAN=[{x:W*0.5,y:118,w:74,h:150},{x:W*0.185,y:150,w:52,h:104},{x:W*0.815,y:150,w:52,h:104}];
+  for(const b of BAN){
+    ctx.fillStyle='#4d1013';
+    ctx.beginPath();
+    ctx.moveTo(b.x-b.w/2,b.y); ctx.lineTo(b.x+b.w/2,b.y);
+    ctx.lineTo(b.x+b.w/2,b.y+b.h); ctx.lineTo(b.x,b.y+b.h-b.w*0.34);
+    ctx.lineTo(b.x-b.w/2,b.y+b.h); ctx.closePath(); ctx.fill();
+    ctx.fillStyle='#61171a';ctx.fillRect(b.x-b.w/2,b.y,b.w,7);
+    ctx.save();ctx.translate(b.x,b.y+b.h*0.36);
+    ctx.fillStyle='#a8792c'; const q=b.w*0.19;
+    ctx.beginPath();ctx.moveTo(0,-q);ctx.lineTo(q*.62,0);ctx.lineTo(0,q);ctx.lineTo(-q*.62,0);
+    ctx.closePath();ctx.fill();
+    ctx.fillRect(-q*1.35,-2.2,q*2.7,4.4);
+    ctx.restore(); }
+
+  // ⑥ 앰버 랜턴 — 작고 흔들리는 점광. 화면의 유일한 따뜻함
+  const LAMP=[{x:118,y:210},{x:352,y:246},{x:608,y:246},{x:842,y:210},{x:238,y:126},{x:722,y:126}];
+  for(let i=0;i<LAMP.length;i++){
+    const L=LAMP[i], fl=0.80+0.20*Math.sin(G.t*(5.5+i*1.3)+i*2.1), rr=64*fl;
+    const lg=ctx.createRadialGradient(L.x,L.y,2,L.x,L.y,rr);
+    lg.addColorStop(0,'rgba(255,206,128,'+(0.30*fl)+')');
+    lg.addColorStop(.35,'rgba(224,140,58,'+(0.13*fl)+')');
+    lg.addColorStop(1,'rgba(180,90,30,0)');
+    ctx.fillStyle=lg;ctx.beginPath();ctx.arc(L.x,L.y,rr,0,6.283);ctx.fill();
+    ctx.strokeStyle='#241a1e';ctx.lineWidth=2;
+    ctx.beginPath();ctx.moveTo(L.x,L.y-24);ctx.lineTo(L.x,L.y-9);ctx.stroke();
+    ctx.fillStyle='#2a1f22';ctx.fillRect(L.x-6,L.y-9,12,15);
+    ctx.fillStyle='rgba(255,214,140,'+(0.85*fl)+')';ctx.fillRect(L.x-3.5,L.y-6,7,10); }
+
+  // ⑦ 비네트 — 레퍼런스만큼 깊게
+  const vg=ctx.createRadialGradient(W/2,H*0.54,120,W/2,H*0.54,H*0.98);
+  vg.addColorStop(0,'rgba(0,0,0,0)');vg.addColorStop(.48,'rgba(0,0,0,.40)');
+  vg.addColorStop(1,'rgba(0,0,0,.93)');
   ctx.fillStyle=vg;ctx.fillRect(0,0,W,H);
 }
 function drawSolids(){
+  // 금속 격자 발판 — 어두운 실루엣에 상단만 앰버 림라이트로 읽힌다
   for(const s of G.solids){
-    ctx.fillStyle='#232c3d'; ctx.fillRect(s.x,s.y,s.w,s.h);
-    ctx.fillStyle='#38455f'; ctx.fillRect(s.x,s.y,s.w,4);
-    ctx.fillStyle='rgba(0,0,0,.3)'; ctx.fillRect(s.x,s.y+s.h-4,s.w,4);
+    ctx.fillStyle='#15100f'; ctx.fillRect(s.x,s.y,s.w,s.h);
+    ctx.save();ctx.beginPath();ctx.rect(s.x,s.y,s.w,s.h);ctx.clip();
+    ctx.strokeStyle='rgba(120,84,52,.07)';ctx.lineWidth=1;
+    for(let x=s.x;x<s.x+s.w;x+=(s.h>60?26:14)){
+      ctx.beginPath();ctx.moveTo(x,s.y);ctx.lineTo(x,s.y+s.h);ctx.stroke(); }
+    if(s.h>26) for(let y=s.y+13;y<s.y+s.h;y+=13){
+      ctx.beginPath();ctx.moveTo(s.x,y);ctx.lineTo(s.x+s.w,y);ctx.stroke(); }
+    ctx.restore();
+    ctx.fillStyle='#4a3220'; ctx.fillRect(s.x,s.y,s.w,3);
+    ctx.fillStyle='rgba(255,186,104,.52)'; ctx.fillRect(s.x,s.y,s.w,1.4);
+    ctx.fillStyle='rgba(150,104,62,.30)';
+    for(let x=s.x+8;x<s.x+s.w-4;x+=34) ctx.fillRect(x,s.y+6,2.5,2.5);
+    ctx.fillStyle='rgba(0,0,0,.55)'; ctx.fillRect(s.x,s.y+s.h-5,s.w,5);
   }
 }
 function drawWalls(){
@@ -1638,10 +1719,15 @@ function body(x,y,face,p,ghost){
   const c=C();
   const cx=x+p.w/2,bot=y+p.h,sq=p.squash||1,sw=p.w*(2-sq),sh=p.h*sq,bx=cx-sw/2,by=bot-sh;
   if(!ghost){ctx.fillStyle='rgba(0,0,0,.35)';ctx.beginPath();ctx.ellipse(cx,bot+2,p.w*.6,5,0,0,6.283);ctx.fill();}
-  ctx.fillStyle='#1b2130';ctx.fillRect(cx-8,by+sh-15,6,15);ctx.fillRect(cx+2,by+sh-15,6,15);
-  ctx.fillStyle='#2b3040';roundRect(bx+2,by+10,sw-4,sh-22,6);ctx.fill();
+  // 어두운 배경 위에서 실루엣이 뜨도록 밝게 — 대신 속성색은 액센트에만 (§6.7)
+  ctx.fillStyle='#3b3f4c';ctx.fillRect(cx-8,by+sh-15,6,15);ctx.fillRect(cx+2,by+sh-15,6,15);
+  ctx.fillStyle='#0a0a0e';roundRect(bx+0.5,by+8.5,sw-1,sh-19,7);ctx.fill();   // 외곽 대비선
+  ctx.fillStyle='#ccd2dd';roundRect(bx+2,by+10,sw-4,sh-22,6);ctx.fill();
+  ctx.fillStyle='#9aa3b3';ctx.fillRect(bx+2,by+sh-16,sw-4,4);   // 밑단 음영
   ctx.fillStyle=c.edge;ctx.fillRect(cx-7,by+16,14,5);          // 속성 띠
-  ctx.fillStyle='#232838';ctx.beginPath();ctx.ellipse(cx,by+8,11,12,0,0,6.283);ctx.fill();
+  ctx.fillStyle='#0a0a0e';ctx.beginPath();ctx.ellipse(cx,by+8,12,13,0,0,6.283);ctx.fill();
+  ctx.fillStyle='#b9c0cd';ctx.beginPath();ctx.ellipse(cx,by+8,11,12,0,0,6.283);ctx.fill();
+  ctx.fillStyle='#8c1f24';                                      // 붉은 두건 — 레퍼런스 결
   ctx.beginPath();ctx.moveTo(cx-11,by+10);ctx.lineTo(cx+(face>0?9:-9),by-6);ctx.lineTo(cx+11,by+10);ctx.fill();
   ctx.fillStyle=c.mid;ctx.fillRect(cx+(face>0?2:-8),by+5,6,3);  // 속성 눈빛
   if(p.cast<=0&&p.skill===''){ctx.strokeStyle='#c9d2e0';ctx.lineWidth=2;ctx.beginPath();
@@ -1662,19 +1748,21 @@ function drawEnemy(){
   const pu=e.punch||0;
   ctx.save();
   if(pu>0.001){ ctx.translate(cx,bot); ctx.scale(1+pu*0.55,1-pu*0.30); ctx.translate(-cx,-bot); }
-  ctx.fillStyle='#2a2f3a';ctx.fillRect(cx-15,bot-22,11,22);ctx.fillRect(cx+4,bot-22,11,22);
+  ctx.fillStyle='#3a352f';ctx.fillRect(cx-15,bot-22,11,22);ctx.fillRect(cx+4,bot-22,11,22);
   // 상태이상 틴트 — 어둡게 물들여 실루엣을 지키면서 상태를 알린다
   const burn=e.st&&e.st.burn?clamp(e.st.burn.n/6,0,1):0;
   const chill=e.st&&e.st.chill?clamp(e.st.chill.n/6,0,1):0;
-  let base=e.hurt>0?'#9a6a56':(e.state==='stagger'?'#5a5060':'#454d5e');
-  if(burn>0) base='rgb('+Math.round(69+71*burn)+','+Math.round(77-15*burn)+','+Math.round(94-46*burn)+')';
-  else if(chill>0) base='rgb('+Math.round(69-14*chill)+','+Math.round(77+18*chill)+','+Math.round(94+46*chill)+')';
+  let base=e.hurt>0?'#c98a6e':(e.state==='stagger'?'#7d6f80':'#6f6558');
+  if(burn>0) base='rgb('+Math.round(111+80*burn)+','+Math.round(101-20*burn)+','+Math.round(88-40*burn)+')';
+  else if(chill>0) base='rgb('+Math.round(111-30*chill)+','+Math.round(101+30*chill)+','+Math.round(88+70*chill)+')';
+  ctx.fillStyle='#0a0a0e';roundRect(e.x+2.5,e.y+14.5,e.w-5,e.h-27,7);ctx.fill();
   ctx.fillStyle=base;
   roundRect(e.x+4,e.y+16,e.w-8,e.h-30,6);ctx.fill();
-  ctx.fillStyle='#39404e';ctx.fillRect(cx-4,e.y+20,8,e.h-34);
-  ctx.fillStyle='#525b6e';ctx.beginPath();ctx.ellipse(e.x+8,e.y+22,10,8,0,0,6.283);ctx.fill();
+  ctx.fillStyle='#4b453c';ctx.fillRect(cx-4,e.y+20,8,e.h-34);
+  ctx.fillStyle='#867a68';ctx.beginPath();ctx.ellipse(e.x+8,e.y+22,10,8,0,0,6.283);ctx.fill();
   ctx.beginPath();ctx.ellipse(e.x+e.w-8,e.y+22,10,8,0,0,6.283);ctx.fill();
-  ctx.fillStyle='#3c4353';ctx.beginPath();ctx.ellipse(cx,e.y+11,13,13,0,0,6.283);ctx.fill();
+  ctx.fillStyle='#0a0a0e';ctx.beginPath();ctx.ellipse(cx,e.y+11,14.2,14.2,0,0,6.283);ctx.fill();
+  ctx.fillStyle='#5e564a';ctx.beginPath();ctx.ellipse(cx,e.y+11,13,13,0,0,6.283);ctx.fill();
   ctx.fillStyle=e.mana<=0?'#48506a':'#7fd0ff';ctx.fillRect(cx-9,e.y+8,18,4);
   // 무기
   ctx.save();ctx.translate(cx+e.face*15,e.y+26);
