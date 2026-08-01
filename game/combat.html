@@ -43,7 +43,16 @@
    상성 = 적 약점 속성과 일치 시 배율 (§11 최우선 미결 검증용)
    F1 = 실시간 튜닝 패널 (공통 + 현재 속성)
    ===================================================================== */
-const cv=document.getElementById('cv'), ctx=cv.getContext('2d');
+const cv=document.getElementById('cv'), mainCtx=cv.getContext('2d');
+let ctx=mainCtx;
+/* 도트 그래픽 — 저해상도 버퍼에 그린 뒤 니어리스트로 확대한다.
+   PIX=3이면 320×180으로 그려서 3배 확대 = 픽셀 하나가 3×3.
+   HUD·텍스트는 확대 후 풀 해상도로 따로 그려 가독성을 지킨다. */
+let PIX=3;
+const bcv=document.createElement('canvas'), bctx=bcv.getContext('2d');
+function setPix(n){ PIX=Math.max(1,Math.min(6,Math.round(n)));
+  bcv.width=Math.ceil(960/PIX); bcv.height=Math.ceil(540/PIX);
+  bctx.imageSmoothingEnabled=false; }
 const W=960,H=540; cv.focus();
 function fit(){const s=Math.min(window.innerWidth/W,window.innerHeight/H);
   cv.style.width=(W*s)+'px'; cv.style.height=(H*s)+'px';}
@@ -120,6 +129,7 @@ const TUNE={
   meleeNoSlow:1,                   // 1 = 근접 타격에 화면 슬로우를 걸지 않는다(기본공격이므로)
   bladeLen:74, bladeIdleAng:-1.15, dashSlashMult:1.55,// 검 길이 · 대기 각 · 대시 직후 강화 배율
   bladeForge:0.10,                 // 검을 빚는 연출 — 선딜 안에 압축된다
+  pixScale:3,                      // 도트 해상도 — 1=원본, 3=320×180을 3배 확대
 
   el:{
     /* ---------- 불: 관통·화상. 기준점(유저 손맛 확인 완료) ---------- */
@@ -195,6 +205,7 @@ const SPEC_COMMON=[
    ['meleeWindPull','예비 당김(각)',0,2,.05],['meleeSwingEase','스윙 순간성',.1,1,.02],
    ['meleeNoSlow','슬로우 끄기',0,1,1],
    ['bladeForge','검 빚는 연출 길이',.03,.5,.01]]],
+ ['도트 해상도',[['pixScale','픽셀 크기(1~5)',1,5,1]]],
  ['기타',[['playerHp','플레이어 체력',20,300,10]]],
 ];
 const SPEC_JAV=[['javWind','빚는 시간(선딜)',.01,.30,.005],['javRec','후딜(1·2연)',.03,.40,.01],
@@ -1171,7 +1182,12 @@ function render(){
     OFF={ x:Math.sin(G.t*hz)*sh*8*rnd(.55,1.45)+G.shakeV.x,
           y:Math.cos(G.t*hz*1.37)*sh*6*rnd(.55,1.45)+G.shakeV.y };
   } else OFF={x:0,y:0};
-  ctx.setTransform(1,0,0,1,0,0);
+  // ── 월드는 저해상도 버퍼에 그린다
+  ctx=bctx;
+  const K=1/PIX;
+  ctx.setTransform(K,0,0,K,0,0);
+  ctx.imageSmoothingEnabled=false;
+  ctx.clearRect(0,0,W,H);
   drawBG();
   ctx.save();
   // 줌 펀치 — 큰 타격에 화면이 순간 당겨졌다 풀린다
@@ -1183,7 +1199,7 @@ function render(){
   drawWaves(true);   // 임팩트 방사선 — 적·파티클 위
   drawEnemyDanger();   // 위험 레이어 = 항상 최상단
   ctx.restore();
-  // ── 최종 그레이딩: 깊은 비네트 + 따뜻한 필름 틴트 (화면 공간)
+  // ── 최종 그레이딩: 깊은 비네트 + 따뜻한 필름 틴트 (버퍼 안에서)
   const vg=ctx.createRadialGradient(W/2,H*0.52,110,W/2,H*0.52,H*1.02);
   vg.addColorStop(0,'rgba(0,0,0,0)');vg.addColorStop(.46,'rgba(0,0,0,.40)');
   vg.addColorStop(1,'rgba(0,0,0,.94)');
@@ -1192,30 +1208,34 @@ function render(){
   const tg=ctx.createLinearGradient(0,0,0,H);
   tg.addColorStop(0,'rgba(40,26,44,.055)');tg.addColorStop(1,'rgba(70,34,16,.055)');
   ctx.fillStyle=tg;ctx.fillRect(0,0,W,H);ctx.restore();
-  drawHUD();
   if(G.edge.a>0){
     const eg=ctx.createRadialGradient(W/2,H/2,H*0.30,W/2,H/2,H*0.85);
     eg.addColorStop(0,'rgba('+G.edge.c+',0)');
     eg.addColorStop(1,'rgba('+G.edge.c+','+(G.edge.a*0.85)+')');
     ctx.fillStyle=eg;ctx.fillRect(0,0,W,H); }
-  if(G.flash.a>0){ctx.globalAlpha=G.flash.a;ctx.fillStyle=G.flash.c;ctx.fillRect(0,0,W,H);ctx.globalAlpha=1;}
+  if(G.flash.a>0){ctx.globalAlpha=G.flash.a;ctx.fillStyle=G.flash.c;
+    ctx.fillRect(0,0,W,H);ctx.globalAlpha=1;}
+
+  // ── 니어리스트 확대 후 HUD는 풀 해상도로
+  ctx=mainCtx;
+  ctx.setTransform(1,0,0,1,0,0);
+  ctx.imageSmoothingEnabled=false;
+  ctx.clearRect(0,0,W,H);
+  ctx.drawImage(bcv,0,0,bcv.width,bcv.height,0,0,W,H);
+  drawHUD();
   if(G.help)drawHelp();
 }
+
 /* ===================== 배경 · 조명 (2026-07-27 대개정) =====================
-   레퍼런스와의 격차는 「광원이 기하를 비추지 않는다」와 「깊이가 없다」였다.
-   ① 시차 4겹 + 대기 원근(멀수록 옅고 푸르다)
-   ② 랜턴이 실제로 발판·벽을 비춘다(월드 좌표 · 가산 합성 · 클리핑)
-   ③ 트러스 골조·체인·난간 — 사각형이 아니라 실루엣이 읽히는 구조물
-   ④ 달빛 광선 · 헤이즈 밴드 · 떠도는 불티                                  */
+   ① 시차 4겹 + 대기 원근  ② 랜턴이 실제로 기하를 비춘다(월드 좌표 · 가산)
+   ③ 트러스 골조·체인      ④ 달빛 광선 · 헤이즈 · 불티                      */
 const CAMX0=480, CAMY0=300;
 const parX=f=>-(G.cam.x-CAMX0)*f, parY=f=>-(G.cam.y-CAMY0)*f;
-// 랜턴 — 월드 좌표. drawLights()가 이 값으로 실제 조명을 계산한다
 const LAMPS=[{x:120,y:330,r:236},{x:398,y:210,r:170},{x:622,y:210,r:170},
              {x:902,y:330,r:236},{x:252,y:120,r:130},{x:768,y:120,r:130},
              {x:508,y:420,r:210}];
 const lampFlick=(i)=>0.82+0.18*Math.sin(G.t*(5.1+i*1.27)+i*2.3)
                         +0.05*Math.sin(G.t*(17+i*3.1));
-
 // 트러스 골조 — X자 브레이스. 레퍼런스 구조물의 정체
 function truss(x,y,w,h,seg,col,lw){
   ctx.strokeStyle=col; ctx.lineWidth=lw;
@@ -2141,6 +2161,7 @@ function update(dt){
 }
 let last=performance.now();
 function frame(now){
+  if(PIX!==TUNE.pixScale) setPix(TUNE.pixScale);
   let raw=(now-last)/1000; last=now; raw=clamp(raw,0,1/30);
   // 히트스톱이 풀린 직후 시간이 천천히 정상 속도로 돌아온다 — 이 꼬리가 "묵직함"을 만든다
   let ts=1;
@@ -2149,6 +2170,7 @@ function frame(now){
   G.tscale=ts; G.rawDt=raw;
   const dt=raw*ts; G.dt=dt;
   update(dt);render();requestAnimationFrame(frame);}
+setPix(TUNE.pixScale);
 resetAll();
 requestAnimationFrame(frame);
 </script>
