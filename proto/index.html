@@ -234,10 +234,18 @@ const MAP = {
   geo:[
     {id:"plaza_floor", t:"solid", rect:[0,0,34,1.0],    stand:true,  label:"대광장 바닥"},
     {id:"wall_l",      t:"wall",  rect:[0,1.0,0.4,5.0], stand:false, label:"좌 경계벽"},
-    {id:"wall_r",      t:"wall",  rect:[33.6,5.0,0.4,1.0],stand:false,label:"우 경계벽"},
+    /* v1.4: rect[33.6,5.0,0.4,1.0](y5~6) → 좌 경계벽과 대칭인 y1~6 전 높이.
+       바닥(y1)에 우벽이 없어서 **지상으로 달리면 x34에서 그냥 떨어졌다**(낙사).
+       의도 경로는 위쪽 출구 렛지인데, 1F는 첫 층이라 예고 없는 낙사는 학습이 아니다.
+       ★ wallJump는 주지 않는다 — 경계벽에 슈트를 주면 단일 벽 무한 벽점프가 되살아난다
+         (검증 「벽점프 슈트가 경계벽이 아님」이 잡는다). */
+    {id:"wall_r",      t:"wall",  rect:[33.6,1.0,0.4,5.0],stand:false,label:"우 경계벽"},
     {id:"step_p1",     t:"solid", rect:[24,2.2,3,0.2],  stand:true,  label:"계단 P1"},
     {id:"step_p2",     t:"solid", rect:[29,3.4,2,0.2],  stand:true,  label:"계단 P2"},
-    {id:"exit_ledge",  t:"solid", rect:[31,4.8,3,0.2],  stand:true,  label:"출구 렛지 P3"},
+    /* v1.4: 폭 3.0 → 2.6 (x1 34 → 33.6). 위 우벽이 y1~6으로 길어지면서 렛지가
+       벽 속에 파묻혀 「충돌 타입 겹침」이 터졌다. 벽 앞까지만 깔아 접합면을 맞춘다
+       (출구 문 x32.5는 그대로 렛지 위). */
+    {id:"exit_ledge",  t:"solid", rect:[31,4.8,2.6,0.2],stand:true,  label:"출구 렛지 P3"},
     {id:"deco_col1",   t:"deco",  rect:[5.45,1.0,1.1,4.4], label:"대열주"},
     {id:"deco_col2",   t:"deco",  rect:[10.45,1.0,1.1,4.4],label:"대열주"},
     {id:"deco_col3",   t:"deco",  rect:[15.45,1.0,1.1,4.4],label:"대열주"},
@@ -490,8 +498,14 @@ const MAP = {
     {id:"terrace_l", t:"solid", rect:[0,0.2,4,0.3],  stand:true, label:"성종 테라스 바닥 L"},
     {id:"spire_gap", t:"oneway",rect:[4,0.2,2,0.3],  stand:true, dropThrough:false, label:"첨탑 개구(진입)"},
     {id:"terrace_r", t:"solid", rect:[6,0.2,10,0.3], stand:true, label:"성종 테라스 바닥 R"},
-    {id:"rail_l", t:"wall", rect:[-0.2,0.5,0.2,1.9], stand:false, label:"좌 난간"},
-    {id:"rail_r", t:"wall", rect:[16,0.5,0.2,1.9],   stand:false, label:"우 난간"},
+    /* v1.4: 좌·우 난간 높이 1.9 → 8.5 (층 상단 y9까지) = **경계벽**으로 승격.
+       1.9u짜리 난간은 이단강림(2.886u) 한 번에 넘어갔다 — 7F는 최상층이라 난간 밖에
+       갈 곳이 없어서 그대로 낙사였다(좌·우 양쪽 모두 재현). 난간을 "넘을 수 없는
+       높이"로 만들려면 창대쉬 체인 4.536u 위여야 하고, 출발 발판이 대들보(y6.6)까지
+       있으므로 결국 층 천장까지 세우는 게 유일하게 성립하는 답이다.
+       ★ 다른 층의 좌우 경계벽과 같은 역할·같은 형상이 됐다(그 층들은 이 결함이 없다). */
+    {id:"rail_l", t:"wall", rect:[-0.2,0.5,0.2,8.5], stand:false, label:"좌 난간(경계벽)"},
+    {id:"rail_r", t:"wall", rect:[16,0.5,0.2,8.5],   stand:false, label:"우 난간(경계벽)"},
     /* v1.2: 하면 y1.3 → 1.6. 테라스(top 0.5) 위 여유가 0.80u뿐이라 bodyH 0.82의
        몸이 들어가지 못했고, 그 밑에 사당5(cp7, x2.5)가 깔려 있었다.
        여유 1.10u로 확보. 발코니 상단 1.9 = 테라스에서 1.4u → 단일점프(1.592) 유지. */
@@ -1272,6 +1286,16 @@ function runTests(){
         +` · 벽(지정 h40 ${(S.wallTall||0).toFixed(2)} / h8 ${(S.wallShort||0).toFixed(2)}`
         +` / 경계 ${(S.wallPlain||0).toFixed(2)} / 경계+창대쉬 ${(S.wallPlainSd||0).toFixed(2)})`
         +` · 첨탑캡 ${(S.finialJump||0).toFixed(2)} · 최대체공vx ${(S.maxAirVx||0).toFixed(2)}`);
+  /* ── v1.4 신규: 층 경계 이탈 (실주행) ── */
+  let be={bad:[{f:{id:"?"},st:{id:"측정 불가"},t:0,x:0,y:0,over:0}], stat:{runs:0,tight:0,tightAt:""}};
+  try{ be=boundsEscapes(); }
+  catch(e){ be={bad:[{f:{id:"?"},st:{id:"측정 예외: "+e.message},t:0,x:0,y:0,over:0}],
+                stat:{runs:0,tight:0,tightAt:""}}; }
+  ok("층 경계 밖으로 나갈 수 없음(전 층 실주행)", be.bad.length===0,
+     be.bad.length
+       ? be.bad.map(b=>`${b.f.id}: ${b.st.id}에서 ${b.dir>0?"오른쪽":"왼쪽"} ${b.t}s`
+           +` → x${b.x}(허용 0~${b.f.w}) 국소y${b.y} · ${b.over}u 이탈`).join(" / ")
+       : `런 ${be.stat.runs}개 · 최소 여유 ${be.stat.tight.toFixed(2)}u @${be.stat.tightAt}`);
   return R;
 }
 function portalPairsOk(){
@@ -2145,7 +2169,7 @@ function drawHUD(T){
   ctx.fillText("성창 — 잊힌 성물 · 「신전 수련장」", 18, 26);
   ctx.font="500 11.5px system-ui"; ctx.fillStyle="rgba(186,208,238,0.85)";
   const pass=TESTS.filter(r=>r.ok).length;
-  ctx.fillText(`맵 프로토 v1.3 · 전역 ${WORLD.x1}×${WORLD.y1}u · 7층 · 검증 ${pass}/${TESTS.length} · `
+  ctx.fillText(`맵 프로토 v1.4 · 전역 ${WORLD.x1}×${WORLD.y1}u · 7층 · 검증 ${pass}/${TESTS.length} · `
     +(PLAY.on?`플레이 모드 ${PLAY.scale}× (Enter=뷰어)`:"뷰어 모드 (Enter=플레이)"), 18, 44);
   ctx.restore();
 
@@ -3604,6 +3628,94 @@ function measureFinialJump(useSdash){
   } finally { grid.remove(CAP); grid.remove(MEAS_PAD); _measRestore(snap); }
   return best;
 }
+/* ── 층 경계 이탈 실주행 (v1.4 신설) ──────────────────────────────────
+   「모든 층에서 플레이어가 층 경계 밖으로 나갈 수 없다」
+
+   ■ 판정 기준은 **층 데이터에서만** 나온다 (원칙 5 — 리터럴 금지)
+       가로 허용 구간 = [0, f.w]            (몸 박스 bodyW가 이 밖으로 나가면 위반)
+       세로 소속 구간 = [f.yOff, f.yOff+f.h)
+     w·h를 고치면 판정도 같이 움직인다. 좌표를 손으로 적은 곳이 한 군데도 없다.
+
+   ■ 모델이 아니라 **컨트롤러를 실제로 몰아서** 본다.
+     도달성 그래프(canMove/closure)는 "발판 사이를 갈 수 있나"만 보므로
+     **벽이 y구간을 덜 덮고 있는** 종류의 결함은 원리적으로 보이지 않는다:
+       · 1F 우 경계벽이 y5~6에만 있어 **지상으로 달리면 x34에서 그냥 떨어졌다**
+       · 7F 난간이 1.9u뿐이라 이단강림(2.886u)으로 넘어 최상층 밖으로 나갔다
+     둘 다 18항목 전부 PASS인 상태에서 살아 있었다.
+
+   ■ ★ 방의 천장은 **열려 있는 것이 설계다.** 전 층에서 (최고 발판 + 창대쉬 체인
+     4.536u)가 f.h를 넘는다(1F 9.54 vs 6 · 2F 9.34 vs 7 · 6F 24.1 vs 20 …).
+     그래서 몸이 층 상단 위로 완전히 올라가면 그 런은 거기서 끝낸다 — 방 밖은
+     이 층의 관할이 아니다. 검사 대상은 **방 안에 있는 동안 옆으로 새는가**이다.
+     (한계: 천장 위로 올라가 옆으로 흘러 방 밖에 착지하는 경로는 이 검사가 못 본다.
+      막으려면 전 층에 천장이 필요한데, 그건 이 맵의 설계 자체를 바꾸는 일이다.) */
+function boundsStarts(f){
+  const P=[], hw=PHYS.bodyW/2, o=f.yOff;
+  if(f.spawn)                        P.push({id:"spawn", x:f.spawn[0], y:f.spawn[1]+o});
+  for(const q of (f.portals||[]))    P.push({id:"portal:"+q.id, x:q.pos[0], y:q.pos[1]+o});
+  for(const c of (f.checkpoints||[]))P.push({id:"cp:"+c.id, x:c.pos[0], y:c.pos[1]+o});
+  for(const g of standables(f.n)){                       // 이미 월드 좌표
+    if(g.x1-g.x0 < PHYS.bodyW) continue;                 // 몸이 못 서는 폭
+    P.push({id:g.id+"@L", x:g.x0+hw, y:g.y1});
+    P.push({id:g.id+"@R", x:g.x1-hw, y:g.y1});
+  }
+  /* 지형에 파묻힌 시작점은 버린다 — 벽 **속**에서 출발하면 축분리 스윕이 밀어낼
+     방향을 못 잡아 그대로 통과해 버려서, 있지도 않은 이탈이 보고된다.
+     bodyBlocked는 컨트롤러가 쓰는 바로 그 함수다(판정 일치). */
+  return P.filter(s=>!bodyBlocked(s.x,s.y));
+}
+function boundsEscapes(){
+  const bad=[], hw=PHYS.bodyW/2, dt=CTRL.dt, p=player;
+  const EPS=1e-6;                          // 부동소수 오차만 흡수(설계 수치 아님)
+  const stat={runs:0, tight:Infinity, tightAt:""};
+  /* 한 정책을 끝까지 몰아보고 첫 이탈을 돌려준다.
+     정책 = (시작점, 진행방향, 점프 연타 주기, 창대쉬 모드).
+     주기·모드는 "몰아보는 방법"일 뿐 판정 기준이 아니다 — 합격/불합격은
+     오직 [0,f.w]가 정한다. (measureWallClimb의 period 스윕과 같은 성격) */
+  const runOne=(f,st,dir,jp,sdm)=>{
+    const top=f.yOff+f.h, sdp=25, sdAt=Math.floor(sdp/2);
+    /* 런 길이 = 층을 가로로 완주하고도 남을 시간 (전부 데이터·PHYS 파생) */
+    const N=Math.ceil((f.w/PHYS.runSpeed + 4*PHYS.jumpV/PHYS.gravity)/dt);
+    for(const k in IN) IN[k]=false;
+    p.x=st.x; p.y=st.y; p.vx=0; p.vy=0; p.face=dir; p.floor=f.n;
+    p.grounded=false; p.ground=null; p.slip=false; p.slipFrom=null;
+    p.coyoteT=0; p.bufT=0; p.jumps=0; p.jumpCut=false;
+    p.dashT=0; p.dashCd=0; p.dashUsed=false; p.iframe=0;
+    p.sdCharge=true; p.sdHover=0; p.sdT=0; p.sdCd=0;
+    p.wallLock=0; p.lastWallUid=null; p.dropT=0; p.dropping=false;
+    p.landT=0; p.hurtT=0; p.atkT=0; p.alive=true; p.groundHit=false;
+    p.respawn={x:st.x, y:st.y};
+    stat.runs++;
+    for(let n=0;n<N;n++){
+      IN.right=dir>0; IN.left=dir<0; IN.up=false; IN.jump=true;
+      if(jp && n%jp===0) IN.jumpEdge=true;
+      /* sdm: 0 안 씀 · 1 진행방향 수평 · 2 진행방향 대각상승 · 3 수직상승 */
+      if(sdm && n%sdp===sdAt){ IN.sdEdge=true; IN.up=sdm>=2;
+                               if(sdm===3){ IN.right=false; IN.left=false; } }
+      stepPlayer(dt);
+      if(p.y>=top) break;                        // 열린 천장 위로 나감 = 런 종료
+      if(p.y+PHYS.bodyH<=f.yOff) continue;       // 방 아래(낙하 중) — 판정 보류
+      const m=Math.min(f.w-(p.x+hw), p.x-hw);    // 좌우 경계까지 남은 여유
+      if(m<stat.tight){ stat.tight=m; stat.tightAt=`${f.id} x${p.x.toFixed(2)}`; }
+      if(m < -EPS) return {f, st, dir, t:+(n*dt).toFixed(2),
+        x:+p.x.toFixed(2), y:+(p.y-f.yOff).toFixed(2), over:+(-m).toFixed(3)};
+    }
+    return null;
+  };
+  const snap=_measSnapshot();
+  try{
+    for(const f of FLOORS){
+      let hit=null;
+      for(const st of boundsStarts(f)){
+        for(const dir of [1,-1]) for(const jp of [0,18,55]) for(const sdm of [0,1,2,3])
+          if(!hit) hit=runOne(f,st,dir,jp,sdm);
+        if(hit) break;                           // 층당 1건이면 충분(빨리 실패)
+      }
+      if(hit) bad.push(hit);
+    }
+  } finally { _measRestore(snap); }
+  return {bad, stat};
+}
 /* 계약 검사: 실측이 모델 포락선을 넘어서면 게이팅 근거가 무너진다 */
 function reachContractIssues(){
   const bad=[];
@@ -3891,7 +4003,7 @@ window.__MAP__={MAP,FLOORS,WORLD,WORLD_GEO,SPEAR_FACES,HAZARDS,CHECKPOINTS,PORTA
   pointReachable,pointHit,occludedPair,occludedPoint,canMove,maxRise,envFor,envSlack,
   startSurfaces,graphNodes,finialNodes,wallBoostTop,
   standPoints,bodyFitIssues,supportIssues,walkClearance,
-  measureEnvelope,measureScalars,reachContractIssues,
+  measureEnvelope,measureScalars,reachContractIssues,boundsStarts,boundsEscapes,
   SPRITE,ANIM,CTRL,PLAY,player,IN,togglePlay,warpFloor,respawnPlayer,stepPlayer,bodyBox,
   FX,FXP,fxs,SHAKE,fxClear,fxTick,
   cam,focusFloor,overview,ui,exportJSON};
