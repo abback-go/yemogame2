@@ -137,3 +137,41 @@
 - 월드맵 뷰어: https://abback-go.github.io/yemogame2/map.html
 - 배포: `gh-pages` 브랜치 전용(개발 금지) — `game/combat.html` 수정 시 gh-pages에도 동일 파일 푸시.
 - 파일 전달: GitHub **Code → Download ZIP** (유저가 직접 최신 수령). 유저 커밋은 GitHub 웹 업로드 또는 github.dev.
+
+---
+
+## ⚠ shadow-dagger 병합 (2026-08-08)
+
+`abback-go/shadow-dagger` 브랜치 `claude/magic-school-game-design-50d3ib`의 산출물을 이 저장소로 가져왔다.
+**두 저장소가 서로 모르는 채로 같은 결론(마법학교 폐기 → 신전)에 도달했고, 비어 있는 쪽이 정확히 반대였다.**
+
+| | yemogame2 (여기) | shadow-dagger |
+|---|---|---|
+| 있던 것 | 전투 손맛·타격감·근접·아트·스토리 뼈대·§7 루프 | **맵 7층 + 게이팅 검증기 11항목 + 창 꽂기 시그니처** |
+| 없던 것 | **맵·게이팅 검증** | **캐릭터·전투** |
+
+### 가져온 것
+
+| 경로 | 내용 |
+|---|---|
+| `proto/index.html` | **맵 프로토타입 v1.1** — 단일 파일·의존성 0. 7층 수직 타워(34×77u) + 자유 카메라 뷰어. 캐릭터·전투 미구현 |
+| `proto/verify-map.mjs` | 인게임 `runTests()`를 호출하는 CI 래퍼 |
+| `docs/handoff-2026-08-08.md` | **세션 인계 문서 — 저쪽 맥락은 이것 하나로 복원된다** |
+| `docs/specs/2026-08-07-holy-spear-design.md` | 「성창 — 잊힌 성물」 기획 정본 |
+| `docs/specs/2026-08-07-temple-training-map.md` | 맵 설계 (**끝의 「개정 v1.1」이 구현 정본**) |
+| `docs/unity-vertical-slice-spec.md` | Unity 이식·필 검증 스펙 |
+| `docs/shadow-dagger-CLAUDE.md` | 저쪽 개발 지침 (사지방 제약·데이터 원칙). **이 저장소 `CLAUDE.md`는 안 건드렸다** |
+| `archive/shadow-dagger-legacy/` | 구 프로토타입(`index.html`·`arcane/`) — **참고용 보관, 수정 금지** |
+
+### 검증
+
+`node proto/verify-map.mjs` → **11/11 PASS** (이 컨테이너에서 재현 확인).
+⚠ 검증기가 `playwright`를 bare import 한다. 여기서는 `node_modules/playwright` 심볼릭 링크로 해결했고
+`.gitignore`에 `node_modules/`를 추가했다 — **저쪽 파일은 안 고쳤다.**
+
+### 아직 안 한 것 — 다음 세션이 결정할 것
+
+1. **본진 결정** — 두 저장소 중 어디서 계속할지. `shadow-dagger`는 현재 **읽기 전용**으로 붙어 있어 푸시하려면 `access:"push"`로 재부착해야 하고 작업 경로도 바뀐다.
+2. **문서 통합** — 이 저장소의 `docs/game-design.md`(마법학교 전제)와 저쪽 `holy-spear-design.md`(신전·창 전제)가 **정면 충돌**한다. 어느 쪽이 정본인지 정하기 전에는 둘 다 살려둔다.
+3. **살릴 것 / 버릴 것 판정** — 이 저장소의 원석 체계·습득 제1원칙·소프트 게이팅·스토리 뼈대 v2(징표 7인·용사 반전)가 신전 전제에서도 유효한지.
+4. **`game/combat.html` ↔ `proto/index.html`** — 전투 손맛과 맵이 각각 다른 파일에 있다. 합칠지, 역할을 나눌지.

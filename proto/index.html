@@ -1,0 +1,1831 @@
+<meta charset="utf-8">
+<title>성창 — 신전 수련장 (맵 프로토 v1.1)</title>
+<style>
+  html,body{margin:0;height:100%;background:#05070d;overflow:hidden;
+    font-family:"Pretendard","Malgun Gothic","Apple SD Gothic Neo",system-ui,sans-serif;}
+  canvas{display:block;cursor:crosshair}
+  canvas.drag{cursor:grabbing}
+</style>
+<canvas id="c"></canvas>
+<script>
+"use strict";
+/* =====================================================================
+   성창(聖槍) — 잊힌 성물 · 「신전 수련장」 맵 프로토타입 v1.1
+   ---------------------------------------------------------------------
+   설계 원본 : docs/specs/2026-08-07-temple-training-map.md (+ v1.1 개정)
+   좌표계    : 유닛(u). 좌하단 원점, +x 오른쪽, +y 위. 1u = 100px @PPU100
+   현 단계   : 맵 지오메트리 + 신전 아트 + 설계 검증 도구. 캐릭터/전투는 다음 단계.
+   v1.1 변경 : 어드바이저 검토 반영 —
+     · 게이팅 검증을 리터럴 → 데이터 파생 + 전 표면쌍 자동 감사로 교체
+     · 시퀀스 브레이크 4건 수정 (3F 히든 / 4F 먼기둥 / 5F 성물기둥 / 7F 개구)
+     · REACH를 PHYS에서 유도 (유니티 물리 상수와 단일 진실원)
+     · 스키마 정비: ascii id · rect[x,y,w,h] · stand/cap/gate · spearFaces(normal)
+       · hazards.respawn · checkpoints · portals · targets · dropThrough
+     · 월드 평탄화(WORLD_GEO/SPEAR_FACES) + 콜리전 질의 API + 동적 창 발판
+     · 인페이지 테스트(T) · JSON 익스포트(E) · 도달성 오버레이(클릭)
+   ===================================================================== */
+
+/* ------------------------------------------------------------------ */
+/* 0. 물리 상수 (유니티 이식 스펙 §4와 동일 — 여기가 단일 진실원)        */
+/* ------------------------------------------------------------------ */
+const PHYS = {
+  gravity:      26.0,   // u/s² (아래)
+  runSpeed:      3.92,  // u/s
+  airControl:    0.90,
+  jumpV:         9.10,  // u/s
+  airJumpV:      8.20,  // u/s (이단 강림)
+  dashSpeed:     7.80,  // u/s
+  dashTime:      0.16,  // s
+  vaultV:       13.30,  // u/s (창대 도약 — 정점 3.4u 역산)
+  spearRange:    5.00,  // u  창 던지기 사거리
+  attackUpReach: 0.80,  // u  위공격 유효 리치(히트박스 상단 기준 추가 도달)
+  ledgeSnap:     0.08,  // u  낮은 턱 자동 승월
+  bodyW:         0.30, bodyH: 0.46,
+};
+/* REACH는 상수가 아니라 PHYS에서 유도된다 → 물리를 튜닝하면 게이팅이 자동 재검증됨 */
+const REACH = (()=>{
+  const h = v => v*v/(2*PHYS.gravity);
+  const jump = h(PHYS.jumpV);
+  const airT = 2*PHYS.jumpV/PHYS.gravity;               // 단일점프 총 체공
+  return {
+    jump,
+    doubleJump: jump + h(PHYS.airJumpV),
+    vault:      h(PHYS.vaultV),
+    // 대시점프 수평 도달: 대시 구간 + 잔여 체공을 공중제어 속도로
+    dashX: PHYS.dashSpeed*PHYS.dashTime + (airT-PHYS.dashTime)*PHYS.runSpeed*PHYS.airControl,
+    spear: PHYS.spearRange,
+    atkUp: PHYS.attackUpReach,
+  };
+})();
+/* 게이팅 여유 규칙: 게이트 갭은 이동기 한계 대비 최소 이만큼 초과해야 한다 */
+const GATE_MARGIN = 0.30;
+
+/* ------------------------------------------------------------------ */
+/* 1. 맵 데이터 (schema temple-map/1.1)                                */
+/*    rect:[x,y,w,h] 좌하단 원점 · 층 로컬 좌표 + yOff                  */
+/*    t: solid|oneway|wall|vault|deco   stand:착지가능  cap:"finial"    */
+/*    gate: 이 표면에 도달하려면 반드시 필요한 수단(spear|vault)         */
+/* ------------------------------------------------------------------ */
+const MAP = {
+  schema:"temple-map/1.1", units:"u", ppu:100, origin:"bottom-left", yUp:true,
+  name:"신전 수련장", phys:PHYS,
+  spear:{ ledgeLen:0.8, ledgeThick:0.12, maxPlanted:1, recallDamages:true },
+  floors:[
+/* ── 1F ─────────────────────────────────────────────────────────── */
+{
+  n:1, id:"plaza", name:"입구 대광장", sub:"Entry Grand Plaza", yOff:0, w:34, h:6,
+  concept:"달리기·점프·대시·기본 3타 콤보. 창 꽂기 의도적 미등장.",
+  camera:{padY:1.2},
+  geo:[
+    {id:"plaza_floor", t:"solid", rect:[0,0,34,1.0],    stand:true,  label:"대광장 바닥"},
+    {id:"wall_l",      t:"wall",  rect:[0,1.0,0.4,5.0], stand:false, label:"좌 경계벽"},
+    {id:"wall_r",      t:"wall",  rect:[33.6,5.0,0.4,1.0],stand:false,label:"우 경계벽"},
+    {id:"step_p1",     t:"solid", rect:[24,2.2,3,0.2],  stand:true,  label:"계단 P1"},
+    {id:"step_p2",     t:"solid", rect:[29,3.4,2,0.2],  stand:true,  label:"계단 P2"},
+    {id:"exit_ledge",  t:"solid", rect:[31,4.8,3,0.2],  stand:true,  label:"출구 렛지 P3"},
+    {id:"deco_col1",   t:"deco",  rect:[5.45,1.0,1.1,4.4], label:"대열주"},
+    {id:"deco_col2",   t:"deco",  rect:[10.45,1.0,1.1,4.4],label:"대열주"},
+    {id:"deco_col3",   t:"deco",  rect:[15.45,1.0,1.1,4.4],label:"대열주"},
+    {id:"deco_col4",   t:"deco",  rect:[20.45,1.0,1.1,4.4],label:"대열주"},
+  ],
+  spearFaces:[],
+  hazards:[],
+  checkpoints:[{id:"cp1", pos:[4.5,1.0], kind:"shrine", display:"사당1"}],
+  portals:[{id:"exit", pos:[32.5,5.0], mode:"door", to:"corridor", toPortal:"entry"}],
+  spawn:[2.0,1.0],
+  targets:[
+    {id:"t1a", pos:[8,1],  kind:"ground"},
+    {id:"t1b", pos:[13,1], kind:"ground"},
+    {id:"t1c", pos:[18,1], kind:"ground"},
+  ],
+  collectibles:[], spearPlan:[],
+},
+/* ── 2F ─────────────────────────────────────────────────────────── */
+{
+  n:2, id:"corridor", name:"부서진 회랑", sub:"Broken Corridor", yOff:6, w:28, h:7,
+  concept:"동일 2.5u 갭 반복 대시점프 + 기둥머리 위 공중 허수아비 에어콤보.",
+  camera:{padY:1.2},
+  geo:[
+    {id:"safe_floor", t:"solid", rect:[0.4,0,25.6,1.0], stand:true,  label:"회복 바닥(세이프티)"},
+    {id:"wall_l",     t:"wall",  rect:[0,0,0.4,7],      stand:false, label:"좌 경계벽"},
+    {id:"wall_r",     t:"wall",  rect:[27.6,0,0.4,7],   stand:false, label:"우 경계벽"},
+    {id:"colA_body",  t:"wall",  rect:[5,1.0,1,1.0],    stand:false, label:"기둥 A 몸통"},
+    {id:"capA", t:"oneway", rect:[4.5,2.0,2,0.2],  stand:true, dropThrough:true, label:"기둥머리 A"},
+    {id:"colB_body",  t:"wall",  rect:[9.5,1.0,1,1.6],  stand:false, label:"기둥 B 몸통"},
+    {id:"capB", t:"oneway", rect:[9,2.6,2,0.2],    stand:true, dropThrough:true, label:"기둥머리 B"},
+    {id:"colC_body",  t:"wall",  rect:[14,1.0,1,2.2],   stand:false, label:"기둥 C 몸통"},
+    {id:"capC", t:"oneway", rect:[13.5,3.2,2,0.2], stand:true, dropThrough:true, label:"기둥머리 C"},
+    {id:"colD_body",  t:"wall",  rect:[18.5,1.0,1,3.1], stand:false, label:"기둥 D 몸통"},
+    {id:"capD", t:"oneway", rect:[18,4.1,2,0.2],   stand:true, dropThrough:true, label:"기둥머리 D"},
+    {id:"exit_ledge", t:"solid", rect:[22.5,4.6,5.1,0.2], stand:true, label:"출구 렛지"},
+    {id:"stump1", t:"deco", rect:[7.5,1.0,0.7,0.6], label:"그루터기"},
+    {id:"stump2", t:"deco", rect:[16.5,1.0,0.7,0.6],label:"그루터기"},
+  ],
+  spearFaces:[], hazards:[], checkpoints:[],
+  portals:[
+    {id:"entry", pos:[2.0,1.0],  mode:"door", to:"plaza",  toPortal:"exit"},
+    {id:"exit",  pos:[26.5,4.8], mode:"door", to:"shaft",  toPortal:"entry"},
+  ],
+  targets:[
+    {id:"t2g",  pos:[3.5,1.0], kind:"ground"},
+    {id:"t2a1", pos:[10,4.2],  kind:"air"},
+    {id:"t2a2", pos:[14.5,4.9],kind:"air"},
+    {id:"t2a3", pos:[19,5.6],  kind:"air"},
+  ],
+  collectibles:[], spearPlan:[],
+},
+/* ── 3F ── ★창꽂기 시그니처 첫 공개 ─────────────────────────────── */
+{
+  n:3, id:"shaft", name:"첫 벽등반 샤프트", sub:"First Ascent Shaft", yOff:13, w:7, h:16,
+  concept:"★창 꽂기 발판 첫 공개★ 필수 갭 3.6·4.4u > 이단강림 → 창 없이는 불가.",
+  camera:{padY:2.0},
+  geo:[
+    {id:"wall_l",  t:"wall",  rect:[0,0,0.5,16],   stand:false, label:"좌 경계벽"},
+    {id:"wall_r",  t:"wall",  rect:[6.5,0,0.5,16], stand:false, label:"우 경계벽"},
+    {id:"safe_floor", t:"solid", rect:[0.5,0,6,1.0], stand:true, label:"바닥 안전지대"},
+    {id:"warm_col",t:"wall",  rect:[2.5,1.0,0.5,4.0], stand:false, label:"워밍업 기둥(벽점프 슈트)"},
+    {id:"r1", t:"solid", rect:[2.3,5.0,1.2,0.2],  stand:true, reachVia:["walljump"], label:"기둥머리 R1"},
+    {id:"r2", t:"solid", rect:[0.5,8.6,2.3,0.2],  stand:true, gate:"spear", label:"좌벽 렛지 R2"},
+    {id:"r3", t:"solid", rect:[0.5,13.0,1.7,0.2], stand:true, gate:"spear", label:"좌벽 렛지 R3"},
+    {id:"niche_floor", t:"solid", rect:[5.9,12.0,0.6,0.2], stand:true, gate:"spear", label:"히든 니치 바닥"},
+    {id:"niche_roof",  t:"wall",  rect:[5.9,13.4,0.6,0.3], stand:false, label:"히든 니치 천장(낙하 차단)"},
+    {id:"exit_ledge",  t:"solid", rect:[4.5,14.3,2,0.2], stand:true, label:"출구 렛지"},
+  ],
+  spearFaces:[
+    {id:"face_l", rect:[0.4,6.0,0.1,7.5],  normal:[1,0],  role:"climb",  label:"좌벽 창꽂기면"},
+    {id:"face_r", rect:[6.5,9.0,0.1,2.0],  normal:[-1,0], role:"hidden", label:"우벽 창꽂기면(히든)"},
+  ],
+  hazards:[{id:"well", rect:[0.5,1.0,6,12.0], kind:"fall", catch:"safe_floor", respawn:"cp3", label:"중앙 우물(낙하)"}],
+  checkpoints:[{id:"cp3", pos:[1.5,1.0], kind:"checkpoint", display:"임시 강림점"}],
+  portals:[
+    {id:"entry", pos:[1.5,1.0],  mode:"door", to:"corridor", toPortal:"exit"},
+    {id:"exit",  pos:[6.0,14.5], mode:"door", to:"fissure",  toPortal:"entry"},
+  ],
+  targets:[
+    {id:"t3w", pos:[6.25,6.55], kind:"wall"},
+    {id:"t3a", pos:[4.6,10.6],  kind:"air"},
+  ],
+  collectibles:[{id:"cr3", pos:[6.2,12.7], gate:"spear-face", note:"우벽 창꽂기 → 니치 진입(수직 게이트)"}],
+  spearPlan:[
+    {id:"sp3a", from:[2.9,5.2], face:"face_l", at:[0.5,6.5],  note:"창① 좌벽 y6.5 → 발판 6.62"},
+    {id:"sp3b", from:[1.2,8.8], face:"face_l", at:[0.5,10.1], note:"창② 좌벽 y10.1 → 발판 10.22 → 창대도약 R3"},
+    {id:"sp3c", from:[2.8,8.8], face:"face_r", at:[6.5,9.8],  note:"창③ 우벽(히든) → 발판 9.92 → 니치"},
+  ],
+},
+/* ── 4F ─────────────────────────────────────────────────────────── */
+{
+  n:4, id:"fissure", name:"큰 균열 갭", sub:"The Great Fissure", yOff:29, w:16, h:9,
+  concept:"대시점프 → 이단강림 → 수평형 창꽂기+창대도약 3비트 체이닝.",
+  camera:{padY:1.4},
+  geo:[
+    {id:"wall_l", t:"wall", rect:[0,0,0.5,9],    stand:false, label:"좌 경계벽"},
+    {id:"wall_r", t:"wall", rect:[15.5,0,0.5,9], stand:false, label:"우 경계벽"},
+    {id:"entry_ledge", t:"solid", rect:[0.5,0,2.1,1.5], stand:true, label:"진입 렛지"},
+    {id:"p1_body", t:"wall", rect:[5.3,0,0.6,1.6], stand:false, label:"P1 몸통"},
+    {id:"cap_p1", t:"oneway", rect:[5.0,1.6,1.2,0.2], stand:true, dropThrough:true, label:"기둥머리 P1"},
+    {id:"p2", t:"solid", rect:[8.6,3.4,1.0,0.2], stand:true, label:"좁은 렛지 P2"},
+    {id:"far_pillar", t:"wall", rect:[11.5,0,0.8,5.6], stand:false, cap:"finial", label:"먼 기둥(창표적·첨탑캡)"},
+    {id:"exit_ledge", t:"solid", rect:[13.5,0,2.0,6.5], stand:true, gate:"spear", label:"출구 렛지"},
+  ],
+  spearFaces:[{id:"far_face", rect:[11.5,0.5,0.1,5.0], normal:[-1,0], role:"cross", label:"먼 기둥 좌면"}],
+  hazards:[{id:"fissure", rect:[2.6,0,10.9,1.2], kind:"fall", respawn:"cp4", label:"대균열 낙하존"}],
+  checkpoints:[{id:"cp4", pos:[1.5,1.5], kind:"checkpoint", display:"진입 리스폰"}],
+  portals:[
+    {id:"entry", pos:[1.5,1.5],  mode:"door", to:"shaft", toPortal:"exit"},
+    {id:"exit",  pos:[14.5,6.5], mode:"door", to:"arena", toPortal:"entry"},
+  ],
+  targets:[
+    {id:"t4a", pos:[6.0,1.8], kind:"ground"},
+    {id:"t4b", pos:[7.4,4.6], kind:"air"},
+    {id:"t4c", pos:[11.9,5.9],kind:"air"},
+  ],
+  collectibles:[{id:"cr4", pos:[12.6,7.5], gate:"vault-arc", note:"마지막 창대 도약 정타 시 스침"}],
+  spearPlan:[{id:"sp4", from:[9.6,3.6], face:"far_face", at:[11.5,4.5], note:"발판 4.62 → 창대도약 정점 8.02 → 출구 6.5"}],
+},
+/* ── 5F ─────────────────────────────────────────────────────────── */
+{
+  n:5, id:"arena", name:"수련 아레나", sub:"The Trial Arena", yOff:38, w:18, h:10,
+  concept:"전투 종합 — i-frame 회피·창강화 게이지·전투용 창꽂기 발판 위 에어콤보.",
+  camera:{padY:1.2},
+  geo:[
+    {id:"wall_l", t:"wall", rect:[0,0,0.5,10],    stand:false, label:"좌 경계벽"},
+    {id:"wall_r", t:"wall", rect:[17.5,0,0.5,10], stand:false, label:"우 경계벽"},
+    {id:"arena_floor", t:"solid", rect:[0.5,0,17,1.0], stand:true, label:"아레나 바닥(연속)"},
+    {id:"center_dais", t:"solid", rect:[6.0,0,1.8,2.4], stand:true, label:"중앙 대리석 단"},
+    {id:"trial_pillar",t:"wall",  rect:[11.6,2.0,0.6,4.4], stand:false, cap:"finial", label:"★수련 기둥(부유·첨탑캡)"},
+    {id:"cap_air1", t:"oneway", rect:[4.0,3.1,1.2,0.1], stand:true, dropThrough:true, label:"기둥머리 P-air1"},
+    {id:"cornice",  t:"solid",  rect:[13.0,2.4,1.5,0.2], stand:true, label:"코니스(중단 렛지)"},
+    {id:"relic_pillar", t:"wall", rect:[14.5,1.0,0.5,6.6], stand:false, cap:"finial", label:"성물 기둥(첨탑캡)"},
+    {id:"exit_ledge", t:"solid", rect:[15.3,5.9,2.2,0.1], stand:true, gate:"spear", label:"출구 렛지"},
+  ],
+  spearFaces:[
+    {id:"dais_face",  rect:[6.0,1.0,0.1,1.4], normal:[-1,0], role:"aux",    label:"중앙 단 좌면(보조)"},
+    {id:"trial_face", rect:[11.6,2.0,0.1,3.0],normal:[-1,0], role:"combat", label:"수련 기둥 좌면(시그니처)"},
+    {id:"relic_face", rect:[14.5,1.0,0.1,5.5],normal:[-1,0], role:"exit",   label:"성물 기둥 좌면(출구용)"},
+  ],
+  hazards:[],
+  checkpoints:[{id:"cp2", pos:[2.5,1.0], kind:"shrine", display:"사당2"}],
+  portals:[
+    {id:"entry", pos:[1.5,1.0],  mode:"door", to:"fissure", toPortal:"exit"},
+    {id:"exit",  pos:[16.5,6.0], mode:"door", to:"spire",   toPortal:"entry"},
+  ],
+  targets:[
+    {id:"dg1", pos:[4.5,1.0], kind:"ground"},
+    {id:"dg2", pos:[6.9,2.4], kind:"ground"},
+    {id:"dg3", pos:[10.0,1.0],kind:"ground"},
+    {id:"da1", pos:[4.6,3.9], kind:"air"},
+    {id:"da2", pos:[11.3,5.6],kind:"air", gate:"spear", note:"창발판 없이는 타격 불가(공격 리치 포함 판정)"},
+    {id:"da3", pos:[14.0,5.4],kind:"air"},
+    {id:"dw1", pos:[0.65,3.2],kind:"wall"},
+    {id:"dw2", pos:[11.5,3.0],kind:"wall"},
+    {id:"ct1", pos:[8.5,1.0], kind:"counter", note:"근접 예고"},
+    {id:"ct2", pos:[13.3,2.6],kind:"counter", note:"투사체 예고"},
+  ],
+  collectibles:[],
+  spearPlan:[
+    {id:"sp5a", from:[10.6,1.0], face:"trial_face", at:[11.6,3.2], note:"시그니처: 발판 3.32 → 단일점프 4.91 +위공격 → D-A2(5.6)"},
+    {id:"sp5b", from:[14.3,2.6], face:"relic_face", at:[14.5,4.4], note:"출구용: 발판 4.52 → 창대도약 7.92 → 출구 6.0"},
+  ],
+},
+/* ── 6F ─────────────────────────────────────────────────────────── */
+{
+  n:6, id:"spire", name:"첨탑 상승", sub:"The Spire Ascent", yOff:48, w:9, h:20,
+  concept:"벽점프→창꽂기→창대도약→이단강림 4대 이동기 연쇄. 전 구간 낙하존.",
+  camera:{padY:2.2},
+  geo:[
+    {id:"wall_l", t:"wall", rect:[0,0,0.3,21],   stand:false, label:"좌벽"},
+    {id:"wall_r", t:"wall", rect:[8.7,0,0.3,21], stand:false, label:"우벽"},
+    {id:"e",  t:"solid", rect:[0.3,0.2,2.2,0.3], stand:true, label:"진입 단 E"},
+    {id:"pa", t:"wall",  rect:[2.6,0.8,0.4,3.7], stand:false, label:"기둥 PA(벽점프 슈트)"},
+    {id:"l1", t:"solid", rect:[0.3,4.2,1.7,0.3], stand:true, reachVia:["walljump"], label:"착지 단 L1"},
+    {id:"pb", t:"wall",  rect:[5.5,4.0,0.4,5.0], stand:false, cap:"finial", label:"수련 성구 PB"},
+    {id:"l2", t:"solid", rect:[0.3,7.5,1.9,0.3], stand:true, gate:"spear", label:"착지 단 L2"},
+    {id:"nb1",t:"vault", rect:[2.2,7.8,0.7,0.5], stand:true, label:"도약 나브 NB1"},
+    {id:"l3", t:"solid", rect:[3.0,10.7,2.5,0.3],stand:true, gate:"vault", label:"착지 단 L3(사당4)"},
+    {id:"l4", t:"solid", rect:[6.0,14.0,1.4,0.3],stand:true, gate:"spear", label:"착지 단 L4"},
+    {id:"nb2",t:"vault", rect:[6.2,14.3,0.8,0.5],stand:true, label:"도약 나브 NB2"},
+    {id:"l5", t:"solid", rect:[3.5,17.3,2.5,0.3],stand:true, gate:"vault", label:"착지 단 L5"},
+    {id:"hc", t:"solid", rect:[0.3,14.0,1.5,0.3],stand:true, gate:"spear", label:"히든 단 HC(일방 포켓)"},
+    {id:"xe", t:"oneway",rect:[3.5,19.4,3,0.2],  stand:true, dropThrough:false, label:"출구 단 XE(통과)"},
+  ],
+  spearFaces:[
+    {id:"pb_face",   rect:[5.4,4.0,0.1,5.0],  normal:[-1,0], role:"climb",  label:"PB 좌면(창표적)"},
+    {id:"rw_face",   rect:[8.6,10.0,0.1,5.0], normal:[-1,0], role:"climb",  label:"우벽 창표적"},
+    {id:"lw_face",   rect:[0.6,13.0,0.1,5.0], normal:[1,0],  role:"hidden", label:"좌벽 창표적(히든)"},
+  ],
+  hazards:[{id:"abyss", rect:[0.3,-2.0,8.4,2.2], kind:"fall", respawn:"auto", label:"최하단 낙하존"}],
+  checkpoints:[
+    {id:"cp5", pos:[0.9,0.5],  kind:"shrine", display:"사당3"},
+    {id:"cp6", pos:[3.3,11.0], kind:"shrine", display:"사당4"},
+  ],
+  portals:[
+    {id:"entry", pos:[1.2,0.5],  mode:"door",     to:"arena",  toPortal:"exit"},
+    {id:"exit",  pos:[5.0,19.6], mode:"physical", to:"summit", toPortal:"entry"},
+  ],
+  targets:[],
+  collectibles:[{id:"cr6", pos:[1.0,14.7], gate:"spear-return", stand:"hc", note:"창발판 미회수 유지 → HC 왕복(복귀에 창 필요)"}],
+  spearPlan:[
+    {id:"sp6a", from:[2.0,4.5],  face:"pb_face", at:[5.5,5.5],  note:"B2 시그니처 → 발판 5.62 → L2(7.8)"},
+    {id:"sp6b", from:[5.5,11.0], face:"rw_face", at:[8.6,11.9], note:"B4 → 발판 12.02 → 이단강림 L4(14.3)"},
+    {id:"sp6c", from:[3.5,17.6], face:"lw_face", at:[0.6,16.5], note:"히든 → 발판 16.62 → HC(15.5) 왕복"},
+  ],
+},
+/* ── 7F ─────────────────────────────────────────────────────────── */
+{
+  n:7, id:"summit", name:"정상 성종", sub:"The Summit Bell", yOff:68, w:16, h:9,
+  concept:"좁음→넓음 반전의 승리의 랩. 성종 타격 = 클리어.",
+  camera:{padY:1.4, forceZoomOut:true},
+  geo:[
+    {id:"terrace_l", t:"solid", rect:[0,0.2,4,0.3],  stand:true, label:"성종 테라스 바닥 L"},
+    {id:"spire_gap", t:"oneway",rect:[4,0.2,2,0.3],  stand:true, dropThrough:false, label:"첨탑 개구(진입)"},
+    {id:"terrace_r", t:"solid", rect:[6,0.2,10,0.3], stand:true, label:"성종 테라스 바닥 R"},
+    {id:"rail_l", t:"wall", rect:[-0.2,0.5,0.2,1.9], stand:false, label:"좌 난간"},
+    {id:"rail_r", t:"wall", rect:[16,0.5,0.2,1.9],   stand:false, label:"우 난간"},
+    {id:"balcony", t:"solid", rect:[0.6,1.3,2.2,0.3],stand:true, label:"좌측 전망 발코니"},
+    {id:"step_a",  t:"solid", rect:[10,1.7,2.5,0.3], stand:true, label:"스텝 A"},
+    {id:"plinth",  t:"solid", rect:[12.5,3.2,3,0.3], stand:true, label:"종 대(플린스)"},
+    {id:"arch_l",  t:"wall",  rect:[12.6,3.5,0.3,3.7],stand:false,label:"아치 좌기둥"},
+    {id:"arch_r",  t:"wall",  rect:[15.1,3.5,0.3,3.7],stand:false,label:"아치 우기둥"},
+    {id:"beam",    t:"solid", rect:[12.9,6.5,2.2,0.1],stand:true, label:"종탑 대들보(플로리시)"},
+  ],
+  spearFaces:[{id:"beam_face", rect:[12.9,6.5,2.2,0.1], normal:[0,-1], role:"flourish", label:"대들보 하면(플로리시)"}],
+  hazards:[],
+  checkpoints:[{id:"cp7", pos:[2.5,0.5], kind:"shrine", display:"사당5"}],
+  portals:[{id:"entry", pos:[5.0,0.5], mode:"physical", to:"spire", toPortal:"exit"}],
+  triggers:[{id:"bell", rect:[13.3,4.8,1.4,1.4], kind:"goal-strike", label:"성종(목표)"}],
+  targets:[
+    {id:"t7a", pos:[7.0,0.5], kind:"ground"},
+    {id:"t7b", pos:[8.5,0.5], kind:"ground"},
+    {id:"t7c", pos:[11.0,3.4],kind:"air"},
+  ],
+  collectibles:[], spearPlan:[],
+},
+]};
+const FLOORS = MAP.floors;
+
+/* ------------------------------------------------------------------ */
+/* 2. 월드 평탄화 — yOff 산술을 여기서 한 번만. 이후 전부 월드 좌표.     */
+/* ------------------------------------------------------------------ */
+const STANDABLE = new Set(["solid","oneway","vault"]);
+let WORLD_GEO=[], SPEAR_FACES=[], HAZARDS=[], CHECKPOINTS=[], PORTALS=[],
+    TARGETS=[], COLLECTIBLES=[], TRIGGERS=[], PLANS=[], WORLD={x0:0,x1:0,y0:0,y1:0};
+
+function buildWorld(){
+  WORLD_GEO=[]; SPEAR_FACES=[]; HAZARDS=[]; CHECKPOINTS=[]; PORTALS=[];
+  TARGETS=[]; COLLECTIBLES=[]; TRIGGERS=[]; PLANS=[];
+  let x0=Infinity,x1=-Infinity,y0=Infinity,y1=-Infinity;
+  for(const f of FLOORS){
+    const o=f.yOff;
+    f.bbox={x0:0,x1:f.w,y0:0,y1:f.h};
+    for(const g of f.geo){
+      const [x,y,w,h]=g.rect;
+      const wg={...g, floor:f.n, fid:f.id, uid:`${f.id}:${g.id}`,
+        x0:x, y0:y+o, x1:x+w, y1:y+h+o,
+        stand: g.stand!==undefined ? g.stand : STANDABLE.has(g.t)};
+      WORLD_GEO.push(wg);
+      x0=Math.min(x0,wg.x0); x1=Math.max(x1,wg.x1);
+      y0=Math.min(y0,wg.y0); y1=Math.max(y1,wg.y1);
+    }
+    for(const s of (f.spearFaces||[])){
+      const [x,y,w,h]=s.rect;
+      SPEAR_FACES.push({...s, floor:f.n, fid:f.id, uid:`${f.id}:${s.id}`,
+        x0:x, y0:y+o, x1:x+w, y1:y+h+o, nx:s.normal[0], ny:s.normal[1]});
+    }
+    for(const z of (f.hazards||[])){
+      const [x,y,w,h]=z.rect;
+      HAZARDS.push({...z, floor:f.n, fid:f.id, uid:`${f.id}:${z.id}`,
+        x0:x, y0:y+o, x1:x+w, y1:y+h+o});
+    }
+    for(const c of (f.checkpoints||[]))  CHECKPOINTS.push({...c, floor:f.n, fid:f.id, wx:c.pos[0], wy:c.pos[1]+o});
+    for(const p of (f.portals||[]))      PORTALS.push({...p, floor:f.n, fid:f.id, wx:p.pos[0], wy:p.pos[1]+o});
+    for(const t of (f.targets||[]))      TARGETS.push({...t, floor:f.n, fid:f.id, wx:t.pos[0], wy:t.pos[1]+o});
+    for(const c of (f.collectibles||[])) COLLECTIBLES.push({...c, floor:f.n, fid:f.id, wx:c.pos[0], wy:c.pos[1]+o});
+    for(const t of (f.triggers||[])){
+      const [x,y,w,h]=t.rect;
+      TRIGGERS.push({...t, floor:f.n, fid:f.id, x0:x, y0:y+o, x1:x+w, y1:y+h+o});
+    }
+    for(const p of (f.spearPlan||[])){
+      const face=(f.spearFaces||[]).find(s=>s.id===p.face);
+      const nx = face? face.normal[0] : -1;
+      const L  = MAP.spear.ledgeLen, T = MAP.spear.ledgeThick;
+      const px = p.at[0], py = p.at[1]+o;
+      PLANS.push({...p, floor:f.n, fid:f.id, faceRef:face,
+        fromX:p.from[0], fromY:p.from[1]+o, atX:px, atY:py, nx,
+        // 박힌 창 = 면 법선 방향으로 돌출한 작은 레지
+        ledge:{ x0: nx<0? px-L : px, x1: nx<0? px : px+L, y0:py, y1:py+T },
+        dist: Math.hypot(px-p.from[0], py-(p.from[1]+o))});
+    }
+    if(f.spawn) f.spawnW=[f.spawn[0], f.spawn[1]+o];
+  }
+  for(const f of FLOORS){ x1=Math.max(x1,f.w); y1=Math.max(y1,f.yOff+f.h); }
+  WORLD={x0:Math.min(0,x0), x1, y0:Math.min(0,y0), y1};
+}
+buildWorld();
+
+/* ------------------------------------------------------------------ */
+/* 3. 콜리전 질의 API — 다음 단계(캐릭터 컨트롤러)의 유일한 진입점      */
+/*    공간 해시 + 동적 창 발판 등록/해제                                */
+/* ------------------------------------------------------------------ */
+class SpatialHash{
+  constructor(cell=2){ this.cell=cell; this.m=new Map(); }
+  _k(cx,cy){ return cx+","+cy; }
+  _cells(g,fn){
+    const c=this.cell;
+    for(let cx=Math.floor(g.x0/c); cx<=Math.floor(g.x1/c); cx++)
+      for(let cy=Math.floor(g.y0/c); cy<=Math.floor(g.y1/c); cy++) fn(this._k(cx,cy));
+  }
+  insert(g){ this._cells(g,k=>{ let a=this.m.get(k); if(!a) this.m.set(k,a=[]); a.push(g); }); }
+  remove(g){ this._cells(g,k=>{ const a=this.m.get(k); if(!a) return;
+                const i=a.indexOf(g); if(i>=0) a.splice(i,1); }); }
+  query(x0,y0,x1,y1){
+    const c=this.cell, out=new Set();
+    for(let cx=Math.floor(x0/c); cx<=Math.floor(x1/c); cx++)
+      for(let cy=Math.floor(y0/c); cy<=Math.floor(y1/c); cy++){
+        const a=this.m.get(this._k(cx,cy)); if(a) for(const g of a) out.add(g);
+      }
+    return [...out];
+  }
+}
+const grid=new SpatialHash(2);
+for(const g of WORLD_GEO) if(g.t!=="deco") grid.insert(g);
+
+/* 동적 창 발판 — 한 번에 하나 (MAP.spear.maxPlanted) */
+const spear = { state:"held", planted:null };
+function plantSpear(faceUid, atY){
+  const face=SPEAR_FACES.find(f=>f.uid===faceUid); if(!face) return null;
+  if(spear.planted) recallSpear();
+  const {ledgeLen:L, ledgeThick:T}=MAP.spear;
+  const px = face.nx<0 ? face.x0 : face.x1;                 // 면의 노출면
+  const g={ id:"spear_ledge", uid:"dyn:spear", t:"solid", dyn:true, stand:true, vaultable:true,
+            label:"박힌 창(발판)",
+            x0: face.nx<0 ? px-L : px, x1: face.nx<0 ? px : px+L,
+            y0: atY, y1: atY+T, floor:face.floor, fid:face.fid };
+  spear.planted=g; spear.state="planted"; grid.insert(g); return g;
+}
+function recallSpear(){ if(spear.planted) grid.remove(spear.planted);
+                        spear.planted=null; spear.state="held"; }
+
+const rectHit=(a,b)=> a.x0<b.x1 && a.x1>b.x0 && a.y0<b.y1 && a.y1>b.y0;
+const Q = {
+  solidsNear(x0,y0,x1,y1){ return grid.query(x0,y0,x1,y1).filter(g=>g.t!=="deco"); },
+  /* 축분리 스윕용 후보 (컨트롤러가 붙을 때 tMin 계산을 여기에 채운다) */
+  sweep(box,dx,dy){
+    const ex={x0:Math.min(box.x0,box.x0+dx), x1:Math.max(box.x1,box.x1+dx),
+              y0:Math.min(box.y0,box.y0+dy), y1:Math.max(box.y1,box.y1+dy)};
+    return this.solidsNear(ex.x0,ex.y0,ex.x1,ex.y1).filter(g=>rectHit(ex,g));
+  },
+  /* oneway는 하강 중 + 직전 바닥이 판 위 + 드롭스루 아닐 때만 막는다 */
+  onewayBlocks(plat, prevBottomY, vy, dropping){
+    if(plat.t!=="oneway") return true;
+    if(dropping && plat.dropThrough!==false) return false;
+    return vy<=0 && prevBottomY>=plat.y1-1e-6;
+  },
+  groundBelow(x,y,maxDrop=40){
+    let best=null;
+    for(const g of this.solidsNear(x-0.01,y-maxDrop,x+0.01,y))
+      if(g.stand && g.x0<=x && g.x1>=x && g.y1<=y+1e-6)
+        if(!best||g.y1>best.y) best={y:g.y1, geo:g};
+    return best;
+  },
+  wallContact(box){
+    for(const g of this.solidsNear(box.x0-0.1,box.y0,box.x1+0.1,box.y1)){
+      if(g.t!=="wall") continue;
+      if(g.y0<box.y1 && g.y1>box.y0){
+        if(Math.abs(g.x1-box.x0)<0.1) return -1;
+        if(Math.abs(g.x0-box.x1)<0.1) return  1;
+      }
+    }
+    return 0;
+  },
+  ceilingAbove(box){
+    let best=null;
+    for(const g of this.solidsNear(box.x0,box.y1,box.x1,box.y1+40))
+      if(g.t!=="oneway" && g.x0<box.x1 && g.x1>box.x0 && g.y0>=box.y1-1e-6)
+        if(best===null||g.y0<best) best=g.y0;
+    return best;
+  },
+  hazardAt(x,y){
+    for(const z of HAZARDS) if(x>=z.x0&&x<=z.x1&&y>=z.y0&&y<=z.y1) return z;
+    return null;
+  },
+  checkpointNear(x,y,r=0.8){
+    let best=null,bd=r;
+    for(const c of CHECKPOINTS){ const d=Math.hypot(c.wx-x,c.wy-y); if(d<bd){bd=d;best=c;} }
+    return best;
+  },
+  /* 창 레이캐스트 — 사거리 내 최초 spear 면 */
+  raycastSpear(px,py,dirx,diry,range=REACH.spear){
+    const L=Math.hypot(dirx,diry)||1; dirx/=L; diry/=L;
+    let best=null;
+    for(const f of SPEAR_FACES){
+      for(let t=0.1;t<=range;t+=0.05){
+        const x=px+dirx*t, y=py+diry*t;
+        if(x>=f.x0-0.06&&x<=f.x1+0.06&&y>=f.y0&&y<=f.y1){
+          if(!best||t<best.dist) best={face:f, point:{x,y}, normal:[f.nx,f.ny], dist:t};
+          break;
+        }
+      }
+    }
+    return best;
+  },
+};
+
+/* ------------------------------------------------------------------ */
+/* 4. 설계 검증 — 데이터 파생. 하드코딩 리터럴 없음.                     */
+/* ------------------------------------------------------------------ */
+function standables(floorN){
+  return WORLD_GEO.filter(g=>g.stand && g.t!=="deco" && (g.x1-g.x0)>0.15 &&
+    (floorN==null||g.floor===floorN));
+}
+function gapBetween(a,b){
+  const dx = b.x0>a.x1 ? b.x0-a.x1 : (a.x0>b.x1 ? a.x0-b.x1 : 0);
+  return {dx, dy: b.y1-a.y1};
+}
+/* 차폐 판정
+   - 수평 통로: 사이 지형의 상단이 도약 정점보다 높으면 "타고 넘을 수 없음" → 차단
+   - 수직 통로: x가 겹치면 두 높이 사이를 가로막는 지형이 있으면 차단(니치 천장 등) */
+function blockedBetween(floorN, aTop, bTop, ax0,ax1, bx0,bx1, maxUp, exclude){
+  const band0=Math.min(aTop,bTop), band1=Math.max(aTop,bTop), apex=aTop+maxUp;
+  const ovl0=Math.max(ax0,bx0), ovl1=Math.min(ax1,bx1);
+  const gap = bx0>ax1 ? [ax1,bx0] : (ax0>bx1 ? [bx1,ax0] : null);
+  for(const g of WORLD_GEO){
+    if(g.floor!==floorN||g.t==="deco"||g.t==="oneway") continue;
+    if(exclude&&exclude.includes(g)) continue;
+    if(gap){                                    // 수평 이동 — 넘어갈 수 있나
+      if(g.x1<=gap[0]+0.02||g.x0>=gap[1]-0.02) continue;
+      if(g.y1<=band0+0.05) continue;            // 발밑 — 그냥 지나감
+      if(g.y1< apex-0.05) continue;             // 정점 아래 — 타고 넘음
+      if(g.y0 > band1+PHYS.bodyH) continue;     // 머리 위로 충분히 떠 있음
+      return true;
+    }else if(ovl1-ovl0>0.05 && bTop<aTop-0.05){ // 하강 — 사이를 막는 천장/차양이 있나
+      // (상승은 옆 모서리로 아치 착지가 가능하므로 수직 차단을 적용하지 않는다)
+      if(g.x1<=ovl0+0.02||g.x0>=ovl1-0.02) continue;
+      if(g.y1>band0+0.05 && g.y0<band1-0.05) return true;
+    }
+  }
+  return false;
+}
+function occludedPair(a,b,maxUp=REACH.doubleJump){
+  return blockedBetween(a.floor,a.y1,b.y1,a.x0,a.x1,b.x0,b.x1,maxUp,[a,b]);
+}
+function occludedPoint(a,x,y,maxUp=REACH.doubleJump){
+  return blockedBetween(a.floor,a.y1,y,a.x0,a.x1,x-0.05,x+0.05,maxUp,[a]);
+}
+/* 창대 도약은 도약 나브(vault) 또는 박힌 창 위에서만 발동한다 */
+function maxRise(a){
+  return (a.t==="vault"||a.virt||a.vaultable) ? REACH.vault : REACH.doubleJump;
+}
+/* 공통 이동 판정 (벽점프 힌트 포함) */
+function canMove(a,b,cap){
+  const maxUp=Math.min(cap!=null?cap:REACH.vault, maxRise(a));
+  const {dx,dy}=gapBetween(a,b);
+  if(b.reachVia&&b.reachVia.includes("walljump")&&b.y1>a.y1){
+    if(b.y1-a.y1<=6.5 && dx<=REACH.dashX*1.6) return !occludedPair(a,b,b.y1-a.y1);
+  }
+  if(dx>REACH.dashX || dy>maxUp) return false;
+  return !occludedPair(a,b,maxUp);
+}
+/* 진입 발판 찾기 */
+function startSurfaces(f){
+  const S=standables(f.n), start=[];
+  const sp = f.spawnW ? {x:f.spawnW[0], y:f.spawnW[1]}
+    : (()=>{ const e=(f.portals||[]).find(p=>p.id==="entry");
+             return e? {x:e.pos[0], y:e.pos[1]+f.yOff} : null; })();
+  if(sp) for(const g of S)
+    if(Math.abs(g.y1-sp.y)<0.4 && g.x0-0.6<=sp.x && g.x1+0.6>=sp.x) start.push(g);
+  if(!start.length && S.length) start.push(S.reduce((a,b)=>a.y1<b.y1?a:b));
+  return start;
+}
+/* 이동기만으로(창 없이) 진입점에서 도달 가능한 표면 폐포 */
+function freeClosure(f){
+  const S=standables(f.n);
+  const start=startSurfaces(f);
+  const seen=new Set(start);
+  let changed=true;
+  while(changed){
+    changed=false;
+    for(const a of [...seen]) for(const b of S){
+      if(seen.has(b)||!canMove(a,b,REACH.doubleJump)) continue;
+      seen.add(b); changed=true;
+    }
+  }
+  return seen;
+}
+/* 전 표면쌍 감사: free = 이동기만으로 도달 / razor = 여유 부족 */
+function auditGates(){
+  const free=[], razor=[];
+  for(const f of FLOORS){
+    const S=standables(f.n);
+    for(const a of S) for(const b of S){
+      if(a===b||b.y1<=a.y1) continue;
+      const {dx,dy}=gapBetween(a,b);
+      if(dx>REACH.dashX||occludedPair(a,b,REACH.doubleJump)) continue;
+      if(dy<=REACH.doubleJump)                    free.push({a,b,dx,dy});
+      else if(dy<=REACH.doubleJump+GATE_MARGIN)   razor.push({a,b,dx,dy});
+    }
+  }
+  return {free, razor};
+}
+/* 게이트 무결성: gate 표면이 "창 없이 도달 가능한 폐포" 안에 들어오면 실패
+   (게이트 상류가 이미 창으로 막혀 있으면 위반이 아니다) */
+function gateViolations(){
+  const bad=[];
+  for(const f of FLOORS){
+    const closure=freeClosure(f);
+    for(const g of standables(f.n))
+      if(g.gate && closure.has(g)) bad.push({b:g, a:{uid:"free-closure"}, dy:0, dx:0});
+  }
+  return bad;
+}
+/* 창 발판이 기존 지형에 파묻히는가 (= 발판이 무의미) */
+function ledgeEmbedded(){
+  const bad=[];
+  for(const p of PLANS){
+    const L=p.ledge;
+    for(const g of WORLD_GEO){
+      if(g.floor!==p.floor||g.t==="deco"||!g.stand) continue;
+      const ox=Math.min(L.x1,g.x1)-Math.max(L.x0,g.x0);
+      if(ox>0.3 && Math.abs(g.y1-L.y1)<0.35) bad.push({plan:p, geo:g, ox});
+    }
+  }
+  return bad;
+}
+/* 서로 다른 충돌 타입이 겹치는가 (7F 개구 사고 방지) */
+function typeOverlaps(){
+  const bad=[], C=WORLD_GEO.filter(g=>g.t!=="deco");
+  for(let i=0;i<C.length;i++) for(let j=i+1;j<C.length;j++){
+    const a=C[i],b=C[j];
+    if(a.floor!==b.floor||a.t===b.t) continue;
+    const ox=Math.min(a.x1,b.x1)-Math.max(a.x0,b.x0);
+    const oy=Math.min(a.y1,b.y1)-Math.max(a.y0,b.y0);
+    if(ox>0.05&&oy>0.05){
+      // solid가 다른 solid를 포함하는 정상적 적층(단상 등)은 제외
+      const contained = (a.x0<=b.x0&&a.x1>=b.x1&&a.y0<=b.y0) || (b.x0<=a.x0&&b.x1>=a.x1&&b.y0<=a.y0);
+      if(!(contained && (a.t==="solid"&&b.t==="solid"))) bad.push({a,b,ox,oy});
+    }
+  }
+  return bad;
+}
+/* 창 계획이 실제 면에 착탄하고 사거리 안인가 */
+function planIssues(){
+  const bad=[];
+  for(const p of PLANS){
+    if(!p.faceRef){ bad.push({p,why:"면 참조 없음"}); continue; }
+    if(p.dist>REACH.spear) bad.push({p,why:`사거리 초과 ${p.dist.toFixed(2)}u`});
+    const f=SPEAR_FACES.find(s=>s.uid===`${p.fid}:${p.face}`);
+    if(!f){ bad.push({p,why:"면 미발견"}); continue; }
+    if(p.atY<f.y0-0.01||p.atY>f.y1+0.01) bad.push({p,why:`착탄 y${p.atY.toFixed(2)} 면 밖(${f.y0}~${f.y1})`});
+  }
+  return bad;
+}
+/* 공격 리치를 포함한 표적 도달성: gate가 붙은 표적은 창발판 없이 못 때려야 함 */
+function targetGateIssues(){
+  const bad=[];
+  for(const t of TARGETS){
+    if(t.gate!=="spear") continue;
+    const f=FLOORS.find(a=>a.n===t.floor);
+    const closure=freeClosure(f);
+    for(const s of closure){                       // 창 없이 갈 수 있는 발판만 검사
+      const dx = t.wx>s.x1 ? t.wx-s.x1 : (t.wx<s.x0 ? s.x0-t.wx : 0);
+      if(dx>REACH.dashX) continue;
+      if(occludedPoint(s,t.wx,t.wy,REACH.doubleJump)) continue;   // 기둥벽 차단
+      if(s.y1+REACH.doubleJump+REACH.atkUp >= t.wy) bad.push({t,s});
+    }
+  }
+  return bad;
+}
+/* 창을 쓸 수 있을 때 도달 가능한 표면 폐포 (가상 창 발판 포함) — 클리어 가능성 증명 */
+function spearClosure(f, excludeFaces){
+  const S=standables(f.n);
+  const faces=SPEAR_FACES.filter(s=>s.floor===f.n &&
+    !(excludeFaces&&excludeFaces.includes(s.id)));
+  const {ledgeLen:L, ledgeThick:T}=MAP.spear;
+  const ledges=[];
+  for(const fc of faces){
+    if(fc.ny===-1) continue;                        // 하면(플로리시)은 발판 아님
+    const px = fc.nx<0 ? fc.x0 : fc.x1;
+    for(let y=fc.y0+0.1; y<=fc.y1-0.05; y+=0.2)
+      ledges.push({uid:`ledge@${fc.id}:${y.toFixed(1)}`, floor:f.n, t:"solid",
+        stand:true, virt:true, face:fc, hx:px, hy:y,
+        x0: fc.nx<0? px-L : px, x1: fc.nx<0? px : px+L, y0:y, y1:y+T});
+  }
+  const seen=new Set(startSurfaces(f));
+  let changed=true, guard=0;
+  while(changed && guard++<40){
+    changed=false;
+    for(const a of [...seen]){
+      const ax=(a.x0+a.x1)/2, ay=a.y1+0.5;
+      for(const b of S){
+        if(seen.has(b)) continue;
+        if(canMove(a,b,REACH.vault)){ seen.add(b); changed=true; }
+      }
+      for(const lg of ledges){
+        if(seen.has(lg)) continue;
+        if(Math.hypot(lg.hx-ax, lg.hy-ay) > REACH.spear) continue;   // 던질 수 있나
+        if(canMove(a,lg,REACH.vault)){ seen.add(lg); changed=true; }
+      }
+    }
+  }
+  return seen;
+}
+function surfaceAt(f,x,y,tol=0.45){
+  return standables(f.n).find(g=>Math.abs(g.y1-y)<tol && g.x0-0.8<=x && g.x1+0.8>=x);
+}
+/* 각 층이 실제로 클리어 가능한가 (출구 도달) */
+function solvability(){
+  const bad=[];
+  for(const f of FLOORS){
+    const ex=(f.portals||[]).find(p=>p.id==="exit");
+    const R=spearClosure(f);
+    if(ex){
+      const tgt=surfaceAt(f, ex.pos[0], ex.pos[1]+f.yOff);
+      if(!tgt) bad.push({f, why:"출구 발판 미발견"});
+      else if(!R.has(tgt)) bad.push({f, why:"출구 도달 불가"});
+    }
+    for(const tr of (f.triggers||[])){              // 7F 성종
+      const gy=tr.rect[1]+f.yOff;
+      const cx=tr.rect[0]+tr.rect[2]/2;
+      const hit=[...R].some(s=>{
+        const dx = cx>s.x1 ? cx-s.x1 : (cx<s.x0 ? s.x0-cx : 0);
+        return dx<=REACH.dashX && s.y1+REACH.jump+REACH.atkUp >= gy && !occludedPoint(s,cx,gy,REACH.vault);
+      });
+      if(!hit) bad.push({f, why:`목표 ${tr.id} 타격 불가`});
+    }
+  }
+  return bad;
+}
+/* 어떤 표면 집합에서 한 지점을 집을 수 있는가 */
+function pointReachable(R,cx,cy){
+  return [...R].some(s=>{
+    const dx = cx>s.x1 ? cx-s.x1 : (cx<s.x0 ? s.x0-cx : 0);
+    return dx<=REACH.dashX && s.y1+REACH.vault+0.5 >= cy && cy >= s.y1-3.5
+        && !occludedPoint(s,cx,cy,REACH.vault);
+  });
+}
+/* 히든 수집물이 창을 써서 도달 가능한가 */
+function collectableIssues(){
+  const bad=[];
+  for(const f of FLOORS){
+    if(!(f.collectibles||[]).length) continue;
+    const R=spearClosure(f);
+    for(const c of f.collectibles)
+      if(!pointReachable(R,c.pos[0],c.pos[1]+f.yOff)) bad.push({f,c});
+  }
+  return bad;
+}
+/* 히든 게이트 검증
+   spear-face : 전용 hidden 면을 빼면 도달 불가여야 한다
+   spear-return: 획득은 되지만, 창 없이는 그 자리에서 되돌아 나올 수 없어야 한다 */
+function hiddenGateIssues(){
+  const bad=[];
+  for(const f of FLOORS){
+    const hid=(f.spearFaces||[]).filter(s=>s.role==="hidden").map(s=>s.id);
+    for(const c of (f.collectibles||[])){
+      if(c.gate==="spear-face"){
+        if(!hid.length){ bad.push({f,c,why:"hidden 면 없음"}); continue; }
+        if(pointReachable(spearClosure(f,hid), c.pos[0], c.pos[1]+f.yOff))
+          bad.push({f,c,why:"전용 면 없이 도달됨"});
+      }else if(c.gate==="spear-return"){
+        const perch=standables(f.n).find(g=>g.id===c.stand);
+        if(!perch){ bad.push({f,c,why:"stand 참조 없음"}); continue; }
+        // 창 없이 이 자리에서 위로 되돌아 나갈 수 있으면 게이트가 아니다
+        const S=standables(f.n);
+        const seen=new Set([perch]); let ch=true;
+        while(ch){ ch=false; for(const a of [...seen]) for(const b of S){
+          if(seen.has(b)||b.y1<=perch.y1) continue;
+          if(canMove(a,b,REACH.doubleJump)){ seen.add(b); ch=true; } } }
+        if([...seen].some(g=>g!==perch)) bad.push({f,c,why:"창 없이 복귀 가능"});
+      }
+    }
+  }
+  return bad;
+}
+function runTests(){
+  const R=[]; const ok=(n,c,d="")=>R.push({n,ok:!!c,d});
+  const gv=gateViolations(), le=ledgeEmbedded(), to=typeOverlaps(),
+        pi=planIssues(), tg=targetGateIssues(), au=auditGates();
+  ok("충돌 타입 겹침 없음", to.length===0, to.map(o=>`${o.a.uid}×${o.b.uid}`).join(", "));
+  ok("창 계획 전부 유효(면·사거리)", pi.length===0, pi.map(x=>`${x.p.id}:${x.why}`).join(", "));
+  ok("창 발판이 기존 지형에 파묻히지 않음", le.length===0, le.map(x=>`${x.plan.id}⊂${x.geo.uid}`).join(", "));
+  ok("게이트 표면이 이동기만으로 도달 불가", gv.length===0, gv.map(p=>`${p.a.uid}→${p.b.uid}(dy${p.dy.toFixed(2)})`).join(", "));
+  ok("게이트 표적이 공격리치 포함해도 도달 불가", tg.length===0, tg.map(x=>`${x.s.uid}→${x.t.id}`).join(", "));
+  ok(`게이트 갭 여유 ≥${GATE_MARGIN}u`, au.razor.filter(p=>p.b.gate).length===0,
+     au.razor.filter(p=>p.b.gate).map(p=>`${p.a.uid}→${p.b.uid}(${p.dy.toFixed(2)})`).join(", "));
+  ok("층간 포탈 양방향 정합", portalPairsOk());
+  ok("체크포인트 참조 유효", HAZARDS.every(z=>z.respawn==="auto"||CHECKPOINTS.some(c=>c.id===z.respawn)));
+  const sv=solvability(), ci=collectableIssues();
+  ok("모든 층 클리어 가능(창 포함 도달)", sv.length===0, sv.map(x=>`${x.f.n}F:${x.why}`).join(", "));
+  ok("히든 수집물 전부 도달 가능", ci.length===0, ci.map(x=>`${x.f.n}F:${x.c.id}`).join(", "));
+  const hg=hiddenGateIssues();
+  ok("히든 게이트 성립(전용 면/복귀 제약)", hg.length===0, hg.map(x=>`${x.f.n}F:${x.c.id}(${x.why})`).join(", "));
+  return R;
+}
+function portalPairsOk(){
+  for(const p of PORTALS){
+    const tf=FLOORS.find(f=>f.id===p.to); if(!tf) return false;
+    if(!(tf.portals||[]).some(q=>q.id===p.toPortal)) return false;
+  }
+  return true;
+}
+let TESTS=runTests();
+
+/* 도달성 분류: 특정 표면에서 다른 표면들이 어떻게 도달되는가 */
+function reachFrom(src){
+  const out=[];
+  for(const b of standables(src.floor)){
+    if(b===src) continue;
+    const {dx,dy}=gapBetween(src,b);
+    let k;
+    if(dx>REACH.dashX)                 k="far";
+    else if(dy<=REACH.jump)            k="jump";
+    else if(dy<=REACH.doubleJump)      k="double";
+    else if(dy<=REACH.vault)           k="vault";
+    else                               k="no";
+    out.push({b,dx,dy,k});
+  }
+  return out;
+}
+
+/* ------------------------------------------------------------------ */
+/* 5. 캔버스 / 카메라                                                  */
+/* ------------------------------------------------------------------ */
+const cv=document.getElementById("c"), ctx=cv.getContext("2d");
+let W=0,H=0,DPR=1, chamberCache=new Map(), vignette=null;
+function resize(){
+  DPR=Math.min(1.5,window.devicePixelRatio||1);       // 성능: DPR 상한
+  W=window.innerWidth; H=window.innerHeight;
+  cv.width=Math.round(W*DPR); cv.height=Math.round(H*DPR);
+  cv.style.width=W+"px"; cv.style.height=H+"px";
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+  vignette=null; chamberCache.clear();
+  if(ui&&ui.floorFocus) focusFloor(ui.floorFocus);
+}
+const cam={x:8,y:3,zoom:58,tx:8,ty:3,tzoom:58};
+const sx=wx=>(wx-cam.x)*cam.zoom + W/2;
+const sy=wy=>H/2 - (wy-cam.y)*cam.zoom;
+const wxAt=px=>(px-W/2)/cam.zoom + cam.x;
+const wyAt=py=>(H/2-py)/cam.zoom + cam.y;
+function focusFloor(n){
+  const f=FLOORS.find(a=>a.n===n); if(!f) return;
+  const pad=(f.camera&&f.camera.padY)||1.2;
+  cam.tx=f.w/2; cam.ty=f.yOff+f.h/2;
+  cam.tzoom=clamp(Math.min(W/(f.w+3), H/(f.h+pad*2)),14,150);
+  ui.floorFocus=n;
+}
+function overview(){
+  cam.tx=WORLD.x1/2; cam.ty=WORLD.y1/2;
+  cam.tzoom=Math.min(W/(WORLD.x1+4), H/(WORLD.y1+4));
+  ui.floorFocus=0;
+}
+const clamp=(v,a,b)=>v<a?a:v>b?b:v;
+const lerp=(a,b,t)=>a+(b-a)*t;
+function rr(c,x,y,w,h,r){
+  r=Math.min(r,Math.abs(w)/2,Math.abs(h)/2);
+  c.beginPath();
+  c.moveTo(x+r,y); c.lineTo(x+w-r,y); c.quadraticCurveTo(x+w,y,x+w,y+r);
+  c.lineTo(x+w,y+h-r); c.quadraticCurveTo(x+w,y+h,x+w-r,y+h);
+  c.lineTo(x+r,y+h); c.quadraticCurveTo(x,y+h,x,y+h-r);
+  c.lineTo(x,y+r); c.quadraticCurveTo(x,y,x+r,y); c.closePath();
+}
+function mulberry(seed){ return function(){
+  seed|=0; seed=seed+0x6D2B79F5|0;
+  let t=Math.imul(seed^seed>>>15,1|seed);
+  t=t+Math.imul(t^t>>>7,61|t)^t;
+  return ((t^t>>>14)>>>0)/4294967296; };}
+function mix(a,b,t){
+  const pa=parseInt(a.slice(1),16), pb=parseInt(b.slice(1),16);
+  return `rgb(${Math.round(lerp((pa>>16)&255,(pb>>16)&255,t))},`
+       + `${Math.round(lerp((pa>>8)&255,(pb>>8)&255,t))},`
+       + `${Math.round(lerp(pa&255,pb&255,t))})`;
+}
+const PAL={
+  skyTop:"#1a2740", skyMid:"#3f5f86", skyLow:"#9fb6cd", skyHaze:"#e6d8bf",
+  marbleHi:"#f2f5fb", marble:"#cfd9e8", marbleLo:"#8e9db5",
+  bodyHi:"#7d8daa", body:"#61708e", bodyLo:"#48566f", bodyDeep:"#3a4761",
+  gold:"#e8c86a", goldHi:"#fff0bd", goldLo:"#a8842f",
+  wallHi:"#4a5a76", wallMid:"#3a4761", wallLo:"#1a2233",
+  crystal:"#8fdcf0", crystalDeep:"#2b7fa8", oneway:"#d8c07f",
+};
+const TYPE_COL={ solid:"#7fe3a0", oneway:"#ffd98a", wall:"#9aa8c4",
+                 vault:"#ffc86a", deco:"#8d9bb2", spear:"#8fdcf0", fall:"#ff8b7a" };
+
+/* ------------------------------------------------------------------ */
+/* 6. UI 상태 / 입력                                                   */
+/* ------------------------------------------------------------------ */
+const ui={labels:true, debug:false, grid:false, plan:true, help:true, tests:false,
+          floorFocus:1, mouse:{x:0,y:0}, sel:null, toast:null, toastT:0};
+window.addEventListener("resize",resize); resize();
+
+function toast(msg){ ui.toast=msg; ui.toastT=performance.now(); }
+addEventListener("keydown",e=>{
+  if(e.repeat) return;                                   // 토글 깜빡임 방지
+  const k=e.key.toLowerCase();
+  keys[k]=true;
+  if(k>="1"&&k<="7") focusFloor(+k);
+  else if(k==="o") overview();
+  else if(k==="l") ui.labels=!ui.labels;
+  else if(k==="k") ui.debug=!ui.debug;
+  else if(k==="g") ui.grid=!ui.grid;
+  else if(k==="p") ui.plan=!ui.plan;
+  else if(k==="h") ui.help=!ui.help;
+  else if(k==="t"){ TESTS=runTests(); ui.tests=!ui.tests;
+                    toast(`검증 ${TESTS.filter(r=>r.ok).length}/${TESTS.length} 통과`); }
+  else if(k==="e") exportJSON();
+  else if(k==="escape") ui.sel=null;
+  if(["arrowup","arrowdown","arrowleft","arrowright"," "].includes(k)) e.preventDefault();
+});
+const keys={};
+addEventListener("keyup",e=>{ keys[e.key.toLowerCase()]=false; });
+let drag=null, dragMoved=false;
+cv.addEventListener("mousedown",e=>{
+  drag={px:e.clientX,py:e.clientY,cx:cam.tx,cy:cam.ty}; dragMoved=false;
+  cv.classList.add("drag");
+});
+addEventListener("mouseup",e=>{
+  if(drag&&!dragMoved) pickSurface(e.clientX,e.clientY);
+  drag=null; cv.classList.remove("drag");
+});
+addEventListener("mousemove",e=>{
+  ui.mouse.x=e.clientX; ui.mouse.y=e.clientY;
+  if(drag){
+    if(Math.abs(e.clientX-drag.px)+Math.abs(e.clientY-drag.py)>4) dragMoved=true;
+    cam.tx=drag.cx-(e.clientX-drag.px)/cam.zoom;
+    cam.ty=drag.cy+(e.clientY-drag.py)/cam.zoom;
+  }
+});
+cv.addEventListener("wheel",e=>{
+  e.preventDefault(); cam.tzoom=clamp(cam.tzoom*Math.exp(-e.deltaY*0.0013),6,220);
+},{passive:false});
+function pickSurface(px,py){
+  const wx=wxAt(px), wy=wyAt(py);
+  let hit=null;
+  for(const g of WORLD_GEO){
+    if(!g.stand||g.t==="deco") continue;
+    if(wx>=g.x0-0.2&&wx<=g.x1+0.2&&wy>=g.y0-0.3&&wy<=g.y1+0.4){ hit=g; break; }
+  }
+  ui.sel = (hit&&ui.sel===hit) ? null : hit;
+}
+function exportJSON(){
+  const data=JSON.parse(JSON.stringify(MAP));
+  data.derived={reach:REACH, gateMargin:GATE_MARGIN};
+  data.tests=runTests().map(r=>({name:r.n, ok:r.ok, detail:r.d}));
+  const blob=new Blob([JSON.stringify(data,null,2)],{type:"application/json"});
+  const a=document.createElement("a");
+  a.href=URL.createObjectURL(blob); a.download="temple-map.json"; a.click();
+  setTimeout(()=>URL.revokeObjectURL(a.href),4000);
+  toast("temple-map.json 내보냄");
+}
+
+/* ------------------------------------------------------------------ */
+/* 7. 배경 (구름 스프라이트 캐시 — 프레임당 그라디언트 제거)             */
+/* ------------------------------------------------------------------ */
+const rnd=mulberry(20260807);
+const CLOUDS=[]; for(let i=0;i<70;i++)
+  CLOUDS.push({x:rnd()*1.6-0.3, y:rnd()*1.15-0.05, s:0.5+rnd()*2.4,
+               d:0.10+rnd()*0.55, a:0.10+rnd()*0.32, ph:rnd()*99, v:(i%4)});
+const MOTES=[]; for(let i=0;i<80;i++)
+  MOTES.push({x:rnd()*WORLD.x1, y:rnd()*WORLD.y1, r:0.02+rnd()*0.05,
+              sp:0.15+rnd()*0.5, ph:rnd()*99});
+const SPIRES=[]; for(let i=0;i<7;i++)
+  SPIRES.push({x:rnd(), w:0.03+rnd()*0.05, h:0.12+rnd()*0.28, d:0.14+rnd()*0.2});
+
+const cloudSprites=(()=>{
+  const out=[];
+  for(let v=0;v<4;v++){
+    const S=256, cc=document.createElement("canvas"); cc.width=S; cc.height=S*0.42;
+    const c=cc.getContext("2d");
+    const g=c.createRadialGradient(S/2,S*0.21,0,S/2,S*0.21,S/2);
+    g.addColorStop(0,"rgba(255,255,255,1)");
+    g.addColorStop(0.5,"rgba(240,247,255,0.55)");
+    g.addColorStop(1,"rgba(226,238,250,0)");
+    c.fillStyle=g; c.beginPath(); c.ellipse(S/2,S*0.21,S/2,S*0.21,0,0,7); c.fill();
+    const r=mulberry(v*77+3);
+    for(let i=0;i<3;i++){
+      const ox=S*(0.25+r()*0.5), oy=S*0.21*(0.7+r()*0.6), rr2=S*(0.12+r()*0.14);
+      const g2=c.createRadialGradient(ox,oy,0,ox,oy,rr2);
+      g2.addColorStop(0,"rgba(255,255,255,0.6)"); g2.addColorStop(1,"rgba(255,255,255,0)");
+      c.fillStyle=g2; c.beginPath(); c.arc(ox,oy,rr2,0,7); c.fill();
+    }
+    out.push(cc);
+  }
+  return out;
+})();
+
+function drawSky(T){
+  const alt=clamp(cam.y/WORLD.y1,0,1);
+  const g=ctx.createLinearGradient(0,0,0,H);
+  g.addColorStop(0, mix(PAL.skyTop,"#2b4b78",alt));
+  g.addColorStop(0.45, mix(PAL.skyMid,"#7fa4cc",alt));
+  g.addColorStop(0.80, mix(PAL.skyLow,"#dfe9f2",alt*0.9));
+  g.addColorStop(1, mix("#7a8ba3",PAL.skyHaze,alt*0.85));
+  ctx.fillStyle=g; ctx.fillRect(0,0,W,H);
+
+  const sunX=W*0.80, sunY=H*(0.16-alt*0.05);
+  const sg=ctx.createRadialGradient(sunX,sunY,0,sunX,sunY,Math.max(W,H)*0.55);
+  sg.addColorStop(0,`rgba(255,246,214,${0.34+alt*0.22})`);
+  sg.addColorStop(0.28,`rgba(255,226,168,${0.13+alt*0.10})`);
+  sg.addColorStop(1,"rgba(255,220,160,0)");
+  ctx.fillStyle=sg; ctx.fillRect(0,0,W,H);
+
+  for(const s of SPIRES){
+    const px=((s.x*1.4 - cam.x*0.008*s.d)%1.4+1.4)%1.4;
+    const X=px*W*1.1-W*0.05, baseY=H*0.66+(cam.y*0.9*s.d), hh=H*s.h;
+    ctx.fillStyle=`rgba(122,146,178,${0.16+s.d*0.16})`;
+    ctx.fillRect(X, baseY-hh, W*s.w, hh);
+    ctx.beginPath(); ctx.moveTo(X-W*0.012,baseY-hh);
+    ctx.lineTo(X+W*s.w/2, baseY-hh-H*0.05);
+    ctx.lineTo(X+W*s.w+W*0.012, baseY-hh); ctx.closePath(); ctx.fill();
+  }
+  for(const c of CLOUDS){
+    const pxr=((c.x - cam.x*0.006*c.d)%1.5+1.5)%1.5;
+    const X=pxr*W*1.2-W*0.1;
+    const Y=(c.y*H*1.4)+cam.y*c.d*7-H*0.12+Math.sin(T*0.00013+c.ph)*6;
+    if(Y<-260||Y>H+260) continue;
+    const rw=W*0.20*c.s, rh=rw*0.42;
+    ctx.globalAlpha=c.a;
+    ctx.drawImage(cloudSprites[c.v], X-rw/2, Y-rh/2, rw, rh);
+  }
+  ctx.globalAlpha=1;
+}
+
+/* 챔버 배경 — 층별 오프스크린 캐시 (아치 니치는 도려내 하늘 노출) */
+function chamberSprite(f){
+  const key=f.id+"|"+Math.round(cam.zoom);
+  let s=chamberCache.get(key);
+  if(s) return s;
+  if(chamberCache.size>24) chamberCache.clear();
+  const z=cam.zoom;
+  const cw=Math.ceil((f.w+1.6)*z), ch=Math.ceil((f.h+0.8)*z);
+  if(cw<=0||ch<=0||cw>6000||ch>6000) return null;
+  const cc=document.createElement("canvas"); cc.width=cw; cc.height=ch;
+  const c=cc.getContext("2d");
+  const g=c.createLinearGradient(0,0,0,ch);
+  g.addColorStop(0,"#243147"); g.addColorStop(0.42,"#192337"); g.addColorStop(1,"#121a2b");
+  c.fillStyle=g; c.fillRect(0,0,cw,ch);
+  // 코니스
+  c.strokeStyle="rgba(170,196,234,0.07)"; c.lineWidth=1;
+  for(let cy=2; cy<f.h; cy+=3){
+    const CY=ch-(cy+0.4)*z;
+    c.beginPath(); c.moveTo(0,CY); c.lineTo(cw,CY); c.stroke();
+  }
+  // 아치 니치 — destination-out 으로 도려내 하늘/구름이 비치게
+  const step=3.2, aw=step*0.56*z, ah=Math.min(ch*0.46, 2.8*z);
+  c.save(); c.globalCompositeOperation="destination-out";
+  for(let ax=0.4; ax<f.w; ax+=step){
+    const AX=(ax+0.8)*z, AY=ch-0.4*z-ah;
+    c.beginPath();
+    c.moveTo(AX, ch-0.4*z);
+    c.lineTo(AX, AY+aw*0.45);
+    c.quadraticCurveTo(AX+aw/2, AY-aw*0.10, AX+aw, AY+aw*0.45);
+    c.lineTo(AX+aw, ch-0.4*z); c.closePath();
+    c.fillStyle="rgba(0,0,0,0.40)"; c.fill();
+  }
+  c.restore();
+  // 아치 테두리
+  for(let ax=0.4; ax<f.w; ax+=step){
+    const AX=(ax+0.8)*z, AY=ch-0.4*z-ah;
+    c.beginPath();
+    c.moveTo(AX, ch-0.4*z); c.lineTo(AX, AY+aw*0.45);
+    c.quadraticCurveTo(AX+aw/2, AY-aw*0.10, AX+aw, AY+aw*0.45);
+    c.lineTo(AX+aw, ch-0.4*z);
+    c.strokeStyle="rgba(214,186,122,0.16)"; c.lineWidth=2; c.stroke();
+  }
+  // 상단 성광 + 바닥 금빛 바운스
+  const rg=c.createLinearGradient(0,0,0,ch*0.45);
+  rg.addColorStop(0,"rgba(255,238,190,0.16)"); rg.addColorStop(1,"rgba(255,238,190,0)");
+  c.fillStyle=rg; c.fillRect(0,0,cw,ch*0.45);
+  const bg=c.createLinearGradient(0,ch,0,ch-ch*0.22);
+  bg.addColorStop(0,"rgba(232,200,106,0.12)"); bg.addColorStop(1,"rgba(232,200,106,0)");
+  c.fillStyle=bg; c.fillRect(0,ch-ch*0.22,cw,ch*0.22);
+  chamberCache.set(key,cc);
+  return cc;
+}
+function drawChamber(f){
+  const s=chamberSprite(f); if(!s) return;
+  const X=sx(-0.8), Y=sy(f.yOff+f.h+0.4);
+  ctx.drawImage(s, X, Y, s.width, s.height);
+  ctx.save();
+  ctx.strokeStyle="rgba(232,200,106,0.30)"; ctx.lineWidth=2;
+  ctx.strokeRect(X,Y,s.width,s.height);
+  ctx.restore();
+}
+function drawGodRays(f,T){
+  if(cam.zoom<14) return;
+  ctx.save(); ctx.globalCompositeOperation="lighter";
+  for(let i=0;i<3;i++){
+    const bx=f.w*(0.58+i*0.16), top=f.yOff+f.h;
+    const a=0.05+0.02*Math.sin(T*0.0004+i);
+    ctx.beginPath();
+    ctx.moveTo(sx(bx-0.3),sy(top)); ctx.lineTo(sx(bx+0.3),sy(top));
+    ctx.lineTo(sx(bx+1.4+i*0.5),sy(f.yOff)); ctx.lineTo(sx(bx-1.4-i*0.5),sy(f.yOff));
+    ctx.closePath();
+    const rg=ctx.createLinearGradient(0,sy(top),0,sy(f.yOff));
+    rg.addColorStop(0,`rgba(255,244,206,${a})`); rg.addColorStop(1,"rgba(255,244,206,0)");
+    ctx.fillStyle=rg; ctx.fill();
+  }
+  ctx.restore();
+}
+
+/* ------------------------------------------------------------------ */
+/* 8. 지형 렌더 — 전부 draw*(g,T) 단일 규약 (월드 좌표)                */
+/* ------------------------------------------------------------------ */
+function offscreen(g){
+  return sx(g.x1)<-60||sx(g.x0)>W+60||sy(g.y1)>H+60||sy(g.y0)<-60;
+}
+function drawSolid(g,T,opt={}){
+  if(offscreen(g)) return;
+  const z=cam.zoom;
+  const bot = (opt.massTo!=null && opt.massTo<g.y0) ? opt.massTo : g.y0;
+  const X=sx(g.x0), Y=sy(g.y1), Wd=(g.x1-g.x0)*z, Hd=Math.max((g.y1-bot)*z,4);
+  const cap=Math.min(Hd*0.42, Math.max(3,z*0.14));
+  ctx.save();
+  ctx.fillStyle="rgba(4,8,18,0.45)"; ctx.fillRect(X+2,Y+3,Wd,Hd);
+  const gr=ctx.createLinearGradient(0,Y,0,Y+Hd);
+  gr.addColorStop(0,PAL.bodyHi); gr.addColorStop(0.28,PAL.body);
+  gr.addColorStop(0.78,PAL.bodyLo); gr.addColorStop(1,PAL.bodyDeep);
+  ctx.fillStyle=gr; ctx.fillRect(X,Y,Wd,Hd);
+  if(z>24&&Wd>20){
+    ctx.strokeStyle="rgba(12,18,30,0.35)"; ctx.lineWidth=1;
+    const n=Math.max(1,Math.floor(Wd/(z*0.9)));
+    for(let i=1;i<n;i++){ const bx=Math.round(X+Wd*i/n)+0.5;
+      ctx.beginPath(); ctx.moveTo(bx,Y+cap); ctx.lineTo(bx,Y+Hd); ctx.stroke(); }
+  }
+  const cg=ctx.createLinearGradient(0,Y,0,Y+cap);
+  cg.addColorStop(0,PAL.marbleHi); cg.addColorStop(0.6,PAL.marble); cg.addColorStop(1,PAL.marbleLo);
+  ctx.fillStyle=cg; ctx.fillRect(X,Y,Wd,cap);
+  ctx.fillStyle=PAL.gold;   ctx.fillRect(X,Y+cap,Wd,Math.max(1.4,z*0.028));
+  ctx.fillStyle=PAL.goldHi; ctx.fillRect(X,Y,Wd,Math.max(1,z*0.014));
+  ctx.fillStyle="rgba(255,255,255,0.10)"; ctx.fillRect(X,Y,Math.max(1,z*0.02),Hd);
+  ctx.fillStyle="rgba(6,10,20,0.35)";     ctx.fillRect(X+Wd-Math.max(1,z*0.02),Y,Math.max(1,z*0.02),Hd);
+  if(g.dyn){                                       // 박힌 창 발판 = 성광 강조
+    ctx.globalCompositeOperation="lighter";
+    ctx.fillStyle=`rgba(143,220,240,${0.25+0.12*Math.sin(T*0.005)})`;
+    ctx.fillRect(X-2,Y-3,Wd+4,Hd+6);
+  }
+  ctx.restore();
+}
+function drawOneway(g,T){
+  if(offscreen(g)) return;
+  const z=cam.zoom;
+  const X=sx(g.x0), Y=sy(g.y1), Wd=(g.x1-g.x0)*z, Hd=Math.max((g.y1-g.y0)*z,3);
+  ctx.save();
+  const gr=ctx.createLinearGradient(0,Y,0,Y+Hd);
+  gr.addColorStop(0,PAL.marbleHi); gr.addColorStop(1,PAL.marbleLo);
+  ctx.fillStyle=gr; rr(ctx,X,Y,Wd,Hd,2); ctx.fill();
+  ctx.fillStyle=PAL.oneway; ctx.fillRect(X,Y,Wd,Math.max(1.4,z*0.03));
+  const cg=ctx.createLinearGradient(0,Y+Hd,0,Y+Hd+z*0.42);
+  const a=0.20+0.08*Math.sin(T*0.003);
+  cg.addColorStop(0,`rgba(255,238,190,${a})`); cg.addColorStop(1,"rgba(255,238,190,0)");
+  ctx.fillStyle=cg; ctx.fillRect(X,Y+Hd,Wd,z*0.42);
+  ctx.restore();
+}
+function drawWall(g,T,alpha=1){
+  if(offscreen(g)) return;
+  const z=cam.zoom;
+  const X=sx(g.x0), Y=sy(g.y1), Wd=(g.x1-g.x0)*z, Hd=(g.y1-g.y0)*z;
+  ctx.save(); ctx.globalAlpha=alpha;
+  ctx.fillStyle="rgba(4,8,18,0.40)"; ctx.fillRect(X+2,Y+2,Wd,Hd);
+  const gr=ctx.createLinearGradient(X,0,X+Wd,0);
+  gr.addColorStop(0,"#232d42"); gr.addColorStop(0.30,PAL.wallHi);
+  gr.addColorStop(0.55,PAL.wallMid); gr.addColorStop(1,PAL.wallLo);
+  ctx.fillStyle=gr; ctx.fillRect(X,Y,Wd,Hd);
+  if(z>18&&Wd>7){
+    const n=Math.max(1,Math.floor(Wd/Math.max(7,z*0.16)));
+    for(let i=1;i<n;i++){ const fx=Math.round(X+Wd*i/n)+0.5;
+      ctx.strokeStyle="rgba(140,166,204,0.13)"; ctx.lineWidth=1;
+      ctx.beginPath(); ctx.moveTo(fx,Y+2); ctx.lineTo(fx,Y+Hd-2); ctx.stroke();
+      ctx.strokeStyle="rgba(8,12,22,0.32)";
+      ctx.beginPath(); ctx.moveTo(fx+1.4,Y+2); ctx.lineTo(fx+1.4,Y+Hd-2); ctx.stroke(); }
+  }
+  const cap=Math.max(2,z*0.055);
+  ctx.fillStyle=PAL.goldLo;
+  ctx.fillRect(X-Wd*0.12,Y+Hd-cap,Wd*1.24,cap);
+  if(g.cap==="finial"){                       // 첨탑캡 = 설 수 없음(뾰족)
+    ctx.fillStyle=PAL.gold;
+    ctx.beginPath(); ctx.moveTo(X+Wd/2, Y-z*0.30);
+    ctx.lineTo(X+Wd*1.05, Y+cap); ctx.lineTo(X-Wd*0.05, Y+cap);
+    ctx.closePath(); ctx.fill();
+    ctx.fillStyle=PAL.goldHi;
+    ctx.beginPath(); ctx.arc(X+Wd/2, Y-z*0.34, Math.max(1.5,z*0.045),0,7); ctx.fill();
+  }else{
+    ctx.fillStyle=PAL.goldLo; ctx.fillRect(X-Wd*0.12,Y,Wd*1.24,cap);
+    ctx.fillStyle=PAL.gold;   ctx.fillRect(X-Wd*0.12,Y,Wd*1.24,Math.max(1,z*0.022));
+  }
+  ctx.restore();
+}
+function drawVault(g,T){
+  if(offscreen(g)) return;
+  const z=cam.zoom;
+  const cx=sx((g.x0+g.x1)/2), top=sy(g.y1), bot=sy(g.y0), half=(g.x1-g.x0)/2*z;
+  ctx.save();
+  const gr=ctx.createLinearGradient(0,top,0,bot);
+  gr.addColorStop(0,PAL.goldHi); gr.addColorStop(0.5,PAL.gold); gr.addColorStop(1,PAL.goldLo);
+  ctx.fillStyle=gr;
+  ctx.beginPath(); ctx.moveTo(cx,top); ctx.lineTo(cx+half,bot); ctx.lineTo(cx-half,bot);
+  ctx.closePath(); ctx.fill();
+  ctx.globalCompositeOperation="lighter";
+  ctx.fillStyle=`rgba(255,240,190,${0.22+0.12*Math.sin(T*0.004)})`;
+  ctx.beginPath(); ctx.arc(cx,top,half*1.6,0,7); ctx.fill();
+  ctx.restore();
+}
+function drawHazard(z_,T){
+  const X=sx(z_.x0), Wd=(z_.x1-z_.x0)*cam.zoom;
+  const Y=sy(z_.y1), Hd=Math.max((z_.y1-z_.y0)*cam.zoom, cam.zoom*0.8);
+  if(X>W+40||X+Wd<-40) return;
+  ctx.save();
+  const dg=ctx.createLinearGradient(0,Y,0,Y+Hd);
+  dg.addColorStop(0,"rgba(30,44,70,0.0)");
+  dg.addColorStop(0.35,"rgba(24,36,60,0.45)");
+  dg.addColorStop(1,"rgba(10,18,34,0.88)");
+  ctx.fillStyle=dg; ctx.fillRect(X,Y,Wd,Hd);
+  ctx.globalAlpha=0.34;
+  for(let i=0;i<4;i++){
+    const yy=Y+Hd*(0.3+i*0.22)+Math.sin(T*0.0006+i*1.7)*5;
+    ctx.fillStyle="rgba(160,186,216,0.18)";
+    ctx.beginPath(); ctx.ellipse(X+Wd/2,yy,Wd*0.5,Hd*0.09,0,0,7); ctx.fill();
+  }
+  ctx.restore();
+  ctx.save();
+  ctx.strokeStyle="rgba(255,140,120,0.34)"; ctx.setLineDash([7,6]); ctx.lineWidth=1.5;
+  ctx.beginPath(); ctx.moveTo(X,Y); ctx.lineTo(X+Wd,Y); ctx.stroke();
+  ctx.restore();
+}
+function drawSpearFace(f,T){
+  const z=cam.zoom;
+  const X=sx(f.x0), Y=sy(f.y1);
+  const Wd=Math.max((f.x1-f.x0)*z,3), Hd=(f.y1-f.y0)*z;
+  if(X>W+80||X+Wd<-80) return;
+  const pulse=0.45+0.25*Math.sin(T*0.0022+f.y0);
+  // 노출면(법선 쪽)에서 바깥으로 발광
+  const ex = f.nx<0 ? X : X+Wd;              // 노출 x
+  ctx.save(); ctx.globalCompositeOperation="lighter";
+  if(f.ny===-1){
+    const ug=ctx.createLinearGradient(0,Y+Hd,0,Y+Hd+z*0.6);
+    ug.addColorStop(0,`rgba(143,220,240,${0.40*pulse})`); ug.addColorStop(1,"rgba(143,220,240,0)");
+    ctx.fillStyle=ug; ctx.fillRect(X,Y+Hd,Wd,z*0.6);
+  }else{
+    const gw=z*1.6*(f.nx<0?-1:1);
+    const fg=ctx.createLinearGradient(ex,0,ex+gw,0);
+    fg.addColorStop(0,`rgba(143,220,240,${0.40*pulse})`); fg.addColorStop(1,"rgba(143,220,240,0)");
+    ctx.fillStyle=fg;
+    ctx.fillRect(Math.min(ex,ex+gw), Y, Math.abs(gw), Hd);
+  }
+  ctx.restore();
+  ctx.save();
+  ctx.strokeStyle=`rgba(180,238,255,${0.55+0.2*Math.sin(T*0.003)})`;
+  ctx.lineWidth=Math.max(1.5,z*0.035);
+  ctx.beginPath();
+  if(f.ny===-1){ ctx.moveTo(X,Y+Hd); ctx.lineTo(X+Wd,Y+Hd); }
+  else { ctx.moveTo(ex,Y); ctx.lineTo(ex,Y+Hd); }
+  ctx.stroke();
+  if(z>16){
+    const span=f.ny===-1 ? (f.x1-f.x0) : (f.y1-f.y0);
+    const n=Math.max(2,Math.round(span/0.9));           // 월드 유닛당 고정 밀도
+    for(let i=0;i<=n;i++){
+      const t=i/n;
+      const cx = f.ny===-1 ? lerp(X,X+Wd,t) : ex;
+      const cy = f.ny===-1 ? Y+Hd : lerp(Y,Y+Hd,t);
+      const r=(2.0+1.2*Math.sin(T*0.004+i))*Math.max(0.6,z/48);
+      ctx.fillStyle="rgba(200,244,255,0.9)";
+      ctx.beginPath(); ctx.arc(cx,cy,r*0.5,0,7); ctx.fill();
+      ctx.fillStyle="rgba(143,220,240,0.26)";
+      ctx.beginPath(); ctx.arc(cx,cy,r*1.7,0,7); ctx.fill();
+    }
+  }
+  ctx.restore();
+}
+
+/* ------------------------------------------------------------------ */
+/* 9. 오브젝트                                                         */
+/* ------------------------------------------------------------------ */
+function drawShrine(s,T){
+  const X=sx(s.wx), Y=sy(s.wy), z=cam.zoom, p=0.6+0.4*Math.sin(T*0.0022);
+  ctx.save(); ctx.globalCompositeOperation="lighter";
+  const bg=ctx.createLinearGradient(0,Y,0,Y-z*3.4);
+  bg.addColorStop(0,`rgba(255,226,150,${0.30*p})`);
+  bg.addColorStop(0.5,`rgba(255,226,150,${0.10*p})`);
+  bg.addColorStop(1,"rgba(255,226,150,0)");
+  ctx.fillStyle=bg; ctx.fillRect(X-z*0.42,Y-z*3.4,z*0.84,z*3.4);
+  ctx.restore();
+  ctx.save();
+  ctx.strokeStyle=`rgba(240,206,120,${0.75*p})`; ctx.lineWidth=Math.max(1.4,z*0.035);
+  ctx.beginPath(); ctx.ellipse(X,Y,z*0.46,z*0.15,0,0,7); ctx.stroke();
+  ctx.beginPath(); ctx.ellipse(X,Y,z*0.26,z*0.085,0,0,7); ctx.stroke();
+  ctx.fillStyle=`rgba(255,242,200,${0.9*p})`;
+  ctx.beginPath(); ctx.arc(X,Y-z*0.10,Math.max(1.6,z*0.05),0,7); ctx.fill();
+  ctx.restore();
+}
+function drawTarget(d,T){
+  const z=cam.zoom, X=sx(d.wx), Y=sy(d.wy);
+  if(X<-60||X>W+60) return;
+  const hgt=z*0.95, wid=z*0.32;
+  const yy=Y + (d.kind==="air" ? Math.sin(T*0.0016+d.wx)*z*0.05 : 0);
+  ctx.save();
+  if(d.kind==="air"){
+    ctx.save(); ctx.globalCompositeOperation="lighter";
+    ctx.strokeStyle=`rgba(143,220,240,${0.30+0.15*Math.sin(T*0.003)})`;
+    ctx.lineWidth=Math.max(1,z*0.022);
+    ctx.beginPath(); ctx.ellipse(X,yy+z*0.10,z*0.38,z*0.11,0,0,7); ctx.stroke();
+    ctx.restore();
+  }
+  if(d.kind==="counter"){
+    ctx.save(); ctx.globalCompositeOperation="lighter";
+    const p=0.5+0.5*Math.sin(T*0.0028);
+    const rg=ctx.createRadialGradient(X,yy-hgt*0.5,0,X,yy-hgt*0.5,z*0.9);
+    rg.addColorStop(0,`rgba(255,150,110,${0.26*p})`); rg.addColorStop(1,"rgba(255,150,110,0)");
+    ctx.fillStyle=rg; ctx.beginPath(); ctx.arc(X,yy-hgt*0.5,z*0.9,0,7); ctx.fill();
+    ctx.restore();
+  }
+  if(d.gate==="spear"){
+    ctx.save(); ctx.globalCompositeOperation="lighter";
+    ctx.strokeStyle="rgba(143,220,240,0.55)"; ctx.setLineDash([4,4]); ctx.lineWidth=1.4;
+    ctx.beginPath(); ctx.arc(X,yy-hgt*0.5,z*0.62,0,7); ctx.stroke();
+    ctx.restore();
+  }
+  const gr=ctx.createLinearGradient(X-wid/2,0,X+wid/2,0);
+  gr.addColorStop(0,PAL.marbleLo); gr.addColorStop(0.4,PAL.marbleHi); gr.addColorStop(1,PAL.marbleLo);
+  ctx.fillStyle=gr; rr(ctx,X-wid/2,yy-hgt,wid,hgt,Math.max(1.5,z*0.05)); ctx.fill();
+  ctx.fillStyle = d.kind==="counter" ? "#e08a5a" : PAL.gold;
+  ctx.fillRect(X-wid*0.62, yy-hgt*0.72, wid*1.24, Math.max(1.6,z*0.05));
+  ctx.fillRect(X-wid*0.52, yy-hgt*0.30, wid*1.04, Math.max(1.4,z*0.04));
+  ctx.fillStyle=PAL.marbleHi;
+  ctx.beginPath(); ctx.arc(X,yy-hgt-wid*0.28,wid*0.42,0,7); ctx.fill();
+  ctx.strokeStyle=PAL.goldLo; ctx.lineWidth=Math.max(1,z*0.02);
+  ctx.beginPath(); ctx.arc(X,yy-hgt-wid*0.28,wid*0.42,0,7); ctx.stroke();
+  if(d.kind==="wall"){ ctx.fillStyle=PAL.goldLo;
+    ctx.fillRect(X-wid*0.9, yy-hgt*0.6, wid*0.5, Math.max(2,z*0.05)); }
+  ctx.restore();
+}
+function drawCrystal(c,T){
+  const X=sx(c.wx), Y=sy(c.wy), z=cam.zoom;
+  const p=0.6+0.4*Math.sin(T*0.0026+c.wx), bob=Math.sin(T*0.0014+c.wy)*z*0.07;
+  ctx.save(); ctx.globalCompositeOperation="lighter";
+  const rg=ctx.createRadialGradient(X,Y+bob,0,X,Y+bob,z*0.85);
+  rg.addColorStop(0,`rgba(170,236,255,${0.55*p})`);
+  rg.addColorStop(0.4,`rgba(110,200,235,${0.20*p})`);
+  rg.addColorStop(1,"rgba(110,200,235,0)");
+  ctx.fillStyle=rg; ctx.beginPath(); ctx.arc(X,Y+bob,z*0.85,0,7); ctx.fill();
+  ctx.restore();
+  const r=z*0.20;
+  ctx.save(); ctx.translate(X,Y+bob);
+  const g=ctx.createLinearGradient(0,-r,0,r);
+  g.addColorStop(0,"#eafcff"); g.addColorStop(0.45,PAL.crystal); g.addColorStop(1,PAL.crystalDeep);
+  ctx.fillStyle=g;
+  ctx.beginPath(); ctx.moveTo(0,-r*1.5); ctx.lineTo(r*0.72,-r*0.2);
+  ctx.lineTo(0,r*1.5); ctx.lineTo(-r*0.72,-r*0.2); ctx.closePath(); ctx.fill();
+  ctx.strokeStyle="rgba(255,255,255,0.7)"; ctx.lineWidth=1; ctx.stroke();
+  ctx.restore();
+}
+function drawBell(tr,T){
+  const x0=sx(tr.x0), x1=sx(tr.x1), yTop=sy(tr.y1), yBot=sy(tr.y0);
+  const cx=(x0+x1)/2, bw=x1-x0, bh=yBot-yTop, z=cam.zoom;
+  ctx.save(); ctx.globalCompositeOperation="lighter";
+  const p=0.55+0.45*Math.sin(T*0.0015);
+  const rg=ctx.createRadialGradient(cx,(yTop+yBot)/2,0,cx,(yTop+yBot)/2,bw*1.7);
+  rg.addColorStop(0,`rgba(255,226,140,${0.34*p})`); rg.addColorStop(1,"rgba(255,226,140,0)");
+  ctx.fillStyle=rg; ctx.beginPath(); ctx.arc(cx,(yTop+yBot)/2,bw*1.7,0,7); ctx.fill();
+  ctx.restore();
+  ctx.save();
+  const g=ctx.createLinearGradient(x0,0,x1,0);
+  g.addColorStop(0,"#8a6a28"); g.addColorStop(0.35,"#f0d281");
+  g.addColorStop(0.6,"#e0b855"); g.addColorStop(1,"#7d5f22");
+  ctx.fillStyle=g;
+  ctx.beginPath();
+  ctx.moveTo(cx-bw*0.16,yTop);
+  ctx.bezierCurveTo(cx-bw*0.50,yTop+bh*0.30, cx-bw*0.50,yBot-bh*0.10, cx-bw*0.50,yBot);
+  ctx.lineTo(cx+bw*0.50,yBot);
+  ctx.bezierCurveTo(cx+bw*0.50,yBot-bh*0.10, cx+bw*0.50,yTop+bh*0.30, cx+bw*0.16,yTop);
+  ctx.closePath(); ctx.fill();
+  ctx.fillStyle="#f6e2a6"; ctx.fillRect(x0-bw*0.04, yBot-Math.max(2,z*0.06), bw*1.08, Math.max(2.4,z*0.07));
+  ctx.strokeStyle="rgba(90,66,20,0.55)"; ctx.lineWidth=Math.max(1,z*0.02);
+  ctx.beginPath(); ctx.moveTo(x0+bw*0.08,yBot-bh*0.34); ctx.lineTo(x1-bw*0.08,yBot-bh*0.34); ctx.stroke();
+  ctx.strokeStyle="#d9bb63"; ctx.lineWidth=Math.max(2,z*0.05);
+  ctx.beginPath(); ctx.arc(cx,yTop-z*0.10,z*0.13,Math.PI,0); ctx.stroke();
+  ctx.restore();
+}
+function drawPortal(p,T){
+  const X=sx(p.wx), Y=sy(p.wy), z=cam.zoom, pl=0.55+0.45*Math.sin(T*0.0024);
+  if(X<-80||X>W+80) return;
+  ctx.save(); ctx.globalCompositeOperation="lighter";
+  const g=ctx.createRadialGradient(X,Y-z*0.6,0,X,Y-z*0.6,z*1.1);
+  g.addColorStop(0,`rgba(180,226,255,${0.34*pl})`); g.addColorStop(1,"rgba(180,226,255,0)");
+  ctx.fillStyle=g; ctx.beginPath(); ctx.arc(X,Y-z*0.6,z*1.1,0,7); ctx.fill();
+  ctx.restore();
+  ctx.save();
+  ctx.strokeStyle="rgba(232,206,140,0.85)"; ctx.lineWidth=Math.max(1.6,z*0.05);
+  ctx.beginPath();
+  ctx.moveTo(X-z*0.36,Y); ctx.lineTo(X-z*0.36,Y-z*0.75);
+  ctx.quadraticCurveTo(X,Y-z*1.35,X+z*0.36,Y-z*0.75);
+  ctx.lineTo(X+z*0.36,Y); ctx.stroke();
+  const ig=ctx.createLinearGradient(0,Y,0,Y-z*1.2);
+  ig.addColorStop(0,`rgba(196,232,255,${0.28*pl})`); ig.addColorStop(1,"rgba(196,232,255,0.02)");
+  ctx.fillStyle=ig;
+  ctx.beginPath(); ctx.moveTo(X-z*0.36,Y); ctx.lineTo(X-z*0.36,Y-z*0.75);
+  ctx.quadraticCurveTo(X,Y-z*1.35,X+z*0.36,Y-z*0.75);
+  ctx.lineTo(X+z*0.36,Y); ctx.closePath(); ctx.fill();
+  ctx.restore();
+  if(ui.labels&&z>20){
+    const tf=FLOORS.find(f=>f.id===p.to);
+    const txt=(p.id==="entry"?"↓ ":"↑ ")+(tf?tf.n+"F":"?")+(p.mode==="physical"?" (통과)":"");
+    ctx.save(); ctx.font=`600 ${Math.max(9,z*0.20)}px system-ui`;
+    ctx.textAlign="center"; ctx.fillStyle="rgba(226,240,255,0.88)";
+    ctx.fillText(txt, X, Y-z*1.5); ctx.restore();
+  }
+}
+function drawSpawn(f,T){
+  if(!f.spawnW) return;
+  const X=sx(f.spawnW[0]), Y=sy(f.spawnW[1]), z=cam.zoom;
+  ctx.save();
+  ctx.strokeStyle="rgba(255,238,180,0.9)"; ctx.lineWidth=Math.max(1.4,z*0.035);
+  ctx.beginPath(); ctx.moveTo(X,Y); ctx.lineTo(X,Y-z*0.9); ctx.stroke();
+  ctx.fillStyle="rgba(255,226,150,0.9)";
+  ctx.beginPath(); ctx.moveTo(X,Y-z*0.9); ctx.lineTo(X+z*0.42,Y-z*0.72);
+  ctx.lineTo(X,Y-z*0.55); ctx.closePath(); ctx.fill();
+  ctx.restore();
+  if(ui.labels&&z>18){
+    ctx.save(); ctx.font=`700 ${Math.max(9,z*0.19)}px system-ui`; ctx.textAlign="center";
+    ctx.fillStyle="rgba(255,240,200,0.95)"; ctx.fillText("★ 스폰", X, Y+z*0.42); ctx.restore();
+  }
+}
+/* 창꽂기 계획선 — 발판을 면 법선 방향으로 정확히 그린다 */
+function drawSpearPlan(T){
+  const z=cam.zoom;
+  ctx.save();
+  for(const p of PLANS){
+    const ax=sx(p.fromX), ay=sy(p.fromY), bx=sx(p.atX), by=sy(p.atY);
+    if((ax<-100&&bx<-100)||(ax>W+100&&bx>W+100)) continue;
+    const ok=p.dist<=REACH.spear;
+    ctx.setLineDash([6,5]); ctx.lineWidth=Math.max(1,z*0.022);
+    ctx.strokeStyle= ok?"rgba(143,220,240,0.70)":"rgba(255,120,120,0.85)";
+    ctx.beginPath(); ctx.moveTo(ax,ay); ctx.lineTo(bx,by); ctx.stroke();
+    // 박힌 창(발판) — ledge는 buildWorld에서 법선 방향으로 계산됨
+    ctx.setLineDash([]);
+    const lx0=sx(p.ledge.x0), lx1=sx(p.ledge.x1), ly=sy(p.ledge.y1);
+    ctx.strokeStyle="rgba(236,244,255,0.95)"; ctx.lineWidth=Math.max(2,z*0.05);
+    ctx.beginPath(); ctx.moveTo(lx0,ly); ctx.lineTo(lx1,ly); ctx.stroke();
+    ctx.fillStyle="rgba(143,220,240,0.95)";
+    ctx.beginPath(); ctx.arc(p.nx<0?lx0:lx1, ly, Math.max(1.6,z*0.05),0,7); ctx.fill();
+    ctx.save(); ctx.globalCompositeOperation="lighter";
+    ctx.fillStyle=`rgba(143,220,240,${0.16+0.08*Math.sin(T*0.004)})`;
+    ctx.fillRect(Math.min(lx0,lx1), ly-z*0.10, Math.abs(lx1-lx0), z*0.20);
+    ctx.restore();
+    if(ui.labels&&z>24){
+      ctx.font=`600 ${Math.max(8,z*0.16)}px system-ui`;
+      ctx.fillStyle= ok?"rgba(190,236,255,0.92)":"rgba(255,170,170,0.95)";
+      ctx.textAlign="left";
+      ctx.fillText(`${p.dist.toFixed(1)}u ${ok?"✓":"✗"}`,(ax+bx)/2+5,(ay+by)/2-5);
+    }
+  }
+  ctx.restore();
+}
+/* 선택 표면 도달성 오버레이 */
+function drawReach(T){
+  const s=ui.sel; if(!s) return;
+  const z=cam.zoom;
+  const bx=(s.x0+s.x1)/2, by=s.y1;
+  ctx.save();
+  // 선택 강조
+  ctx.strokeStyle="rgba(255,238,180,0.95)"; ctx.lineWidth=2.4; ctx.setLineDash([6,4]);
+  ctx.strokeRect(sx(s.x0)-2, sy(s.y1)-2, (s.x1-s.x0)*z+4, Math.max(6,(s.y1-s.y0)*z)+4);
+  ctx.setLineDash([]);
+  // 창 사거리 원
+  ctx.globalCompositeOperation="lighter";
+  ctx.strokeStyle="rgba(143,220,240,0.42)"; ctx.lineWidth=1.6;
+  ctx.beginPath(); ctx.arc(sx(bx),sy(by),REACH.spear*z,0,7); ctx.stroke();
+  ctx.globalCompositeOperation="source-over";
+  // 높이 포락선
+  const bands=[["점프",REACH.jump,"rgba(127,227,160,"],["이단",REACH.doubleJump,"rgba(120,196,255,"],
+               ["창대도약",REACH.vault,"rgba(255,200,106,"]];
+  for(const [nm,hgt,col] of bands){
+    ctx.strokeStyle=col+"0.5)"; ctx.setLineDash([5,5]); ctx.lineWidth=1.4;
+    ctx.beginPath(); ctx.moveTo(sx(bx-REACH.dashX),sy(by+hgt));
+    ctx.lineTo(sx(bx+REACH.dashX),sy(by+hgt)); ctx.stroke();
+    if(z>20){ ctx.setLineDash([]); ctx.font=`600 ${Math.max(9,z*0.16)}px system-ui`;
+      ctx.fillStyle=col+"0.85)"; ctx.textAlign="left";
+      ctx.fillText(`${nm} +${hgt.toFixed(2)}u`, sx(bx+REACH.dashX)+5, sy(by+hgt)+3); }
+  }
+  ctx.setLineDash([]);
+  // 대상 표면 색칠
+  const KC={jump:"rgba(127,227,160,0.85)", double:"rgba(120,196,255,0.85)",
+            vault:"rgba(255,200,106,0.85)", no:"rgba(255,120,110,0.7)", far:"rgba(150,160,180,0.35)"};
+  for(const r of reachFrom(s)){
+    if(r.k==="far") continue;
+    ctx.strokeStyle=KC[r.k]; ctx.lineWidth=2.2;
+    ctx.strokeRect(sx(r.b.x0), sy(r.b.y1)-1, (r.b.x1-r.b.x0)*z, 3);
+  }
+  ctx.restore();
+}
+
+/* ------------------------------------------------------------------ */
+/* 10. 라벨 / 디버그 / HUD                                              */
+/* ------------------------------------------------------------------ */
+const _lb=[];
+function slot(X,Y,w,h){
+  for(let i=0;i<8;i++){
+    const yy=Y-i*(h+3);
+    let hit=false;
+    for(const b of _lb) if(X<b.x+b.w+3&&X+w+3>b.x&&yy<b.y+b.h+2&&yy+h+2>b.y){hit=true;break;}
+    if(!hit){ _lb.push({x:X,y:yy,w,h}); return yy; }
+  }
+  return null;
+}
+function drawLabels(f,dim){
+  const z=cam.zoom; if(z<24) return;
+  ctx.save();
+  if(dim) ctx.globalAlpha=0.3;
+  const fs=Math.max(9,Math.min(14,z*0.16));
+  ctx.font=`600 ${fs}px system-ui`; ctx.textAlign="left"; ctx.textBaseline="middle";
+  for(const g of WORLD_GEO){
+    if(g.floor!==f.n||g.t==="deco") continue;
+    const X=sx(g.x0)+3, baseY=sy(g.y1)-fs-6;
+    if(X<-220||X>W+40) continue;
+    const txt=`${g.label} · y${g.y1.toFixed(1)}`;
+    const wpx=ctx.measureText(txt).width+10, hpx=fs+6;
+    const Y=slot(X,baseY,wpx,hpx); if(Y===null) continue;
+    ctx.fillStyle="rgba(6,11,20,0.80)"; rr(ctx,X,Y,wpx,hpx,3); ctx.fill();
+    ctx.strokeStyle=(TYPE_COL[g.t]||"#e8eefc")+"55"; ctx.lineWidth=1; ctx.stroke();
+    ctx.fillStyle=TYPE_COL[g.t]||"#e8eefc";
+    ctx.fillText(txt, X+5, Y+hpx/2+0.5);
+    if(g.gate){ ctx.fillStyle="rgba(143,220,240,0.95)";
+      ctx.fillText(g.gate==="spear"?"🔱":"▲", X+wpx+4, Y+hpx/2+0.5); }
+  }
+  ctx.restore();
+}
+function drawDebug(f){
+  ctx.save(); ctx.lineWidth=1;
+  for(const g of WORLD_GEO){
+    if(g.floor!==f.n) continue;
+    ctx.strokeStyle=TYPE_COL[g.t]||"#fff";
+    ctx.setLineDash(g.t==="oneway"?[5,4]:[]);
+    ctx.strokeRect(sx(g.x0),sy(g.y1),(g.x1-g.x0)*cam.zoom,Math.max((g.y1-g.y0)*cam.zoom,2));
+    if(!g.stand&&g.t!=="deco"){
+      ctx.strokeStyle="rgba(255,120,110,0.6)";
+      ctx.beginPath(); ctx.moveTo(sx(g.x0),sy(g.y1)); ctx.lineTo(sx(g.x1),sy(g.y1)); ctx.stroke();
+    }
+  }
+  ctx.restore();
+}
+function dimFloor(f){
+  const x0=sx(-0.8), x1=sx(f.w+0.8), y1=sy(f.yOff-0.4), y0=sy(f.yOff+f.h+0.4);
+  ctx.save(); ctx.fillStyle="rgba(7,12,22,0.55)"; ctx.fillRect(x0,y0,x1-x0,y1-y0); ctx.restore();
+}
+const _badges=[];
+function drawFloorBadge(f){
+  const z=cam.zoom;
+  const X=sx(-0.8), Ytop=sy(f.yOff+f.h+0.4), Ybot=sy(f.yOff-0.4);
+  if(Ybot<40||Ytop>H-30) return;                       // 화면 밖 층은 배지 생략
+  const focus=(ui.floorFocus===0||ui.floorFocus===f.n);
+  if(!focus&&z>40) return;
+  const s=Math.max(10,Math.min(21,z*0.34));
+  ctx.save(); ctx.textAlign="left"; ctx.textBaseline="middle";
+  const title=`${f.n}F  ${f.name}`;
+  ctx.font=`800 ${s}px system-ui`;
+  const tw=ctx.measureText(title).width;
+  const showSub=z>18&&focus;
+  const sub=`${f.sub} · ${f.w}×${f.h}u · 전역 y ${f.yOff}–${f.yOff+f.h}`;
+  ctx.font=`500 ${s*0.56}px system-ui`;
+  const sw=showSub?ctx.measureText(sub).width:0;
+  const bw=Math.max(tw,sw)+22, bh=showSub? s*1.95 : s*1.25;
+  const minY = ui.help ? 340 : 70;
+  let by=Math.max(minY, Math.min(Ytop+8, Ybot-bh-4));
+  let bx=Math.max(6,X+8);
+  for(let i=0;i<6;i++){                                 // 배지끼리 겹침 회피
+    let hit=false;
+    for(const b of _badges) if(bx<b.x+b.w+4&&bx+bw+4>b.x&&by<b.y+b.h+4&&by+bh+4>b.y){hit=true;break;}
+    if(!hit) break; by+=bh+6;
+  }
+  if(by+bh>Ybot+4&&Ybot<H){ ctx.restore(); return; }
+  _badges.push({x:bx,y:by,w:bw,h:bh});
+  const g=ctx.createLinearGradient(bx,by,bx,by+bh);
+  g.addColorStop(0,"rgba(12,19,33,0.94)"); g.addColorStop(1,"rgba(12,19,33,0.74)");
+  ctx.fillStyle=g; rr(ctx,bx,by,bw,bh,5); ctx.fill();
+  ctx.fillStyle= focus?"rgba(232,200,106,0.92)":"rgba(232,200,106,0.30)";
+  ctx.fillRect(bx,by,3.5,bh);
+  ctx.font=`800 ${s}px system-ui`;
+  ctx.fillStyle= focus?"rgba(255,238,186,0.98)":"rgba(255,238,186,0.40)";
+  ctx.fillText(title,bx+12,by+(showSub? s*0.72 : bh/2));
+  if(showSub){ ctx.font=`500 ${s*0.56}px system-ui`;
+    ctx.fillStyle="rgba(186,208,240,0.72)"; ctx.fillText(sub,bx+12,by+s*1.42); }
+  ctx.restore();
+}
+function drawGrid(){
+  if(!ui.grid) return;
+  const z=cam.zoom, step= z<14?5:(z<34?2:1);
+  ctx.save(); ctx.lineWidth=1; ctx.strokeStyle="rgba(160,190,230,0.10)";
+  const wx0=Math.floor(wxAt(0)/step)*step, wx1=wxAt(W);
+  const wy0=Math.floor(wyAt(H)/step)*step, wy1=wyAt(0);
+  for(let x=wx0;x<=wx1;x+=step){ const X=sx(x); ctx.beginPath(); ctx.moveTo(X,0); ctx.lineTo(X,H); ctx.stroke(); }
+  for(let y=wy0;y<=wy1;y+=step){ const Y=sy(y); ctx.beginPath(); ctx.moveTo(0,Y); ctx.lineTo(W,Y); ctx.stroke(); }
+  if(z>26){ ctx.fillStyle="rgba(160,190,230,0.45)"; ctx.font="10px system-ui";
+    for(let x=wx0;x<=wx1;x+=step) ctx.fillText(x.toFixed(0), sx(x)+2, H-4);
+    for(let y=wy0;y<=wy1;y+=step) ctx.fillText(y.toFixed(0), 3, sy(y)-2); }
+  ctx.restore();
+}
+function drawVignette(){
+  if(!vignette){
+    vignette=document.createElement("canvas");
+    vignette.width=Math.max(1,Math.round(W)); vignette.height=Math.max(1,Math.round(H));
+    const c=vignette.getContext("2d");
+    const g=c.createRadialGradient(W/2,H/2,Math.min(W,H)*0.35,W/2,H/2,Math.max(W,H)*0.78);
+    g.addColorStop(0,"rgba(0,0,0,0)"); g.addColorStop(1,"rgba(4,8,18,0.52)");
+    c.fillStyle=g; c.fillRect(0,0,W,H);
+  }
+  ctx.drawImage(vignette,0,0,W,H);
+}
+function drawMinimap(){
+  const mw=100;
+  const mh=Math.min(H-160, mw*(WORLD.y1+2)/(WORLD.x1+2));
+  const mx=W-mw-16, my=76;
+  const s=Math.min(mw/(WORLD.x1+2), mh/(WORLD.y1+2));
+  ctx.save();
+  ctx.fillStyle="rgba(8,14,26,0.66)"; rr(ctx,mx-8,my-8,mw+16,mh+16,10); ctx.fill();
+  ctx.strokeStyle="rgba(232,200,106,0.25)"; ctx.lineWidth=1; ctx.stroke();
+  const MX=x=>mx+(x+1)*s, MY=y=>my+mh-(y+1)*s;
+  for(const f of FLOORS){
+    ctx.fillStyle= f.n===ui.floorFocus? "rgba(255,226,150,0.20)":"rgba(150,180,220,0.09)";
+    ctx.fillRect(MX(0),MY(f.yOff+f.h),f.w*s,f.h*s);
+  }
+  for(const g of WORLD_GEO){
+    if(g.t==="deco") continue;
+    ctx.fillStyle= g.t==="wall"?"rgba(140,158,190,0.5)":"rgba(230,240,255,0.75)";
+    ctx.fillRect(MX(g.x0),MY(g.y1),Math.max(1,(g.x1-g.x0)*s),Math.max(1,(g.y1-g.y0)*s));
+  }
+  for(const z_ of HAZARDS){ ctx.fillStyle="rgba(255,120,100,0.55)";
+    ctx.fillRect(MX(z_.x0),MY(z_.y1),Math.max(1,(z_.x1-z_.x0)*s),Math.max(1,(z_.y1-z_.y0)*s)); }
+  for(const f of SPEAR_FACES){ ctx.fillStyle="rgba(143,220,240,0.95)";
+    ctx.fillRect(MX(f.x0)-1,MY(f.y1),2,Math.max(2,(f.y1-f.y0)*s)); }
+  for(const c of CHECKPOINTS){ ctx.fillStyle="rgba(255,226,150,0.95)";
+    ctx.fillRect(MX(c.wx)-1.5,MY(c.wy)-1.5,3,3); }
+  ctx.fillStyle="rgba(255,236,180,0.6)"; ctx.font="8px system-ui"; ctx.textAlign="right";
+  for(const f of FLOORS) ctx.fillText(f.n+"F", mx+mw, MY(f.yOff)-1);
+  const vx0=clamp(wxAt(0),-1,WORLD.x1+1), vx1=clamp(wxAt(W),-1,WORLD.x1+1);
+  const vy0=clamp(wyAt(H),-1,WORLD.y1+1), vy1=clamp(wyAt(0),-1,WORLD.y1+1);
+  ctx.save(); ctx.beginPath(); ctx.rect(mx-4,my-4,mw+8,mh+8); ctx.clip();
+  ctx.strokeStyle="rgba(255,255,255,0.9)"; ctx.lineWidth=1.4;
+  ctx.strokeRect(MX(vx0),MY(vy1),Math.max(2,(vx1-vx0)*s),Math.max(2,(vy1-vy0)*s));
+  ctx.restore(); ctx.restore();
+}
+function drawHUD(T){
+  ctx.save();
+  const g=ctx.createLinearGradient(0,0,0,58);
+  g.addColorStop(0,"rgba(8,13,24,0.88)"); g.addColorStop(1,"rgba(8,13,24,0)");
+  ctx.fillStyle=g; ctx.fillRect(0,0,W,58);
+  ctx.font="800 17px system-ui"; ctx.textAlign="left"; ctx.fillStyle="#f3e2b0";
+  ctx.fillText("성창 — 잊힌 성물 · 「신전 수련장」", 18, 26);
+  ctx.font="500 11.5px system-ui"; ctx.fillStyle="rgba(186,208,238,0.85)";
+  const pass=TESTS.filter(r=>r.ok).length;
+  ctx.fillText(`맵 프로토 v1.1 · 전역 ${WORLD.x1}×${WORLD.y1}u · 7층 · 검증 ${pass}/${TESTS.length} · 캐릭터 미구현(뷰어)`, 18, 44);
+  ctx.restore();
+
+  const wx=wxAt(ui.mouse.x), wy=wyAt(ui.mouse.y);
+  const f=FLOORS.find(a=>wy>=a.yOff&&wy<a.yOff+a.h);
+  ctx.save();
+  ctx.font="600 12px ui-monospace,monospace"; ctx.textAlign="left";
+  ctx.fillStyle="rgba(8,14,26,0.70)"; rr(ctx,14,H-34,300,24,6); ctx.fill();
+  ctx.fillStyle="rgba(200,224,255,0.95)";
+  ctx.fillText(`전역 (${wx.toFixed(2)}, ${wy.toFixed(2)})`, 22, H-18);
+  if(f) ctx.fillText(`${f.n}F 로컬 y ${(wy-f.yOff).toFixed(2)}`, 172, H-18);
+  ctx.restore();
+
+  if(ui.help){
+    const rows=[
+      ["카메라","드래그 · WASD/방향키 · 휠 줌"],
+      ["층 이동","1~7 · O 전체 조망"],
+      ["토글","L 라벨 · K 콜리전 · G 그리드 · P 창꽂기 · H 도움말"],
+      ["검증","T 테스트 실행/표시 · E JSON 내보내기"],
+      ["도달성","표면 클릭 → 포락선·창 사거리·도달 분류 (ESC 해제)"],
+    ];
+    const derived=[
+      ["단일점프", REACH.jump], ["이단강림", REACH.doubleJump],
+      ["창대도약", REACH.vault], ["대시점프 수평", REACH.dashX], ["창 사거리", REACH.spear],
+    ];
+    ctx.save();
+    const px=14, py=76, pw=308;
+    const ph=26+rows.length*17+14+derived.length*15+10;
+    ctx.fillStyle="rgba(8,14,26,0.76)"; rr(ctx,px,py,pw,ph,10); ctx.fill();
+    ctx.strokeStyle="rgba(232,200,106,0.20)"; ctx.lineWidth=1; ctx.stroke();
+    ctx.textAlign="left";
+    ctx.font="700 11px system-ui"; ctx.fillStyle="#f0dda8"; ctx.fillText("조작", px+12, py+18);
+    ctx.font="500 11px system-ui";
+    let yy=py+34;
+    for(const [k,v] of rows){
+      ctx.fillStyle="rgba(255,226,150,0.85)"; ctx.fillText(k, px+12, yy);
+      ctx.fillStyle="rgba(196,216,244,0.88)"; ctx.fillText(v, px+70, yy); yy+=17;
+    }
+    yy+=8;
+    ctx.font="700 11px system-ui"; ctx.fillStyle="#f0dda8";
+    ctx.fillText("도달성 (PHYS에서 유도)", px+12, yy); yy+=15;
+    ctx.font="500 10.5px ui-monospace,monospace";
+    for(const [k,v] of derived){
+      ctx.fillStyle="rgba(196,216,244,0.80)"; ctx.fillText(k, px+12, yy);
+      ctx.fillStyle="rgba(143,220,240,0.95)"; ctx.fillText(v.toFixed(3)+"u", px+150, yy); yy+=15;
+    }
+    ctx.restore();
+  }
+
+  if(ui.tests){
+    ctx.save();
+    const px=14, py=ui.help? 76+ (26+5*17+14+5*15+10) + 10 : 76;
+    const fs=11, pw=460, ph=26+TESTS.length*19+8;
+    ctx.fillStyle="rgba(8,14,26,0.82)"; rr(ctx,px,py,pw,ph,10); ctx.fill();
+    ctx.strokeStyle="rgba(232,200,106,0.24)"; ctx.lineWidth=1; ctx.stroke();
+    ctx.textAlign="left"; ctx.font="700 11px system-ui"; ctx.fillStyle="#f0dda8";
+    ctx.fillText("설계 검증 (데이터 파생 · T 갱신)", px+12, py+18);
+    ctx.font=`500 ${fs}px system-ui`;
+    let yy=py+34;
+    for(const r of TESTS){
+      ctx.fillStyle= r.ok?"#7fe3a0":"#ff8b7a"; ctx.fillText(r.ok?"✓":"✗", px+12, yy);
+      ctx.fillStyle="rgba(200,220,246,0.9)"; ctx.fillText(r.n, px+28, yy);
+      if(!r.ok&&r.d){ ctx.fillStyle="rgba(255,170,160,0.85)";
+        ctx.fillText(r.d.slice(0,44), px+28, yy+11); yy+=11; }
+      yy+=17;
+    }
+    ctx.restore();
+  }
+
+  const cf=FLOORS.find(a=>a.n===ui.floorFocus);
+  if(cf){
+    ctx.save();
+    const txt=`${cf.n}F ${cf.name} — ${cf.concept}`;
+    ctx.font="600 12px system-ui";
+    const wpx=ctx.measureText(txt).width, bx=(W-wpx-28)/2;
+    ctx.fillStyle="rgba(8,14,26,0.74)"; rr(ctx,bx,H-72,wpx+28,26,8); ctx.fill();
+    ctx.strokeStyle="rgba(232,200,106,0.22)"; ctx.lineWidth=1; ctx.stroke();
+    ctx.fillStyle="rgba(232,240,255,0.92)"; ctx.textAlign="left";
+    ctx.fillText(txt,bx+14,H-54);
+    ctx.restore();
+  }
+  if(ui.sel){
+    ctx.save();
+    const s=ui.sel;
+    const lines=[`${s.label}  [${s.uid}]`,
+      `rect  x${s.x0.toFixed(2)}–${s.x1.toFixed(2)}  y${s.y0.toFixed(2)}–${s.y1.toFixed(2)}`,
+      `type ${s.t}  stand ${s.stand}${s.gate?"  gate "+s.gate:""}${s.cap?"  cap "+s.cap:""}`];
+    ctx.font="600 11.5px ui-monospace,monospace";
+    const wpx=Math.max(...lines.map(l=>ctx.measureText(l).width))+22;
+    const bx=W-wpx-16, by=H-84;
+    ctx.fillStyle="rgba(8,14,26,0.86)"; rr(ctx,bx,by,wpx,58,8); ctx.fill();
+    ctx.strokeStyle="rgba(255,238,180,0.35)"; ctx.lineWidth=1; ctx.stroke();
+    ctx.textAlign="left"; ctx.fillStyle="rgba(255,238,186,0.95)";
+    ctx.fillText(lines[0],bx+11,by+18);
+    ctx.fillStyle="rgba(196,216,244,0.88)";
+    ctx.fillText(lines[1],bx+11,by+34); ctx.fillText(lines[2],bx+11,by+50);
+    ctx.restore();
+  }
+  if(ui.toast&&T-ui.toastT<2200){
+    ctx.save(); ctx.font="700 13px system-ui"; ctx.textAlign="center";
+    const a=1-Math.max(0,(T-ui.toastT-1500)/700);
+    const wpx=ctx.measureText(ui.toast).width+30;
+    ctx.globalAlpha=a;
+    ctx.fillStyle="rgba(8,14,26,0.9)"; rr(ctx,(W-wpx)/2,H-118,wpx,30,8); ctx.fill();
+    ctx.strokeStyle="rgba(232,200,106,0.4)"; ctx.stroke();
+    ctx.fillStyle="#ffeaa7"; ctx.fillText(ui.toast,W/2,H-98);
+    ctx.restore();
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/* 11. 메인 루프                                                       */
+/* ------------------------------------------------------------------ */
+let last=performance.now();
+function frame(T){
+  const dt=Math.min(50,T-last); last=T;
+  const sp=(keys["shift"]?2.4:1)*dt*0.018*(60/cam.zoom)*22;
+  if(keys["a"]||keys["arrowleft"])  cam.tx-=sp;
+  if(keys["d"]||keys["arrowright"]) cam.tx+=sp;
+  if(keys["w"]||keys["arrowup"])    cam.ty+=sp;
+  if(keys["s"]||keys["arrowdown"])  cam.ty-=sp;
+  if(keys["="]||keys["+"]) cam.tzoom=clamp(cam.tzoom*1.03,6,220);
+  if(keys["-"]||keys["_"]) cam.tzoom=clamp(cam.tzoom/1.03,6,220);
+  cam.tx=clamp(cam.tx,-12,WORLD.x1+12);
+  cam.ty=clamp(cam.ty,-8,WORLD.y1+8);
+  const k=1-Math.pow(0.001,dt/1000);
+  cam.x=lerp(cam.x,cam.tx,k); cam.y=lerp(cam.y,cam.ty,k); cam.zoom=lerp(cam.zoom,cam.tzoom,k);
+
+  drawSky(T);
+  const vy0=wyAt(H)-2, vy1=wyAt(0)+2;
+  const vis=FLOORS.filter(f=>f.yOff+f.h>vy0 && f.yOff<vy1);
+
+  for(const f of vis) drawChamber(f);
+  for(const f of vis) drawGodRays(f,T);
+  for(const z_ of HAZARDS) if(z_.y1>vy0&&z_.y0<vy1) drawHazard(z_,T);
+
+  // 장식 → 벽 → 솔리드/한방향/나브
+  for(const g of WORLD_GEO) if(g.t==="deco") drawWall(g,T,0.42);
+  for(const g of WORLD_GEO) if(g.t==="wall") drawWall(g,T);
+  for(const g of WORLD_GEO){
+    if(g.t==="solid"){
+      const f=FLOORS.find(a=>a.n===g.floor);
+      drawSolid(g,T,{massTo: (g.y0-f.yOff)<=0.25 ? f.yOff-0.4 : null});
+    } else if(g.t==="oneway") drawOneway(g,T);
+    else if(g.t==="vault")    drawVault(g,T);
+  }
+  if(spear.planted) drawSolid(spear.planted,T);
+  for(const f of SPEAR_FACES) drawSpearFace(f,T);
+
+  for(const c of CHECKPOINTS) drawShrine(c,T);
+  for(const t of TARGETS)     drawTarget(t,T);
+  for(const c of COLLECTIBLES)drawCrystal(c,T);
+  for(const tr of TRIGGERS)   if(tr.kind==="goal-strike") drawBell(tr,T);
+  for(const p of PORTALS)     drawPortal(p,T);
+  for(const f of vis)         drawSpawn(f,T);
+  if(ui.plan) drawSpearPlan(T);
+
+  ctx.save(); ctx.globalCompositeOperation="lighter";
+  for(const m of MOTES){
+    const my=(m.y+(T*0.00004*m.sp))%WORLD.y1;
+    const X=sx(m.x), Y=sy(my+Math.sin(T*0.0009+m.ph)*0.12);
+    if(X<-20||X>W+20||Y<-20||Y>H+20) continue;
+    ctx.fillStyle=`rgba(214,238,255,${0.18+0.16*Math.sin(T*0.002+m.ph)})`;
+    ctx.beginPath(); ctx.arc(X,Y,Math.max(0.8,m.r*cam.zoom),0,7); ctx.fill();
+  }
+  ctx.restore();
+
+  if(ui.floorFocus>0) for(const f of vis) if(f.n!==ui.floorFocus) dimFloor(f);
+  drawReach(T);
+  drawGrid();
+  if(ui.debug) for(const f of vis) drawDebug(f);
+  _lb.length=0; _badges.length=0;
+  if(ui.labels){
+    const order=[...vis].sort((a,b)=>(b.n===ui.floorFocus)-(a.n===ui.floorFocus));
+    for(const f of order) drawLabels(f, ui.floorFocus>0 && f.n!==ui.floorFocus);
+  }
+  for(const f of vis) drawFloorBadge(f);
+  drawVignette();
+  drawMinimap();
+  drawHUD(T);
+  requestAnimationFrame(frame);
+}
+focusFloor(1);
+cam.x=cam.tx; cam.y=cam.ty; cam.zoom=cam.tzoom;
+requestAnimationFrame(frame);
+
+/* 헤드리스/콘솔 노출 */
+window.__MAP__={MAP,FLOORS,WORLD,WORLD_GEO,SPEAR_FACES,HAZARDS,CHECKPOINTS,PORTALS,
+  TARGETS,COLLECTIBLES,TRIGGERS,PLANS,PHYS,REACH,GATE_MARGIN,Q,grid,spear,
+  plantSpear,recallSpear,runTests,auditGates,gateViolations,ledgeEmbedded,
+  typeOverlaps,planIssues,targetGateIssues,reachFrom,standables,
+  freeClosure,spearClosure,solvability,collectableIssues,hiddenGateIssues,pointReachable,
+  occludedPair,occludedPoint,canMove,maxRise,startSurfaces,
+  cam,focusFloor,overview,ui,exportJSON};
+</script>
