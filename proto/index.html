@@ -40,6 +40,7 @@ const PHYS = {
   spearRange:    5.00,  // u  창 던지기 사거리 (창 꽂기 비활성 — 부활 대비 보존)
   attackUpReach: 0.80,  // u  위공격 유효 리치(히트박스 상단 기준 추가 도달)
   ledgeSnap:     0.08,  // u  낮은 턱 자동 승월
+  simDt:       1/120,   // s  고정 타임스텝(컨트롤러와 모델이 공유하는 이산화 단위)
   /* ── ★창대쉬 (Spear Dash) — v1.3 신설 시그니처 ─────────────────────
      레퍼런스: 오리와 도깨비불의 「충전 점프」.
      누르면 sdashHover 동안 공중에 멈춰 서고(중력·수평 모두 정지) 그 다음
@@ -74,11 +75,14 @@ const PHYS = {
   bodyW:         0.30, bodyH: 0.82,
 };
 /* REACH는 상수가 아니라 PHYS에서 유도된다 → 물리를 튜닝하면 게이팅이 자동 재검증됨 */
+/* 지속시간을 고정 타임스텝의 정수배로 올림 — 컨트롤러가 스텝 단위로만 끝낼 수
+   있으므로 모델도 같은 이산화를 써야 실측과 정확히 맞는다. */
+const envQ = t => Math.ceil(t/PHYS.simDt - 1e-9)*PHYS.simDt;
 const REACH = (()=>{
   const h = v => v*v/(2*PHYS.gravity);
   const jump = h(PHYS.jumpV);
   const airT = 2*PHYS.jumpV/PHYS.gravity;               // 단일점프 총 체공
-  const sdash = PHYS.sdashSpeed*PHYS.sdashTime;         // 창대쉬 순수 변위
+  const sdash = PHYS.sdashSpeed*envQ(PHYS.sdashTime);   // 창대쉬 순수 변위(이산화 반영)
   return {
     jump,
     doubleJump: jump + h(PHYS.airJumpV),
@@ -87,7 +91,7 @@ const REACH = (()=>{
     /* 점프 → 이단강림 → 창대쉬(수직) 4단 체인의 최대 상승 */
     chainUp:    jump + h(PHYS.airJumpV) + sdash,
     // 대시점프 수평 도달(스칼라 표시용). 실제 게이팅 판정은 아래 ENV 포락선이 한다.
-    dashX: PHYS.dashSpeed*PHYS.dashTime + (airT-PHYS.dashTime)*PHYS.runSpeed*PHYS.airControl,
+    dashX: PHYS.dashSpeed*envQ(PHYS.dashTime) + (airT-PHYS.dashTime)*PHYS.runSpeed*PHYS.airControl,
     spear: PHYS.spearRange,
     atkUp: PHYS.attackUpReach,
   };
@@ -128,8 +132,8 @@ function envTrace(tbl, o){
     t+=dt;
     /* 이벤트 발동 */
     if(!airJumped && t>=o.tAir){ vy=PHYS.airJumpV; airJumped=true; }
-    if(!dashed   && t>=o.tDash){ dashT=PHYS.dashTime; dashed=true; }
-    if(!sdashed  && t>=o.tSd){ sdHover=PHYS.sdashHover; sdT=PHYS.sdashTime;
+    if(!dashed   && t>=o.tDash){ dashT=envQ(PHYS.dashTime); dashed=true; }
+    if(!sdashed  && t>=o.tSd){ sdHover=envQ(PHYS.sdashHover); sdT=envQ(PHYS.sdashTime);
                                sdx=o.sdx; sdy=o.sdy; sdashed=true; vx=0; vy=0; }
     if(sdHover>0){ sdHover-=dt; }                       // 체공: 완전 정지
     else if(sdT>0){ sdT-=dt; vx=sdx*PHYS.sdashSpeed; vy=sdy*PHYS.sdashSpeed;
@@ -2135,11 +2139,11 @@ function drawHUD(T){
   ctx.fillText("성창 — 잊힌 성물 · 「신전 수련장」", 18, 26);
   ctx.font="500 11.5px system-ui"; ctx.fillStyle="rgba(186,208,238,0.85)";
   const pass=TESTS.filter(r=>r.ok).length;
-  ctx.fillText(`맵 프로토 v1.2 · 전역 ${WORLD.x1}×${WORLD.y1}u · 7층 · 검증 ${pass}/${TESTS.length} · `
+  ctx.fillText(`맵 프로토 v1.3 · 전역 ${WORLD.x1}×${WORLD.y1}u · 7층 · 검증 ${pass}/${TESTS.length} · `
     +(PLAY.on?`플레이 모드 ${PLAY.scale}× (Enter=뷰어)`:"뷰어 모드 (Enter=플레이)"), 18, 44);
   ctx.restore();
 
-  if(PLAY.on){
+  if(PLAY.on&&ui.help){          // 2배 확대에서는 계측 패널도 시야를 먹는다 — H로 토글
     const p=player;
     const lines=[
       `pos  ${p.x.toFixed(2)}, ${p.y.toFixed(2)}   ${p.floor}F`,
@@ -2380,7 +2384,7 @@ function sdashAnim(sx,sy){
 }
 /* 컨트롤러 감각 상수 (PHYS에서 유도되지 않는 값만 — 물리 수치는 PHYS가 정본) */
 const CTRL={
-  dt:1/120, maxSub:8,          // 고정 타임스텝
+  dt:PHYS.simDt, maxSub:8,     // 고정 타임스텝 (PHYS.simDt가 정본)
   accelGround:42.0, accelAir:26.0,
   fricGround:46.0,  fricAir:4.0,
   maxFall:22.0,
@@ -2659,14 +2663,15 @@ function stepPlayer(dt){
   if(sdashing){
     if(p.sdHover>0){ p.sdHover-=dt; p.vx=0; p.vy=0; }      // 체공(완전 정지)
     else{
-      /* 마지막 스텝은 남은 시간만큼만 — 그래야 변위가 정확히 sdashSpeed·sdashTime이
-         되어 REACH.sdash 계약과 이산화 오차 없이 일치한다 */
-      const s=Math.min(dt,p.sdT)/dt; p.sdT-=dt;
-      p.vx=p.sdx*PHYS.sdashSpeed*s; p.vy=p.sdy*PHYS.sdashSpeed*s;
+      /* ★ 속도를 부분 스텝으로 깎지 말 것. 깎으면 돌진 마지막 스텝의 vx가 0에 가까워져
+         (a) 돌진이 뚝 멈추는 감각이 되고 (b) 그 상태로 이어지는 도약이 수평속도를
+         잃어 계측 포락선이 실제보다 작게 나온다. 이산화 오차는 모델 쪽에서
+         envQ()로 스텝 수에 맞춰 흡수한다. */
+      p.sdT-=dt;
+      p.vx=p.sdx*PHYS.sdashSpeed; p.vy=p.sdy*PHYS.sdashSpeed;
     }
   }else if(dashing){
-    const s=Math.min(dt,p.dashT)/dt; p.dashT-=dt;   // 마지막 스텝은 남은 시간만큼만
-    p.vx=p.dashDir*PHYS.dashSpeed*s;
+    p.dashT-=dt; p.vx=p.dashDir*PHYS.dashSpeed;
     p.iframe=Math.max(p.iframe,p.dashT);
     /* ★ 계측은 moveX **이후**에 해야 한다. v1.2는 여기서 바로 찍어 마지막 한 스텝의
        이동분이 빠졌다(표시 1.235 / 실제 1.30 — 어드바이저 B-9). 플래그만 세운다. */
@@ -2991,7 +2996,7 @@ function reachContractIssues(){
     bad.push(`${n} 실측 ${meas.toFixed(3)} > 모델 ${model.toFixed(3)}`); };
   chk("단일점프", S.jump, REACH.jump);
   chk("이단강림", S.doubleJump, REACH.doubleJump);
-  chk("대시거리", S.dashDist, PHYS.dashSpeed*PHYS.dashTime);
+  chk("대시거리", S.dashDist, PHYS.dashSpeed*envQ(PHYS.dashTime));
   chk("창대쉬 변위", S.sdashUp, REACH.sdash);
   chk("4단 체인 상승", S.chainUp, REACH.chainUp);
   if(!S.chainOk) bad.push("4단 체인(점프→이단강림→대시→창대쉬)이 나가지 않음");
@@ -3083,7 +3088,9 @@ function drawPlayer(T){
   const p=player, A=ANIM[p.st]||ANIM.idle;
   const fi=A.i[Math.min(p.animI,A.i.length-1)];   // 절대 인덱스 → 격자 좌표
   const cx=(fi%SPRITE.cols)*SPRITE.fw, cy=Math.floor(fi/SPRITE.cols)*SPRITE.fh;
-  const S=PLAY.scale;
+  /* 디바이스 픽셀 기준 확대배율 = (1u당 디바이스 px) / (1u당 스프라이트 px 100).
+     반올림해 **정수배**를 보장한다(스프라이트 1px = 정수 디바이스 px). */
+  const S=Math.max(1, Math.round(cam.zoom*DPR/100));
   ctx.save();
   ctx.setTransform(1,0,0,1,0,0);                 // 디바이스 픽셀로 — 정수배 보장
   ctx.imageSmoothingEnabled=false;
@@ -3134,8 +3141,13 @@ function togglePlay(on){
   }
 }
 function playCamera(dt){
-  const S=PLAY.scale;
-  cam.tzoom=cam.zoom=100*S/DPR;                  // 스프라이트 정수배 유지 (줌 보간 금지)
+  /* ★ B-7: 줌을 DPR로 나누면 안 된다.
+     v1.2는 `100·scale/DPR`이라 DPR 1에서 8.0×4.5u, DPR 1.5에서 12.0×6.75u —
+     **화면 설정에 따라 가시 영역이 50% 달라졌다.** 맵 설계(viewSpec)가 가시 영역을
+     전제로 게이트를 배치하므로 이건 설계 근거를 무너뜨린다.
+     이제 줌은 CSS 픽셀 기준(100·scale)으로 고정하고, DPR은 스프라이트 확대배율
+     쪽에서만 흡수한다(drawPlayer의 S = cam.zoom·DPR/100 → 정수). */
+  cam.tzoom=cam.zoom=100*PLAY.scale;             // CSS px/u — DPR 무관
   const halfW=W/2/cam.zoom, halfH=H/2/cam.zoom;
   let tx=player.x+player.face*CTRL.camLead, ty=player.y+PHYS.bodyH*0.5+CTRL.camUp;
   const f=FLOORS.find(a=>a.n===player.floor);
