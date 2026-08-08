@@ -67,13 +67,22 @@ docs/specs/2026-05-25-shadow-dagger-eclipse-design.md
   - `portals[]`(`mode:"door"|"physical"`, `toPortal`) · `targets[]` · `collectibles[]`(`gate`) · `triggers[]` · `spearPlan[]`
 - `buildWorld()` → **월드 좌표 1회 평탄화** (`WORLD_GEO`/`SPEAR_FACES`/…). 이후 코드에 `yOff` 산술 없음.
 - `SpatialHash(2u)` + **콜리전 질의 API `Q.*`** + 동적 창 발판 `plantSpear()`/`recallSpear()`
-- **검증 `runTests()` 11항목** — 상세는 인계 문서 참조
+- **검증 `runTests()` 12항목** (v1.1 11항목 + v1.2 「필수 지점 신체 여유」) — 상세는 인계 문서 참조
+- **캐릭터 컨트롤러(v1.2)**: `SPRITE`(base64 내장 시트) · `ANIM` · `CTRL` · `player` · `stepPlayer(dt)`
+  고정 타임스텝 1/120s + 벨로시티 베를레. `Q.*` 위에서만 동작
 - 렌더: `draw*(g, T)` 단일 규약, 월드 좌표
 
-## 7. 조작 (뷰어)
+## 7. 조작
 
-`드래그`/`WASD`/휠 = 카메라 · `1~7` 층 · `O` 조망 · `L` 라벨 · `K` 콜리전 · `G` 그리드 ·
+**뷰어 모드** — `드래그`/`WASD`/휠 = 카메라 · `1~7` 층 · `O` 조망 · `L` 라벨 · `K` 콜리전 · `G` 그리드 ·
 `P` 창꽂기선 · `H` 도움말 · **`T` 검증 실행** · **`E` JSON 내보내기** · 표면 클릭 = 도달성 오버레이
+
+**플레이 모드** (`Enter` 토글) — `←→`/`AD` 이동 · `Space`/`Z` 점프(누르면 높이·공중 재입력 = 이단 강림·
+벽에서 = 벽점프) · `Shift`/`X` 대시 · `↓`+점프 = 한방향 판 통과 · `↑`/`W` 문 통과 ·
+`1~7` 층 워프 · `R` 리스폰 · `K` 히트박스 표시. 뷰어 검증 키는 플레이 모드에서도 살아 있다.
+
+> **히트박스 `bodyW 0.30 × bodyH 0.82`** (스프라이트 실측 확정 2026-08-08).
+> 스프라이트 피벗은 **(35, 111)** — `art/README.md`의 110은 1px 어긋난 값이다.
 
 ## 8. 워크플로
 
