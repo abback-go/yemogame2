@@ -1,0 +1,249 @@
+{
+ "image": "temple_maiden_sheet.png",
+ "frameWidth": 144,
+ "frameHeight": 148,
+ "columns": 6,
+ "pivot": {
+  "x": 51,
+  "y": 110
+ },
+ "pivotNormalized": {
+  "x": 0.3542,
+  "y": 0.7432
+ },
+ "animations": {
+  "idle": {
+   "row": 0,
+   "start": 0,
+   "end": 5,
+   "frames": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5
+   ],
+   "frameNames": [
+    "idle_00",
+    "idle_01",
+    "idle_02",
+    "idle_03",
+    "idle_04",
+    "idle_05"
+   ],
+   "fps": 8,
+   "loop": true
+  },
+  "walk": {
+   "row": 1,
+   "start": 6,
+   "end": 9,
+   "frames": [
+    6,
+    7,
+    8,
+    9
+   ],
+   "frameNames": [
+    "walk_00",
+    "walk_01",
+    "walk_02",
+    "walk_03"
+   ],
+   "fps": 10,
+   "loop": true
+  },
+  "jump": {
+   "row": 2,
+   "start": 12,
+   "end": 16,
+   "frames": [
+    12,
+    13,
+    14,
+    15,
+    16
+   ],
+   "frameNames": [
+    "jump_00",
+    "jump_01",
+    "jump_02",
+    "jump_03",
+    "jump_04"
+   ],
+   "fps": 12,
+   "loop": false
+  },
+  "attack": {
+   "row": 3,
+   "start": 18,
+   "end": 21,
+   "frames": [
+    18,
+    19,
+    20,
+    21
+   ],
+   "frameNames": [
+    "attack_00",
+    "attack_01",
+    "attack_02",
+    "attack_03"
+   ],
+   "fps": 16,
+   "loop": false
+  },
+  "dash": {
+   "row": 4,
+   "start": 24,
+   "end": 27,
+   "frames": [
+    24,
+    25,
+    26,
+    27
+   ],
+   "frameNames": [
+    "dash_00",
+    "dash_01",
+    "dash_02",
+    "dash_03"
+   ],
+   "fps": 18,
+   "loop": false
+  },
+  "hurt": {
+   "row": 5,
+   "start": 30,
+   "end": 35,
+   "frames": [
+    30,
+    31,
+    32,
+    33,
+    34,
+    35
+   ],
+   "frameNames": [
+    "hurt_00",
+    "hurt_01",
+    "hurt_02",
+    "hurt_03",
+    "hurt_04",
+    "hurt_05"
+   ],
+   "fps": 10,
+   "loop": false
+  },
+  "run": {
+   "row": 6,
+   "start": 36,
+   "end": 38,
+   "frames": [
+    36,
+    37,
+    38
+   ],
+   "frameNames": [
+    "run_00",
+    "run_01",
+    "run_02"
+   ],
+   "fps": 15,
+   "loop": true
+  },
+  "charge": {
+   "row": 7,
+   "start": 42,
+   "end": 44,
+   "frames": [
+    42,
+    43,
+    44
+   ],
+   "frameNames": [
+    "charge_00",
+    "charge_01",
+    "charge_02"
+   ],
+   "fps": 14,
+   "loop": false
+  },
+  "sdash_right": {
+   "row": 8,
+   "start": 48,
+   "end": 49,
+   "frames": [
+    48,
+    49
+   ],
+   "frameNames": [
+    "sdash_right_00",
+    "sdash_right_01"
+   ],
+   "fps": 20,
+   "loop": false
+  },
+  "sdash_upright": {
+   "row": 9,
+   "start": 54,
+   "end": 55,
+   "frames": [
+    54,
+    55
+   ],
+   "frameNames": [
+    "sdash_upright_00",
+    "sdash_upright_01"
+   ],
+   "fps": 20,
+   "loop": false
+  },
+  "sdash_downright": {
+   "row": 10,
+   "start": 60,
+   "end": 61,
+   "frames": [
+    60,
+    61
+   ],
+   "frameNames": [
+    "sdash_downright_00",
+    "sdash_downright_01"
+   ],
+   "fps": 20,
+   "loop": false
+  },
+  "sdash_up": {
+   "row": 11,
+   "start": 66,
+   "end": 67,
+   "frames": [
+    66,
+    67
+   ],
+   "frameNames": [
+    "sdash_up_00",
+    "sdash_up_01"
+   ],
+   "fps": 20,
+   "loop": false
+  },
+  "sdash_down": {
+   "row": 12,
+   "start": 72,
+   "end": 73,
+   "frames": [
+    72,
+    73
+   ],
+   "frameNames": [
+    "sdash_down_00",
+    "sdash_down_01"
+   ],
+   "fps": 20,
+   "loop": false
+  }
+ }
+}
