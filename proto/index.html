@@ -37,9 +37,25 @@ const PHYS = {
   dashSpeed:     7.80,  // u/s
   dashTime:      0.16,  // s
   vaultV:       13.30,  // u/s (창대 도약 — 정점 3.4u 역산)
-  spearRange:    5.00,  // u  창 던지기 사거리
+  spearRange:    5.00,  // u  창 던지기 사거리 (창 꽂기 비활성 — 부활 대비 보존)
   attackUpReach: 0.80,  // u  위공격 유효 리치(히트박스 상단 기준 추가 도달)
   ledgeSnap:     0.08,  // u  낮은 턱 자동 승월
+  /* ── ★창대쉬 (Spear Dash) — v1.3 신설 시그니처 ─────────────────────
+     레퍼런스: 오리와 도깨비불의 「충전 점프」.
+     누르면 sdashHover 동안 공중에 멈춰 서고(중력·수평 모두 정지) 그 다음
+     8방향 중 하나로 sdashTime 동안 sdashSpeed로 돌진한다.
+     충전 1회. 접지 또는 **wallJump:true 표면 접촉** 시에만 회복된다.
+     ★ 이 세 값이 REACH.sdash / REACH.chainUp / 포락선을 전부 결정한다.
+       손으로 도달 수치를 적지 말고 반드시 여기를 고칠 것.
+     ★ hover 시간은 "튜닝 손잡이"지만 CTRL이 아니라 여기 있다 — hover가 체공을
+       늘려 도달 범위를 바꾸기 때문. 도달을 바꾸는 값은 전부 PHYS가 정본이다. */
+  sdashSpeed:   11.00,  // u/s  돌진 속도
+  sdashTime:     0.15,  // s    돌진 지속 → 순수 변위 1.65u
+  sdashHover:    0.20,  // s    발동 직후 공중 정지(체공)
+  /* 공중 수평속도가 상한(runSpeed·airControl)으로 되돌아오는 시간.
+     v1.2의 하드 클램프(즉시 절단)를 대체한다 — 게이팅은 포락선이 보장하므로
+     감각을 위해 관성을 살린다(어드바이저 B-8). */
+  airDecayT:     0.12,  // s
   /* ── 히트박스 (2026-08-08 확정 · 스프라이트 실측 기반) ────────────────
      art/temple_maiden_sheet.png 108×116 셀을 프레임별로 실측한 결과:
        · 발 기준선  : 전 프레임 공통. 몸 픽셀 마지막 행 = y110 → 발바닥 경계 y111
@@ -62,18 +78,124 @@ const REACH = (()=>{
   const h = v => v*v/(2*PHYS.gravity);
   const jump = h(PHYS.jumpV);
   const airT = 2*PHYS.jumpV/PHYS.gravity;               // 단일점프 총 체공
+  const sdash = PHYS.sdashSpeed*PHYS.sdashTime;         // 창대쉬 순수 변위
   return {
     jump,
     doubleJump: jump + h(PHYS.airJumpV),
     vault:      h(PHYS.vaultV),
-    // 대시점프 수평 도달: 대시 구간 + 잔여 체공을 공중제어 속도로
+    sdash,
+    /* 점프 → 이단강림 → 창대쉬(수직) 4단 체인의 최대 상승 */
+    chainUp:    jump + h(PHYS.airJumpV) + sdash,
+    // 대시점프 수평 도달(스칼라 표시용). 실제 게이팅 판정은 아래 ENV 포락선이 한다.
     dashX: PHYS.dashSpeed*PHYS.dashTime + (airT-PHYS.dashTime)*PHYS.runSpeed*PHYS.airControl,
     spear: PHYS.spearRange,
     atkUp: PHYS.attackUpReach,
   };
 })();
-/* 게이팅 여유 규칙: 게이트 갭은 이동기 한계 대비 최소 이만큼 초과해야 한다 */
-const GATE_MARGIN = 0.30;
+/* 게이팅 여유 규칙: 게이트 갭은 이동기 한계 대비 최소 이만큼 초과해야 한다.
+   ledgeSnap(런타임 관대함)에서 유도한다 — ledgeSnap을 키우면 요구 여유도 커진다.
+   0.30u는 프로젝트 원칙 6의 하한. (v1.2에선 순수 리터럴이라 ledgeSnap을 0.90으로
+   바꿔도 전 항목 PASS였다 — 어드바이저 B-6) */
+const GATE_MARGIN = Math.max(0.30, PHYS.ledgeSnap*3.5);
+
+/* ------------------------------------------------------------------ */
+/* 0.5 도달 포락선 (dy → 최대 dx) — PHYS만으로 유도한 탄도 모델          */
+/*                                                                     */
+/*   v1.2는 도달을 "직사각형"(dx≤dashX && dy≤maxUp)으로 봤다. 실제는     */
+/*   높이를 벌수록 수평이 줄어드는 **포락선**이고, 그 차이 때문에         */
+/*   1F step_p1→exit_ledge(dx4.0/dy2.6) 같은 구간이 모델 밖에서 넘어갔다. */
+/*   (어드바이저 B-4)                                                   */
+/*                                                                     */
+/*   여기 모델은 컨트롤러 코드를 참조하지 않는다 — PHYS 상수만 쓰는       */
+/*   독립 질점 탄도 시뮬레이터다. 그래야 "컨트롤러가 계약을 지키는가"를    */
+/*   검사(test: 실측 ≤ 모델)할 수 있다. 모델이 실측에서 유도되면 그 검사는 */
+/*   공허해진다.                                                        */
+/* ------------------------------------------------------------------ */
+const ENV_STEP = 0.1, ENV_LO = -8, ENV_HI = 8;
+const envIdx = dy => Math.round((dy-ENV_LO)/ENV_STEP);
+const ENV_N  = envIdx(ENV_HI)+1;
+
+/* 한 궤적을 굴려 dy 버킷마다 최대 x를 적립 */
+function envTrace(tbl, o){
+  const g=PHYS.gravity, dt=1/480;
+  const cap=PHYS.runSpeed*PHYS.airControl;
+  let x=0, y=0, vx=o.vx0, vy=o.vy0;
+  let t=0, airJumped=!o.airJump, dashed=!o.dash, sdashed=!o.sdash;
+  let dashT=0, sdHover=0, sdT=0, sdx=0, sdy=0, decay=0;
+  const mark=()=>{ const i=envIdx(y); if(i>=0&&i<tbl.length&&x>tbl[i]) tbl[i]=x; };
+  mark();
+  for(let n=0;n<3000;n++){
+    t+=dt;
+    /* 이벤트 발동 */
+    if(!airJumped && t>=o.tAir){ vy=PHYS.airJumpV; airJumped=true; }
+    if(!dashed   && t>=o.tDash){ dashT=PHYS.dashTime; dashed=true; }
+    if(!sdashed  && t>=o.tSd){ sdHover=PHYS.sdashHover; sdT=PHYS.sdashTime;
+                               sdx=o.sdx; sdy=o.sdy; sdashed=true; vx=0; vy=0; }
+    if(sdHover>0){ sdHover-=dt; }                       // 체공: 완전 정지
+    else if(sdT>0){ sdT-=dt; vx=sdx*PHYS.sdashSpeed; vy=sdy*PHYS.sdashSpeed;
+                    x+=vx*dt; y+=vy*dt;
+                    if(sdT<=0){ vy=0; decay=PHYS.airDecayT; }   // 종료: 상승분 소멸
+                    mark(); continue; }
+    else if(dashT>0){ dashT-=dt; vx=Math.sign(o.vx0||1)*PHYS.dashSpeed;
+                      x+=vx*dt; y+=vy*dt; vy-=g*dt;
+                      if(dashT<=0) decay=PHYS.airDecayT;
+                      mark(); continue; }
+    else{
+      /* 수평: 상한 초과분을 airDecayT에 걸쳐 선형 감쇠 (하드 클램프 대체) */
+      if(Math.abs(vx)>cap){
+        const d=(PHYS.dashSpeed-cap)/Math.max(1e-6,PHYS.airDecayT);
+        vx = vx>0 ? Math.max(cap, vx-d*dt) : Math.min(-cap, vx+d*dt);
+      }
+      vy-=g*dt; x+=vx*dt; y+=vy*dt;
+    }
+    mark();
+    if(y<ENV_LO-1) break;
+    if(t>o.tMax) break;
+  }
+}
+/* kit: {airJump, dash, sdash, vy0, vx0} → dy→maxdx 테이블 */
+function buildEnvelope(kit){
+  const tbl=new Float64Array(ENV_N).fill(-1);
+  const T=[0,0.05,0.10,0.16,0.22,0.28,0.34,0.40,0.48,0.56,0.66,0.76,0.90,1.05,1.25];
+  const D8=[[1,0],[0.7071,0.7071],[0,1],[0.7071,-0.7071],[0,-1]];   // +x/상승 유효분면
+  const tAirs = kit.airJump? T : [1e9];
+  const tDashes= kit.dash?   T : [1e9];
+  const tSds   = kit.sdash?  T : [1e9];
+  const dirs   = kit.sdash?  D8 : [[1,0]];
+  for(const tAir of tAirs) for(const tDash of tDashes)
+    for(const tSd of tSds) for(const d of dirs)
+      envTrace(tbl,{vx0:kit.vx0, vy0:kit.vy0, airJump:kit.airJump, dash:kit.dash,
+        sdash:kit.sdash, tAir, tDash, tSd, sdx:d[0], sdy:d[1], tMax:3.2});
+  /* 위로 갈수록 좁아지도록 단조화(수치 노이즈 제거) — 아래 방향은 그대로 */
+  for(let i=envIdx(0);i<tbl.length-1;i++) if(tbl[i+1]>tbl[i]) tbl[i+1]=tbl[i];
+  return tbl;
+}
+/* 표면에서 표면으로: 달려서 대시까지 붙일 수 있다고 본다(게이팅은 낙관 가정이 안전) */
+const ENV = {
+  /* 기본 키트 — 달리기·점프·이단강림·대시. 창대쉬 없음 */
+  basic: buildEnvelope({vy0:PHYS.jumpV,  vx0:PHYS.dashSpeed, airJump:true,  dash:true,  sdash:false}),
+  /* 전체 키트 — + 창대쉬 */
+  full:  buildEnvelope({vy0:PHYS.jumpV,  vx0:PHYS.dashSpeed, airJump:true,  dash:true,  sdash:true }),
+  /* 도약 나브에서 출발 (창대 도약) */
+  vault: buildEnvelope({vy0:PHYS.vaultV, vx0:PHYS.dashSpeed, airJump:true,  dash:true,  sdash:false}),
+  vaultFull: buildEnvelope({vy0:PHYS.vaultV,vx0:PHYS.dashSpeed,airJump:true,dash:true,  sdash:true }),
+  /* 첨탑캡(stand:false) — 점프 봉인. 미끄러지며 창대쉬만 가능 */
+  finial:     buildEnvelope({vy0:0, vx0:0, airJump:false, dash:false, sdash:false}),
+  finialFull: buildEnvelope({vy0:0, vx0:0, airJump:false, dash:false, sdash:true }),
+};
+/* 포락선 조회: 높이차 dy를 벌면서 갈 수 있는 최대 수평거리. 없으면 -1 */
+function envDx(tbl,dy){
+  const i=envIdx(dy);
+  if(i<0) return tbl[0];
+  if(i>=tbl.length) return -1;
+  return tbl[i];
+}
+/* 포락선의 최대 상승 (dx≥0으로 닿을 수 있는 가장 높은 dy) */
+function envMaxUp(tbl){
+  let best=-Infinity;
+  for(let i=0;i<tbl.length;i++) if(tbl[i]>=0) best=Math.max(best, ENV_LO+i*ENV_STEP);
+  return best;
+}
 
 /* ------------------------------------------------------------------ */
 /* 1. 맵 데이터 (schema temple-map/1.1)                                */
@@ -84,7 +206,15 @@ const GATE_MARGIN = 0.30;
 const MAP = {
   schema:"temple-map/1.1", units:"u", ppu:100, origin:"bottom-left", yUp:true,
   name:"신전 수련장", phys:PHYS,
-  spear:{ ledgeLen:0.8, ledgeThick:0.12, maxPlanted:1, recallDamages:true },
+  /* ★ 창 꽂기(스피어 앵커)는 v1.3에서 이 맵에 한해 **비활성**이다 (유저 확정).
+     삭제가 아니라 스위치인 이유:
+       · plantSpear/recallSpear·spearFaces·spearPlan 데이터가 전부 보존돼 되살리기 쉽다
+       · enabled:false면 buildWorld가 SPEAR_FACES/PLANS를 비우고, 그에 딸린 검증
+         항목(창 계획 유효 / 발판 파묻힘)은 **데이터가 비어 자동 skip**된다 —
+         테스트를 지우지 않으므로 부활 시 그대로 다시 물린다
+     되살리려면 enabled:true 하나만 바꾸고 게이트 재설계하면 된다. */
+  spear:{ enabled:false, ledgeLen:0.8, ledgeThick:0.12, maxPlanted:1, recallDamages:true },
+  /* 이동기 게이트 종류: "sdash" = 창대쉬 필수 · "vault" = 도약 나브 필수(현재 미사용) */
   floors:[
 /* ── 1F ─────────────────────────────────────────────────────────── */
 {
@@ -158,11 +288,16 @@ const MAP = {
     {id:"wall_l",  t:"wall",  rect:[0,0,0.5,16],   stand:false, label:"좌 경계벽"},
     {id:"wall_r",  t:"wall",  rect:[6.5,0,0.5,16], stand:false, label:"우 경계벽"},
     {id:"safe_floor", t:"solid", rect:[0.5,0,6,1.0], stand:true, label:"바닥 안전지대"},
-    {id:"warm_col",t:"wall",  rect:[2.5,1.0,0.5,4.0], stand:false, label:"워밍업 기둥(벽점프 슈트)"},
+    /* ★ wallJump:true = 벽점프가 성립하는 유일한 표면 집합(설계가 지정한 슈트).
+       경계벽에는 절대 주지 않는다 — 주면 단일 벽 무한 벽점프로 층이 통째로
+       스킵된다(어드바이저 B-1: 6F를 15.6초/76회 벽점프로 통과). */
+    {id:"warm_col",t:"wall",  rect:[2.5,1.0,0.5,4.0], stand:false, wallJump:true, label:"워밍업 기둥(벽점프 슈트)"},
     {id:"r1", t:"solid", rect:[2.3,5.0,1.2,0.2],  stand:true, reachVia:["walljump"], label:"기둥머리 R1"},
-    {id:"r2", t:"solid", rect:[0.5,8.6,2.3,0.2],  stand:true, gate:"spear", label:"좌벽 렛지 R2"},
-    {id:"r3", t:"solid", rect:[0.5,13.0,1.7,0.2], stand:true, gate:"spear", label:"좌벽 렛지 R3"},
-    {id:"niche_floor", t:"solid", rect:[5.9,12.0,0.6,0.2], stand:true, gate:"spear", label:"히든 니치 바닥"},
+    {id:"r2", t:"solid", rect:[0.5,8.6,2.3,0.2],  stand:true, gate:"sdash", label:"좌벽 렛지 R2"},
+    /* v1.3: top 13.2 → 12.2. R2→R3 4.4u는 창대쉬 체인 한계 4.536u에 여유 0.14뿐이라
+       원칙 6(≥0.30) 위반이었다. 3.4u로 낮춰 기본키트 2.9u 대비 여유 0.5u 확보. */
+    {id:"r3", t:"solid", rect:[0.5,12.0,1.7,0.2], stand:true, gate:"sdash", label:"좌벽 렛지 R3"},
+    {id:"niche_floor", t:"solid", rect:[5.9,12.0,0.6,0.2], stand:true, gate:"sdash", label:"히든 니치 바닥"},
     {id:"niche_roof",  t:"wall",  rect:[5.9,13.4,0.6,0.3], stand:false, label:"히든 니치 천장(낙하 차단)"},
     {id:"exit_ledge",  t:"solid", rect:[4.5,14.3,2,0.2], stand:true, label:"출구 렛지"},
   ],
@@ -180,7 +315,7 @@ const MAP = {
     {id:"t3w", pos:[6.25,6.55], kind:"wall"},
     {id:"t3a", pos:[4.6,10.6],  kind:"air"},
   ],
-  collectibles:[{id:"cr3", pos:[6.2,12.7], gate:"spear-face", note:"우벽 창꽂기 → 니치 진입(수직 게이트)"}],
+  collectibles:[{id:"cr3", pos:[6.2,12.7], gate:"sdash", note:"R3에서 수평 창대쉬로 니치 진입"}],
   spearPlan:[
     {id:"sp3a", from:[2.9,5.2], face:"face_l", at:[0.5,6.5],  note:"창① 좌벽 y6.5 → 발판 6.62"},
     {id:"sp3b", from:[1.2,8.8], face:"face_l", at:[0.5,10.1], note:"창② 좌벽 y10.1 → 발판 10.22 → 창대도약 R3"},
@@ -199,22 +334,29 @@ const MAP = {
     {id:"p1_body", t:"wall", rect:[5.3,0,0.6,1.6], stand:false, label:"P1 몸통"},
     {id:"cap_p1", t:"oneway", rect:[5.0,1.6,1.2,0.2], stand:true, dropThrough:true, label:"기둥머리 P1"},
     {id:"p2", t:"solid", rect:[8.6,3.4,1.0,0.2], stand:true, label:"좁은 렛지 P2"},
-    {id:"far_pillar", t:"wall", rect:[11.5,0,0.8,5.6], stand:false, cap:"finial", label:"먼 기둥(창표적·첨탑캡)"},
-    {id:"exit_ledge", t:"solid", rect:[13.5,0,2.0,6.5], stand:true, gate:"spear", label:"출구 렛지"},
+    /* v1.3: 높이 5.6 → 3.0. 첨탑캡(34.6)에서 슬립 중 점프로 출구(35.5)에 올라타는
+       시퀀스 브레이크가 있었다(어드바이저 B-2). 점프는 코드에서 봉인했고, 창대쉬
+       변위(1.65u)로도 못 닿도록 캡을 출구보다 4.0u 아래로 내렸다. */
+    {id:"far_pillar", t:"wall", rect:[11.5,0,0.8,3.0], stand:false, cap:"finial", label:"먼 기둥(첨탑캡)"},
+    /* v1.3: top 6.5 → 7.0. P2(3.6)→출구 dy2.90은 이단강림 2.8856 대비 여유
+       0.0144u로 원칙 6 위반이었다(B-4). 3.4u로 올려 여유 0.5u. */
+    {id:"exit_ledge", t:"solid", rect:[13.5,0,2.0,7.0], stand:true, gate:"sdash", label:"출구 렛지"},
   ],
   spearFaces:[{id:"far_face", rect:[11.5,0.5,0.1,5.0], normal:[-1,0], role:"cross", label:"먼 기둥 좌면"}],
   hazards:[{id:"fissure", rect:[2.6,0,10.9,1.2], kind:"fall", respawn:"cp4", label:"대균열 낙하존"}],
   checkpoints:[{id:"cp4", pos:[1.5,1.5], kind:"checkpoint", display:"진입 리스폰"}],
   portals:[
     {id:"entry", pos:[1.5,1.5],  mode:"door", to:"shaft", toPortal:"exit"},
-    {id:"exit",  pos:[14.5,6.5], mode:"door", to:"arena", toPortal:"entry"},
+    {id:"exit",  pos:[14.5,7.0], mode:"door", to:"arena", toPortal:"entry"},
   ],
   targets:[
     {id:"t4a", pos:[6.0,1.8], kind:"ground"},
     {id:"t4b", pos:[7.4,4.6], kind:"air"},
-    {id:"t4c", pos:[11.9,5.9],kind:"air"},
+    {id:"t4c", pos:[11.9,4.4],kind:"air"},
   ],
-  collectibles:[{id:"cr4", pos:[12.6,7.5], gate:"vault-arc", note:"마지막 창대 도약 정타 시 스침"}],
+  /* v1.3: (12.6,7.5) "창대 도약 아크" → 출구 위 공중. 창대쉬 없이 도달하는
+     최고 표면이 P2(3.6)뿐이므로 8.6은 기본키트로 절대 불가, 출구(7.0)에서는 닿는다. */
+  collectibles:[{id:"cr4", pos:[12.6,8.6], gate:"sdash", note:"출구 렛지에서 위로 창대쉬 → 균열 위 공중"}],
   spearPlan:[{id:"sp4", from:[9.6,3.6], face:"far_face", at:[11.5,4.5], note:"발판 4.62 → 창대도약 정점 8.02 → 출구 6.5"}],
 },
 /* ── 5F ─────────────────────────────────────────────────────────── */
@@ -230,8 +372,11 @@ const MAP = {
     {id:"trial_pillar",t:"wall",  rect:[11.6,2.0,0.6,4.4], stand:false, cap:"finial", label:"★수련 기둥(부유·첨탑캡)"},
     {id:"cap_air1", t:"oneway", rect:[4.0,3.1,1.2,0.1], stand:true, dropThrough:true, label:"기둥머리 P-air1"},
     {id:"cornice",  t:"solid",  rect:[13.0,2.4,1.5,0.2], stand:true, label:"코니스(중단 렛지)"},
-    {id:"relic_pillar", t:"wall", rect:[14.5,1.0,0.5,6.6], stand:false, cap:"finial", label:"성물 기둥(첨탑캡)"},
-    {id:"exit_ledge", t:"solid", rect:[15.3,5.9,2.2,0.1], stand:true, gate:"spear", label:"출구 렛지"},
+    /* v1.3: 높이 6.6 → 5.5 (top 7.6 → 6.5). 창 발판이 사라지고 코니스→출구가
+       창대쉬 구간이 되면서, 7.6짜리 기둥이 창대쉬 아크(정점 7.1)까지 가로막아
+       출구가 아예 도달 불가가 됐다. 6.5면 창대쉬는 넘고 기본키트(정점 5.5)는 막힌다. */
+    {id:"relic_pillar", t:"wall", rect:[14.5,1.0,0.5,5.5], stand:false, cap:"finial", label:"성물 기둥(첨탑캡)"},
+    {id:"exit_ledge", t:"solid", rect:[15.3,5.9,2.2,0.1], stand:true, gate:"sdash", label:"출구 렛지"},
   ],
   spearFaces:[
     {id:"dais_face",  rect:[6.0,1.0,0.1,1.4], normal:[-1,0], role:"aux",    label:"중앙 단 좌면(보조)"},
@@ -249,7 +394,11 @@ const MAP = {
     {id:"dg2", pos:[6.9,2.4], kind:"ground"},
     {id:"dg3", pos:[10.0,1.0],kind:"ground"},
     {id:"da1", pos:[4.6,3.9], kind:"air"},
-    {id:"da2", pos:[11.3,5.6],kind:"air", gate:"spear", note:"창발판 없이는 타격 불가(공격 리치 포함 판정)"},
+    /* v1.3: (11.3,5.6) → (11.9,8.0). 기본키트 타격 천장은 최고 발판 cap_air1(3.2)
+       기준 3.2+2.886+bodyH 0.82+atkUp 0.8 = 7.706u다. 5.6은 아레나 바닥에서도
+       닿아 게이트가 성립하지 않았다(창 발판 시절엔 dashX 3.153 직사각형 모델이
+       거리로 걸러줘서 우연히 통과했을 뿐). 수련 기둥 캡(6.4) 위로 띄운다. */
+    {id:"da2", pos:[11.9,8.0],kind:"air", gate:"sdash", note:"수련 기둥 위 — 창대쉬로 올라야 타격 가능(공격 리치 포함 판정)"},
     {id:"da3", pos:[14.0,5.4],kind:"air"},
     {id:"dw1", pos:[0.65,3.2],kind:"wall"},
     {id:"dw2", pos:[11.5,3.0],kind:"wall"},
@@ -271,16 +420,23 @@ const MAP = {
     {id:"wall_l", t:"wall", rect:[0,0,0.3,21],   stand:false, label:"좌벽"},
     {id:"wall_r", t:"wall", rect:[8.7,0,0.3,21], stand:false, label:"우벽"},
     {id:"e",  t:"solid", rect:[0.3,0.2,2.2,0.3], stand:true, label:"진입 단 E"},
-    {id:"pa", t:"wall",  rect:[2.6,0.8,0.4,3.7], stand:false, label:"기둥 PA(벽점프 슈트)"},
+    /* ★ 6F에서 벽점프가 성립하는 유일한 표면. 경계벽(wall_l/wall_r)에는 없다 —
+       그게 있었기 때문에 단일 벽 무한 벽점프로 L2~HC 게이트가 전부 무시됐다(B-1). */
+    {id:"pa", t:"wall",  rect:[2.6,0.8,0.4,3.7], stand:false, wallJump:true, label:"기둥 PA(벽점프 슈트)"},
     {id:"l1", t:"solid", rect:[0.3,4.2,1.7,0.3], stand:true, reachVia:["walljump"], label:"착지 단 L1"},
     {id:"pb", t:"wall",  rect:[5.5,4.0,0.4,5.0], stand:false, cap:"finial", label:"수련 성구 PB"},
-    {id:"l2", t:"solid", rect:[0.3,7.5,1.9,0.3], stand:true, gate:"spear", label:"착지 단 L2"},
-    {id:"nb1",t:"vault", rect:[2.2,7.8,0.7,0.5], stand:true, label:"도약 나브 NB1"},
-    {id:"l3", t:"solid", rect:[3.0,10.7,2.5,0.3],stand:true, gate:"vault", label:"착지 단 L3(사당4)"},
-    {id:"l4", t:"solid", rect:[6.0,14.0,1.4,0.3],stand:true, gate:"spear", label:"착지 단 L4"},
-    {id:"nb2",t:"vault", rect:[6.2,14.3,0.8,0.5],stand:true, label:"도약 나브 NB2"},
-    {id:"l5", t:"solid", rect:[3.5,17.3,2.5,0.3],stand:true, gate:"vault", label:"착지 단 L5"},
-    {id:"hc", t:"solid", rect:[0.3,14.0,1.5,0.3],stand:true, gate:"spear", label:"히든 단 HC(일방 포켓)"},
+    {id:"l2", t:"solid", rect:[0.3,7.5,1.9,0.3], stand:true, gate:"sdash", label:"착지 단 L2"},
+    /* v1.3: 도약 나브 NB1/NB2 삭제 · gate:"vault" → "sdash".
+       창대쉬 체인(4.536u)이 창대 도약(나브 위 3.402+0.5=3.9u)을 완전히 앞지르므로
+       나브는 더 이상 아무것도 게이팅하지 못한다. 게다가 창대 도약은 컨트롤러에
+       구현이 없어 계약 검사(B-3)로 지킬 수도 없다. t:"vault"·REACH.vault·
+       drawVault는 코드에 남겨둔다(부활 대비).
+       L2~L5는 전부 3.4u 간격의 창대쉬 사다리로 재설계 — 기본키트 상한 2.9u 대비
+       여유 0.5u, 창대쉬 4.5u 대비 여유 1.1u. */
+    {id:"l3", t:"solid", rect:[3.0,10.9,2.5,0.3],stand:true, gate:"sdash", label:"착지 단 L3(사당4)"},
+    {id:"l4", t:"solid", rect:[6.0,14.3,1.4,0.3],stand:true, gate:"sdash", label:"착지 단 L4"},
+    {id:"l5", t:"solid", rect:[3.5,17.7,2.5,0.3],stand:true, gate:"sdash", label:"착지 단 L5"},
+    {id:"hc", t:"solid", rect:[0.3,14.3,1.5,0.3],stand:true, gate:"sdash", label:"히든 단 HC"},
     {id:"xe", t:"oneway",rect:[3.5,19.4,3,0.2],  stand:true, dropThrough:false, label:"출구 단 XE(통과)"},
   ],
   spearFaces:[
@@ -291,14 +447,17 @@ const MAP = {
   hazards:[{id:"abyss", rect:[0.3,-2.0,8.4,2.2], kind:"fall", respawn:"auto", label:"최하단 낙하존"}],
   checkpoints:[
     {id:"cp5", pos:[0.9,0.5],  kind:"shrine", display:"사당3"},
-    {id:"cp6", pos:[3.3,11.0], kind:"shrine", display:"사당4"},
+    {id:"cp6", pos:[3.3,11.2], kind:"shrine", display:"사당4"},
   ],
   portals:[
     {id:"entry", pos:[1.2,0.5],  mode:"door",     to:"arena",  toPortal:"exit"},
     {id:"exit",  pos:[5.0,19.6], mode:"physical", to:"summit", toPortal:"entry"},
   ],
   targets:[],
-  collectibles:[{id:"cr6", pos:[1.0,14.7], gate:"spear-return", stand:"hc", note:"창발판 미회수 유지 → HC 왕복(복귀에 창 필요)"}],
+  /* v1.3: "spear-return"(창 없이는 못 나오는 일방 포켓) 게이트는 성립 불가가 됐다 —
+     창대쉬가 상시 사용 가능하므로 어디서든 되돌아 나올 수 있다. HC 진입 자체를
+     창대쉬 게이트로 전환(L3에서 dy 3.4·dx 1.2의 좌상향 창대쉬). */
+  collectibles:[{id:"cr6", pos:[1.0,15.0], gate:"sdash", stand:"hc", note:"L3에서 좌상향 창대쉬 → HC"}],
   spearPlan:[
     {id:"sp6a", from:[2.0,4.5],  face:"pb_face", at:[5.5,5.5],  note:"B2 시그니처 → 발판 5.62 → L2(7.8)"},
     {id:"sp6b", from:[5.5,11.0], face:"rw_face", at:[8.6,11.9], note:"B4 → 발판 12.02 → 이단강림 L4(14.3)"},
@@ -364,7 +523,9 @@ function buildWorld(){
       x0=Math.min(x0,wg.x0); x1=Math.max(x1,wg.x1);
       y0=Math.min(y0,wg.y0); y1=Math.max(y1,wg.y1);
     }
-    for(const s of (f.spearFaces||[])){
+    /* 창 꽂기 비활성이면 면·계획을 월드에 올리지 않는다 → 관련 검증은 자동 skip,
+       렌더/HUD도 자연히 사라진다. MAP 데이터는 그대로 남아 부활 가능. */
+    for(const s of (MAP.spear.enabled? (f.spearFaces||[]) : [])){
       const [x,y,w,h]=s.rect;
       SPEAR_FACES.push({...s, floor:f.n, fid:f.id, uid:`${f.id}:${s.id}`,
         x0:x, y0:y+o, x1:x+w, y1:y+h+o, nx:s.normal[0], ny:s.normal[1]});
@@ -382,7 +543,7 @@ function buildWorld(){
       const [x,y,w,h]=t.rect;
       TRIGGERS.push({...t, floor:f.n, fid:f.id, x0:x, y0:y+o, x1:x+w, y1:y+h+o});
     }
-    for(const p of (f.spearPlan||[])){
+    for(const p of (MAP.spear.enabled? (f.spearPlan||[]) : [])){
       const face=(f.spearFaces||[]).find(s=>s.id===p.face);
       const nx = face? face.normal[0] : -1;
       const L  = MAP.spear.ledgeLen, T = MAP.spear.ledgeThick;
@@ -429,7 +590,10 @@ for(const g of WORLD_GEO) if(g.t!=="deco") grid.insert(g);
 
 /* 동적 창 발판 — 한 번에 하나 (MAP.spear.maxPlanted) */
 const spear = { state:"held", planted:null };
+/* ★ 창 꽂기 런타임은 v1.3에서 컨트롤러에 연결되지 않는다(MAP.spear.enabled=false).
+   함수 자체는 부활을 위해 그대로 둔다 — enabled를 켜고 입력만 물리면 된다. */
 function plantSpear(faceUid, atY){
+  if(!MAP.spear.enabled) return null;
   const face=SPEAR_FACES.find(f=>f.uid===faceUid); if(!face) return null;
   if(spear.planted) recallSpear();
   const {ledgeLen:L, ledgeThick:T}=MAP.spear;
@@ -465,15 +629,25 @@ const Q = {
         if(!best||g.y1>best.y) best={y:g.y1, geo:g};
     return best;
   },
+  /* ★ 벽점프·벽슬라이드·창대쉬 충전이 성립하는 벽만 돌려준다.
+     `wallJump:true`를 명시한 표면(설계가 지정한 슈트)만 인정하고 **경계벽은 제외**한다.
+     경계벽을 인정하면 (a) 단일 벽 무한 벽점프로 층이 통째로 스킵되고(B-1),
+     (b) 창대쉬 충전이 경계벽에서 회복돼 "붙어 충전 → 창대쉬 → 다시 붙기" 사다리로
+     무한 상승이 부활한다. 두 경우 모두 검증 항목으로 못 박혀 있다.
+     반환: 0 (없음) 또는 {dir:-1|1, geo} */
   wallContact(box){
     for(const g of this.solidsNear(box.x0-0.1,box.y0,box.x1+0.1,box.y1)){
-      if(g.t!=="wall") continue;
+      if(g.t!=="wall" || g.wallJump!==true) continue;
       if(g.y0<box.y1 && g.y1>box.y0){
-        if(Math.abs(g.x1-box.x0)<0.1) return -1;
-        if(Math.abs(g.x0-box.x1)<0.1) return  1;
+        if(Math.abs(g.x1-box.x0)<0.1) return {dir:-1, geo:g};
+        if(Math.abs(g.x0-box.x1)<0.1) return {dir: 1, geo:g};
       }
     }
     return 0;
+  },
+  /* 설계가 지정한 벽점프 슈트 목록 (검증·모델이 쓴다) */
+  wallJumpSurfaces(floorN){
+    return WORLD_GEO.filter(g=>g.wallJump===true && (floorN==null||g.floor===floorN));
   },
   ceilingAbove(box){
     let best=null;
@@ -515,6 +689,23 @@ function standables(floorN){
   return WORLD_GEO.filter(g=>g.stand && g.t!=="deco" && (g.x1-g.x0)>0.15 &&
     (floorN==null||g.floor===floorN));
 }
+/* ★ 첨탑캡(cap:"finial") — `stand:false`라 "설 수 없는" 표면이지만 런타임 moveY는
+   여기서 **착지시킨다**(미끄러지며 얹힘). v1.2 모델은 이걸 노드로 아예 취급하지
+   않아서, 4F 먼 기둥 캡을 밟고 점프해 출구로 올라타는 시퀀스 브레이크를 못 봤다
+   (어드바이저 B-2). 이제 **점프 못 하는 경유 지점**으로 명시 모델링한다:
+     · 진입: 보통 표면과 동일하게 착지 가능
+     · 탈출: 점프·대시 불가(ENV.finial = 상승 0), 창대쉬만 가능(ENV.finialFull)
+   컨트롤러 쪽에서도 슬립 중 점프를 봉인해 이 모델과 일치시킨다. */
+function finialNodes(floorN){
+  return WORLD_GEO.filter(g=>g.cap==="finial" && (floorN==null||g.floor===floorN))
+    .map(g=>({...g, baseUid:g.uid, uid:g.uid+"#cap", stand:true, noJump:true, finial:true}));
+}
+/* 도달성 그래프의 노드 = 착지 표면 + 첨탑캡 경유 지점 */
+let _nodeCache=new Map();
+function graphNodes(floorN){
+  if(!_nodeCache.has(floorN)) _nodeCache.set(floorN,[...standables(floorN),...finialNodes(floorN)]);
+  return _nodeCache.get(floorN);
+}
 function gapBetween(a,b){
   const dx = b.x0>a.x1 ? b.x0-a.x1 : (a.x0>b.x1 ? a.x0-b.x1 : 0);
   return {dx, dy: b.y1-a.y1};
@@ -528,7 +719,7 @@ function blockedBetween(floorN, aTop, bTop, ax0,ax1, bx0,bx1, maxUp, exclude){
   const gap = bx0>ax1 ? [ax1,bx0] : (ax0>bx1 ? [bx1,ax0] : null);
   for(const g of WORLD_GEO){
     if(g.floor!==floorN||g.t==="deco"||g.t==="oneway") continue;
-    if(exclude&&exclude.includes(g)) continue;
+    if(exclude&&exclude.some(e=>e&&(e===g||e.baseUid===g.uid||e.uid===g.uid))) continue;
     if(gap){                                    // 수평 이동 — 넘어갈 수 있나
       if(g.x1<=gap[0]+0.02||g.x0>=gap[1]-0.02) continue;
       if(g.y1<=band0+0.05) continue;            // 발밑 — 그냥 지나감
@@ -549,19 +740,74 @@ function occludedPair(a,b,maxUp=REACH.doubleJump){
 function occludedPoint(a,x,y,maxUp=REACH.doubleJump){
   return blockedBetween(a.floor,a.y1,y,a.x0,a.x1,x-0.05,x+0.05,maxUp,[a]);
 }
-/* 창대 도약은 도약 나브(vault) 또는 박힌 창 위에서만 발동한다 */
-function maxRise(a){
-  return (a.t==="vault"||a.virt||a.vaultable) ? REACH.vault : REACH.doubleJump;
+/* ------------------------------------------------------------------ */
+/*  이동 판정 — v1.3부터 포락선(dy→maxdx) 기반. 직사각형 모델 폐기.       */
+/*                                                                     */
+/*  v1.2의 판정은 `dx<=REACH.dashX && dy<=maxUp`인 직사각형이었고,        */
+/*  거기에 `dy<=6.5 && dx<=dashX*1.6` 같은 매직 리터럴이 벽점프 표면의     */
+/*  도달성을 혼자 결정했다(어드바이저 B-6). 둘 다 없앤다.                 */
+/* ------------------------------------------------------------------ */
+/* 출발 표면의 성격 → 어떤 포락선을 쓰는가 */
+function envFor(a, kit){                      // kit: "basic" | "full"
+  const full = kit==="full";
+  if(a.noJump)                        return full? ENV.finialFull : ENV.finial;   // 첨탑캡
+  if(a.t==="vault"||a.virt||a.vaultable) return full? ENV.vaultFull : ENV.vault;  // 도약 나브(현재 미사용)
+  return full? ENV.full : ENV.basic;
 }
-/* 공통 이동 판정 (벽점프 힌트 포함) */
-function canMove(a,b,cap){
-  const maxUp=Math.min(cap!=null?cap:REACH.vault, maxRise(a));
-  const {dx,dy}=gapBetween(a,b);
-  if(b.reachVia&&b.reachVia.includes("walljump")&&b.y1>a.y1){
-    if(b.y1-a.y1<=6.5 && dx<=REACH.dashX*1.6) return !occludedPair(a,b,b.y1-a.y1);
+/* 이 표면에서 낼 수 있는 최대 상승 (차폐 판정의 아치 정점 계산용) */
+function maxRise(a, kit){ return envMaxUp(envFor(a,kit)); }
+/* 벽점프 보정: a에서 뛰어 `wallJump:true` 벽에 붙었다가 한 번 차고 오르는 경로.
+   - 접촉 높이는 min(a.y1 + 단일점프, 벽 상단)까지
+   - 차고 난 뒤에는 다시 기본 포락선(이단강림 1회 남음)
+   - **같은 벽 연속 벽점프는 컨트롤러가 금지**하므로 1회만 인정한다
+   벽에 닿으려면 벽이 a에서 수평 포락선 안에 있어야 한다. */
+function wallBoostTop(a, kit){
+  let best=-Infinity;
+  const tbl=envFor(a,kit);
+  for(const w of Q.wallJumpSurfaces(a.floor)){
+    if(w.y1<=a.y1) continue;                                    // 이미 벽 꼭대기 위
+    const wdx = w.x0>a.x1 ? w.x0-a.x1 : (a.x0>w.x1 ? a.x0-w.x1 : 0);
+    /* 접촉 가능 높이:
+       basic — 한 번 뛰어 붙는 게 전부다(같은 벽 연속 벽점프는 컨트롤러가 금지).
+       full  — 창대쉬 충전이 이 벽에서 회복되므로 "붙어 충전 → 위로 창대쉬 → 다시 붙기"로
+               **벽 꼭대기까지 기어오를 수 있다.** 그래서 벽 상단을 그대로 접촉 높이로 본다.
+               (이 상한이 곧 wallJump 표면을 짧게 유지해야 하는 이유다) */
+    const contact = kit==="full"
+      ? Math.min(a.y1+Math.max(REACH.jump, envMaxUp(tbl)), w.y1) === w.y1
+        ? w.y1 : Math.min(a.y1+envMaxUp(tbl), w.y1)
+      : Math.min(a.y1+REACH.jump, w.y1);
+    if(contact<=a.y1) continue;
+    if(wdx > envDx(tbl, Math.min(contact-a.y1, envMaxUp(tbl)))) continue;   // 벽까지 못 감
+    best=Math.max(best, contact);
   }
-  if(dx>REACH.dashX || dy>maxUp) return false;
-  return !occludedPair(a,b,maxUp);
+  return best;
+}
+/* 공통 이동 판정. kit: "basic"(창대쉬 없음) | "full"(창대쉬 포함) */
+function canMove(a,b,kit="basic"){
+  const tbl=envFor(a,kit);
+  const {dx,dy}=gapBetween(a,b);
+  const dyEff = dy - PHYS.ledgeSnap;                 // 런타임 렛지스냅 관대함 흡수
+  const up=maxRise(a,kit);
+  if(dx<=envDx(tbl,dyEff) && dyEff<=up && !occludedPair(a,b,up)) return true;
+  /* 벽점프 경유 */
+  const wt=wallBoostTop(a,kit);
+  if(wt>-Infinity){
+    const wtbl = kit==="full"? ENV.full : ENV.basic;   // 벽을 찬 뒤엔 통상 도약
+    const dy2 = b.y1 - wt - PHYS.ledgeSnap;
+    if(dy2<=envMaxUp(wtbl) && dx<=envDx(wtbl,dy2) && !occludedPair(a,b,wt-a.y1+envMaxUp(wtbl)))
+      return true;
+  }
+  return false;
+}
+/* 포락선 밖으로 얼마나 벗어났나 (>0 = 도달 불가, 그 여유). 게이트 여유 검사용 */
+function envSlack(a,b,kit="basic"){
+  const tbl=envFor(a,kit);
+  const {dx,dy}=gapBetween(a,b);
+  const dyEff=dy-PHYS.ledgeSnap;
+  const md=envDx(tbl,dyEff);
+  const vSlack = dyEff - maxRise(a,kit);
+  if(md<0) return vSlack;                            // 이 높이는 아예 불가 → 높이 여유
+  return Math.min(dx-md, vSlack>0? vSlack : Infinity);
 }
 /* 진입 발판 찾기 */
 function startSurfaces(f){
@@ -574,44 +820,59 @@ function startSurfaces(f){
   if(!start.length && S.length) start.push(S.reduce((a,b)=>a.y1<b.y1?a:b));
   return start;
 }
-/* 이동기만으로(창 없이) 진입점에서 도달 가능한 표면 폐포 */
-function freeClosure(f){
-  const S=standables(f.n);
-  const start=startSurfaces(f);
-  const seen=new Set(start);
-  let changed=true;
-  while(changed){
+/* 진입점에서 kit만으로 도달 가능한 노드 폐포.
+   kit "basic" = 달리기·점프·이단강림·대시·(지정 슈트에서의)벽점프  — 창대쉬 없음
+   kit "full"  = + ★창대쉬 */
+function closure(f, kit){
+  const S=graphNodes(f.n);
+  const seen=new Set(startSurfaces(f));
+  let changed=true, guard=0;
+  while(changed && guard++<60){
     changed=false;
     for(const a of [...seen]) for(const b of S){
-      if(seen.has(b)||!canMove(a,b,REACH.doubleJump)) continue;
+      if(seen.has(b)||!canMove(a,b,kit)) continue;
       seen.add(b); changed=true;
     }
   }
   return seen;
 }
-/* 전 표면쌍 감사: free = 이동기만으로 도달 / razor = 여유 부족 */
+const freeClosure = f => closure(f,"basic");    // 이름 유지(외부 노출·역호환)
+const fullClosure = f => closure(f,"full");
+/* 전 표면쌍 감사: free = 기본 키트로 도달 / razor = 게이트인데 여유 부족 */
 function auditGates(){
   const free=[], razor=[];
   for(const f of FLOORS){
-    const S=standables(f.n);
+    const S=graphNodes(f.n);
     for(const a of S) for(const b of S){
       if(a===b||b.y1<=a.y1) continue;
       const {dx,dy}=gapBetween(a,b);
-      if(dx>REACH.dashX||occludedPair(a,b,REACH.doubleJump)) continue;
-      if(dy<=REACH.doubleJump)                    free.push({a,b,dx,dy});
-      else if(dy<=REACH.doubleJump+GATE_MARGIN)   razor.push({a,b,dx,dy});
+      if(canMove(a,b,"basic")) free.push({a,b,dx,dy});
+      else if(envSlack(a,b,"basic") < GATE_MARGIN && !occludedPair(a,b,maxRise(a,"basic")))
+        razor.push({a,b,dx,dy,slack:envSlack(a,b,"basic")});
     }
   }
   return {free, razor};
 }
-/* 게이트 무결성: gate 표면이 "창 없이 도달 가능한 폐포" 안에 들어오면 실패
-   (게이트 상류가 이미 창으로 막혀 있으면 위반이 아니다) */
+/* 게이트 무결성 — **양면 검사**.
+   v1.2는 "기본 키트로 도달되면 실패" 한쪽만 봤다. 창 꽂기는 해금형 능력이라
+   그걸로 충분했지만, 창대쉬는 **상시 사용 가능한 기본 시그니처**다. 그래서
+   게이트의 의미가 "능력 잠금"에서 "이 테크 없이는 못 넘는 구간"으로 바뀌었고,
+   검사도 두 방향이 필요하다:
+     (1) 기본 키트(창대쉬 없음)로는 도달 불가  → 시그니처가 실제로 강제되는가
+     (2) 전체 키트로는 도달 가능              → 막다른 길이 아닌가
+   (게이트 상류가 이미 막혀 있으면 (1)은 자동 성립 — 그건 위반이 아니다) */
 function gateViolations(){
   const bad=[];
   for(const f of FLOORS){
-    const closure=freeClosure(f);
-    for(const g of standables(f.n))
-      if(g.gate && closure.has(g)) bad.push({b:g, a:{uid:"free-closure"}, dy:0, dx:0});
+    const basic=freeClosure(f), full=fullClosure(f);
+    const byUid=new Map([...full].map(n=>[n.uid,n]));
+    for(const g of graphNodes(f.n)){
+      if(!g.gate) continue;
+      if([...basic].some(n=>n.uid===g.uid))
+        bad.push({b:g, a:{uid:"basic-closure"}, why:"창대쉬 없이 도달됨"});
+      else if(!byUid.has(g.uid))
+        bad.push({b:g, a:{uid:"full-closure"}, why:"창대쉬로도 도달 불가"});
+    }
   }
   return bad;
 }
@@ -656,25 +917,44 @@ function planIssues(){
   }
   return bad;
 }
-/* 공격 리치를 포함한 표적 도달성: gate가 붙은 표적은 창발판 없이 못 때려야 함 */
+/* 한 지점(표적/수집물)에 닿을 수 있는가 — 포락선 + 공격 리치.
+   v1.2의 `s.y1+REACH.vault+0.5 >= cy && cy >= s.y1-3.5`(매직 +0.5 / -3.5, B-6)를
+   포락선 판정으로 교체했다. 몸이 그 지점에 겹치면 집는다 = 발 높이 기준
+   [cy-bodyH-extra, cy+extra] 사이 어딘가를 지나면 된다. */
+function pointHit(s,cx,cy,kit,extra=0){
+  const tbl=envFor(s,kit);
+  const dx = cx>s.x1 ? cx-s.x1 : (cx<s.x0 ? s.x0-cx : 0);
+  const lo = cy-s.y1-PHYS.bodyH-extra, hi = cy-s.y1+extra;   // 필요한 발 높이차 구간
+  /* ledgeSnap은 "낮은 턱을 걸어 올라간다"는 런타임 관대함이라 착지 판정에만 쓴다.
+     공중의 한 점에 닿는 판정에는 적용하지 않는다. */
+  if(lo > envMaxUp(tbl)) return false;
+  if(occludedPoint(s,cx,cy,maxRise(s,kit))) return false;
+  for(let dy=Math.max(lo,ENV_LO); dy<=hi+1e-9; dy+=ENV_STEP)
+    if(dx<=envDx(tbl,dy)) return true;
+  return false;
+}
+function pointReachable(R,cx,cy,kit="full",extra=0){
+  return [...R].some(s=>pointHit(s,cx,cy,kit,extra));
+}
+/* 공격 리치를 포함한 표적 도달성 — 게이트 표적은 **양면 검사**
+   (기본 키트로는 못 때리고, 전체 키트로는 때릴 수 있어야 한다) */
 function targetGateIssues(){
   const bad=[];
   for(const t of TARGETS){
-    if(t.gate!=="spear") continue;
+    if(!t.gate) continue;
     const f=FLOORS.find(a=>a.n===t.floor);
-    const closure=freeClosure(f);
-    for(const s of closure){                       // 창 없이 갈 수 있는 발판만 검사
-      const dx = t.wx>s.x1 ? t.wx-s.x1 : (t.wx<s.x0 ? s.x0-t.wx : 0);
-      if(dx>REACH.dashX) continue;
-      if(occludedPoint(s,t.wx,t.wy,REACH.doubleJump)) continue;   // 기둥벽 차단
-      if(s.y1+REACH.doubleJump+REACH.atkUp >= t.wy) bad.push({t,s});
-    }
+    if(pointReachable(freeClosure(f), t.wx, t.wy, "basic", REACH.atkUp))
+      bad.push({t, why:"창대쉬 없이 타격됨"});
+    else if(!pointReachable(fullClosure(f), t.wx, t.wy, "full", REACH.atkUp))
+      bad.push({t, why:"창대쉬로도 타격 불가"});
   }
   return bad;
 }
-/* 창을 쓸 수 있을 때 도달 가능한 표면 폐포 (가상 창 발판 포함) — 클리어 가능성 증명 */
+/* 창 꽂기가 켜져 있을 때만: 가상 창 발판을 얹은 폐포 (부활 대비 · 현재 비활성) */
 function spearClosure(f, excludeFaces){
-  const S=standables(f.n);
+  const seen=fullClosure(f);
+  if(!MAP.spear.enabled) return seen;
+  const S=graphNodes(f.n);
   const faces=SPEAR_FACES.filter(s=>s.floor===f.n &&
     !(excludeFaces&&excludeFaces.includes(s.id)));
   const {ledgeLen:L, ledgeThick:T}=MAP.spear;
@@ -684,23 +964,19 @@ function spearClosure(f, excludeFaces){
     const px = fc.nx<0 ? fc.x0 : fc.x1;
     for(let y=fc.y0+0.1; y<=fc.y1-0.05; y+=0.2)
       ledges.push({uid:`ledge@${fc.id}:${y.toFixed(1)}`, floor:f.n, t:"solid",
-        stand:true, virt:true, face:fc, hx:px, hy:y,
+        stand:true, virt:true, vaultable:true, face:fc, hx:px, hy:y,
         x0: fc.nx<0? px-L : px, x1: fc.nx<0? px : px+L, y0:y, y1:y+T});
   }
-  const seen=new Set(startSurfaces(f));
   let changed=true, guard=0;
   while(changed && guard++<40){
     changed=false;
     for(const a of [...seen]){
       const ax=(a.x0+a.x1)/2, ay=a.y1+0.5;
-      for(const b of S){
-        if(seen.has(b)) continue;
-        if(canMove(a,b,REACH.vault)){ seen.add(b); changed=true; }
-      }
+      for(const b of S){ if(!seen.has(b)&&canMove(a,b,"full")){ seen.add(b); changed=true; } }
       for(const lg of ledges){
         if(seen.has(lg)) continue;
         if(Math.hypot(lg.hx-ax, lg.hy-ay) > REACH.spear) continue;   // 던질 수 있나
-        if(canMove(a,lg,REACH.vault)){ seen.add(lg); changed=true; }
+        if(canMove(a,lg,"full")){ seen.add(lg); changed=true; }
       }
     }
   }
@@ -718,27 +994,15 @@ function solvability(){
     if(ex){
       const tgt=surfaceAt(f, ex.pos[0], ex.pos[1]+f.yOff);
       if(!tgt) bad.push({f, why:"출구 발판 미발견"});
-      else if(!R.has(tgt)) bad.push({f, why:"출구 도달 불가"});
+      else if(![...R].some(n=>n.uid===tgt.uid)) bad.push({f, why:"출구 도달 불가"});
     }
     for(const tr of (f.triggers||[])){              // 7F 성종
       const gy=tr.rect[1]+f.yOff;
       const cx=tr.rect[0]+tr.rect[2]/2;
-      const hit=[...R].some(s=>{
-        const dx = cx>s.x1 ? cx-s.x1 : (cx<s.x0 ? s.x0-cx : 0);
-        return dx<=REACH.dashX && s.y1+REACH.jump+REACH.atkUp >= gy && !occludedPoint(s,cx,gy,REACH.vault);
-      });
-      if(!hit) bad.push({f, why:`목표 ${tr.id} 타격 불가`});
+      if(!pointReachable(R,cx,gy,"full",REACH.atkUp)) bad.push({f, why:`목표 ${tr.id} 타격 불가`});
     }
   }
   return bad;
-}
-/* 어떤 표면 집합에서 한 지점을 집을 수 있는가 */
-function pointReachable(R,cx,cy){
-  return [...R].some(s=>{
-    const dx = cx>s.x1 ? cx-s.x1 : (cx<s.x0 ? s.x0-cx : 0);
-    return dx<=REACH.dashX && s.y1+REACH.vault+0.5 >= cy && cy >= s.y1-3.5
-        && !occludedPoint(s,cx,cy,REACH.vault);
-  });
 }
 /* 히든 수집물이 창을 써서 도달 가능한가 */
 function collectableIssues(){
@@ -751,30 +1015,66 @@ function collectableIssues(){
   }
   return bad;
 }
-/* 히든 게이트 검증
-   spear-face : 전용 hidden 면을 빼면 도달 불가여야 한다
-   spear-return: 획득은 되지만, 창 없이는 그 자리에서 되돌아 나올 수 없어야 한다 */
+/* 히든 게이트 검증 — 수집물도 표면·표적과 같은 **양면 검사**.
+   v1.2의 두 규칙("전용 hidden 면 없이 불가" / "창 없이는 복귀 불가")은 창 꽂기
+   비활성으로 성립하지 않는다. 특히 **복귀 제약형(spear-return)은 원리적으로 죽었다**:
+   창대쉬가 상시 사용 가능하므로 어떤 포켓에서도 되돌아 나올 수 있다.
+   ⇒ 전부 `gate:"sdash"`(진입 게이트)로 전환하고 아래 한 규칙으로 검사한다. */
 function hiddenGateIssues(){
   const bad=[];
   for(const f of FLOORS){
-    const hid=(f.spearFaces||[]).filter(s=>s.role==="hidden").map(s=>s.id);
     for(const c of (f.collectibles||[])){
-      if(c.gate==="spear-face"){
+      if(!c.gate) continue;
+      const x=c.pos[0], y=c.pos[1]+f.yOff;
+      if(c.gate==="sdash"){
+        if(pointReachable(freeClosure(f), x, y, "basic"))
+          bad.push({f,c,why:"창대쉬 없이 도달됨"});
+        else if(!pointReachable(fullClosure(f), x, y, "full"))
+          bad.push({f,c,why:"창대쉬로도 도달 불가"});
+      }else if(c.gate==="spear-face"){        // 창 꽂기 부활 시에만 유효
+        const hid=(f.spearFaces||[]).filter(s=>s.role==="hidden").map(s=>s.id);
         if(!hid.length){ bad.push({f,c,why:"hidden 면 없음"}); continue; }
-        if(pointReachable(spearClosure(f,hid), c.pos[0], c.pos[1]+f.yOff))
-          bad.push({f,c,why:"전용 면 없이 도달됨"});
-      }else if(c.gate==="spear-return"){
-        const perch=standables(f.n).find(g=>g.id===c.stand);
-        if(!perch){ bad.push({f,c,why:"stand 참조 없음"}); continue; }
-        // 창 없이 이 자리에서 위로 되돌아 나갈 수 있으면 게이트가 아니다
-        const S=standables(f.n);
-        const seen=new Set([perch]); let ch=true;
-        while(ch){ ch=false; for(const a of [...seen]) for(const b of S){
-          if(seen.has(b)||b.y1<=perch.y1) continue;
-          if(canMove(a,b,REACH.doubleJump)){ seen.add(b); ch=true; } } }
-        if([...seen].some(g=>g!==perch)) bad.push({f,c,why:"창 없이 복귀 가능"});
+        if(pointReachable(spearClosure(f,hid), x, y)) bad.push({f,c,why:"전용 면 없이 도달됨"});
       }
     }
+  }
+  return bad;
+}
+/* ── B-5 ① 보행 천장 여유 ────────────────────────────────────────────
+   전 `stand` 표면 상단을 실제로 걸어가며(x를 잘게 훑으며) 머리 위 여유를 잰다.
+   그 x에 기둥이 서 있으면(발밑에서 솟은 지형) 걸을 수 없는 자리이므로 건너뛴다.
+   v1.2 검증은 "필수 지점"만 봐서 bodyH를 1.05로 올려도 전부 PASS였다
+   (실제 최소 여유는 1.00u) — 그 사각지대를 메운다. */
+function walkClearance(){
+  const out=[]; const hw=PHYS.bodyW/2, step=0.05, eps=1e-3;
+  for(const s of standables()){
+    for(let x=s.x0+hw; x<=s.x1-hw+1e-9; x+=step){
+      let roof=Infinity, blocked=false;
+      for(const g of WORLD_GEO){
+        if(g.floor!==s.floor||g.t==="deco"||g.uid===s.uid) continue;
+        if(g.t==="oneway") continue;                       // 아래에서 통과 가능
+        if(g.x1<=x-hw+eps||g.x0>=x+hw-eps) continue;       // 몸통 폭 밖
+        if(g.y1<=s.y1+eps) continue;                       // 발밑
+        if(g.y0<=s.y1+eps){ blocked=true; break; }         // 이 x는 지형이 막고 있음
+        roof=Math.min(roof,g.y0);
+      }
+      if(blocked) continue;
+      out.push({uid:s.uid, x:+x.toFixed(2), clear: roof===Infinity? Infinity : +(roof-s.y1).toFixed(3),
+                roofOf: roof});
+    }
+  }
+  out.sort((a,b)=>a.clear-b.clear);
+  return out;
+}
+/* ── B-5 ② 지지면 검사 ───────────────────────────────────────────────
+   "플레이어가 서 있다"고 선언된 지점의 **발밑에 실제로 착지 표면이 있는가**.
+   v1.2는 겹침만 봐서 spawn을 허공(y4.5)에 둬도 PASS였다. */
+function supportIssues(){
+  const bad=[], hw=PHYS.bodyW/2, tol=PHYS.ledgeSnap;
+  for(const p of standPoints()){
+    const ok=standables(p.floor).some(g=>
+      Math.abs(g.y1-p.y)<=tol && g.x0<=p.x+hw && g.x1>=p.x-hw);
+    if(!ok) bad.push(p);
   }
   return bad;
 }
@@ -807,26 +1107,51 @@ function bodyFitIssues(){
   return bad;
 }
 function runTests(){
+  _nodeCache=new Map();                       // 데이터가 바뀌었을 수 있다
   const R=[]; const ok=(n,c,d="")=>R.push({n,ok:!!c,d});
   const gv=gateViolations(), le=ledgeEmbedded(), to=typeOverlaps(),
         pi=planIssues(), tg=targetGateIssues(), au=auditGates();
   ok("충돌 타입 겹침 없음", to.length===0, to.map(o=>`${o.a.uid}×${o.b.uid}`).join(", "));
-  ok("창 계획 전부 유효(면·사거리)", pi.length===0, pi.map(x=>`${x.p.id}:${x.why}`).join(", "));
-  ok("창 발판이 기존 지형에 파묻히지 않음", le.length===0, le.map(x=>`${x.plan.id}⊂${x.geo.uid}`).join(", "));
-  ok("게이트 표면이 이동기만으로 도달 불가", gv.length===0, gv.map(p=>`${p.a.uid}→${p.b.uid}(dy${p.dy.toFixed(2)})`).join(", "));
-  ok("게이트 표적이 공격리치 포함해도 도달 불가", tg.length===0, tg.map(x=>`${x.s.uid}→${x.t.id}`).join(", "));
-  ok(`게이트 갭 여유 ≥${GATE_MARGIN}u`, au.razor.filter(p=>p.b.gate).length===0,
-     au.razor.filter(p=>p.b.gate).map(p=>`${p.a.uid}→${p.b.uid}(${p.dy.toFixed(2)})`).join(", "));
+  /* 창 꽂기 비활성 시 PLANS/SPEAR_FACES가 비어 아래 두 항목은 자동 skip된다 */
+  ok(`창 계획 전부 유효(면·사거리)${PLANS.length?"":" — 창 꽂기 비활성, skip"}`,
+     pi.length===0, pi.map(x=>`${x.p.id}:${x.why}`).join(", "));
+  ok(`창 발판이 기존 지형에 파묻히지 않음${PLANS.length?"":" — skip"}`,
+     le.length===0, le.map(x=>`${x.plan.id}⊂${x.geo.uid}`).join(", "));
+  ok("게이트 표면 = 창대쉬 없이 불가 / 창대쉬로 가능", gv.length===0,
+     gv.map(p=>`${p.b.uid}(${p.why})`).join(", "));
+  ok("게이트 표적 = 공격리치 포함해도 창대쉬 필수", tg.length===0,
+     tg.map(x=>`${x.t.id}(${x.why})`).join(", "));
+  ok(`게이트 갭 여유 ≥${GATE_MARGIN.toFixed(2)}u`, au.razor.filter(p=>p.b.gate).length===0,
+     au.razor.filter(p=>p.b.gate).map(p=>`${p.a.uid}→${p.b.uid}(여유${p.slack.toFixed(2)})`).join(", "));
   ok("층간 포탈 양방향 정합", portalPairsOk());
   ok("체크포인트 참조 유효", HAZARDS.every(z=>z.respawn==="auto"||CHECKPOINTS.some(c=>c.id===z.respawn)));
   const sv=solvability(), ci=collectableIssues();
-  ok("모든 층 클리어 가능(창 포함 도달)", sv.length===0, sv.map(x=>`${x.f.n}F:${x.why}`).join(", "));
+  ok("모든 층 클리어 가능(창대쉬 포함 도달)", sv.length===0, sv.map(x=>`${x.f.n}F:${x.why}`).join(", "));
   ok("히든 수집물 전부 도달 가능", ci.length===0, ci.map(x=>`${x.f.n}F:${x.c.id}`).join(", "));
   const hg=hiddenGateIssues();
-  ok("히든 게이트 성립(전용 면/복귀 제약)", hg.length===0, hg.map(x=>`${x.f.n}F:${x.c.id}(${x.why})`).join(", "));
-  const bf=bodyFitIssues();
+  ok("히든 게이트 성립(창대쉬 양면 검사)", hg.length===0, hg.map(x=>`${x.f.n}F:${x.c.id}(${x.why})`).join(", "));
+  const bf=bodyFitIssues(), su=supportIssues();
   ok(`필수 지점 신체 여유(${PHYS.bodyW}×${PHYS.bodyH}u)`, bf.length===0,
      bf.map(x=>`${x.p.fid}/${x.p.id}⊂${x.g.uid}`).join(", "));
+  /* ── v1.3 신규 (어드바이저 B-5) ── */
+  ok("필수 지점 발밑 지지면 존재", su.length===0,
+     su.map(x=>`${x.fid}/${x.id}@y${x.y.toFixed(2)}`).join(", "));
+  const wcAll=walkClearance(), wc=wcAll.filter(w=>w.clear<PHYS.bodyH);
+  const wcMin=wcAll.length? wcAll[0] : null;
+  ok(`보행 천장 여유 ≥ bodyH(${PHYS.bodyH}u)`, wc.length===0,
+     wc.length? wc.slice(0,3).map(x=>`${x.uid}@x${x.x}(${x.clear})`).join(", ")
+              : (wcMin? `최소 ${wcMin.clear===Infinity?"∞":wcMin.clear}u @${wcMin.uid} x${wcMin.x}` : ""));
+  /* ── v1.3 신규 (어드바이저 B-3): 컨트롤러가 REACH/ENV 계약을 지키는가 ── */
+  let rc={bad:["측정 불가"], scalars:{}};
+  try{ rc=reachContractIssues(); }catch(e){ rc={bad:["측정 예외: "+e.message], scalars:{}}; }
+  const S=rc.scalars;
+  ok("이동기 실측 ≤ 유도 도달(REACH·ENV 계약)", rc.bad.length===0,
+     rc.bad.length? rc.bad.join(" / ")
+       : `점프 ${(S.jump||0).toFixed(3)} · 이단 ${(S.doubleJump||0).toFixed(3)}`
+        +` · 대시 ${(S.dashDist||0).toFixed(3)} · 창대쉬 ${(S.sdashUp||0).toFixed(3)}`
+        +` · 체인 ${(S.chainUp||0).toFixed(3)}`
+        +` · 벽(지정 ${(S.wallFlagged||0).toFixed(2)} / 경계 ${(S.wallPlain||0).toFixed(2)}`
+        +` / 경계+창대쉬 ${(S.wallPlainSd||0).toFixed(2)})`);
   return R;
 }
 function portalPairsOk(){
@@ -836,7 +1161,8 @@ function portalPairsOk(){
   }
   return true;
 }
-let TESTS=runTests();
+/* 검증 실행은 컨트롤러 정의 이후로 미룬다 — 실측 항목(B-3)이 stepPlayer·CTRL을 쓴다 */
+let TESTS=[];
 
 /* 도달성 분류: 특정 표면에서 다른 표면들이 어떻게 도달되는가 */
 function reachFrom(src){
@@ -934,6 +1260,7 @@ addEventListener("keydown",e=>{
   if(PLAY.on){
     if(k===" "||k==="z") IN.jumpEdge=true;
     if(k==="shift"||k==="x") IN.dashEdge=true;
+    if(k==="c"||k==="v") IN.sdEdge=true;                 // ★ 창대쉬 (대시와 별개 입력)
     if(k==="arrowup"||k==="w") IN.upEdge=true;
     if(k==="j") IN.atkEdge=true;
   }
@@ -1703,7 +2030,11 @@ function drawHUD(T){
       `vel  ${p.vx.toFixed(2)}, ${p.vy.toFixed(2)}`,
       `st   ${p.st}  f${p.animI}  ${p.grounded?"ground":(p.wallSliding?"wall":"air")}`
         +`  jumps ${p.jumps}${p.dashT>0?"  DASH":""}${p.iframe>0?"  i-frame":""}`,
-      `점프고 ${p.tele.lastJumpH.toFixed(3)}u  대시거리 ${p.tele.lastDashX.toFixed(3)}u  사망 ${p.deaths}`,
+      `창대쉬 ${p.sdCharge?"● 충전":"○ 소진"}`
+        +`${p.sdHover>0?"  HOVER":""}${p.sdT>0?"  SDASH":""}`
+        +`  벽 ${p.wallGeo? p.wallGeo.id : "-"}${p.lastWallUid?" (재사용금지)":""}`,
+      `점프고 ${p.tele.lastJumpH.toFixed(3)}u  대시거리 ${p.tele.lastDashX.toFixed(3)}u`
+        +`  창대쉬 ${p.tele.lastSdashD.toFixed(3)}u  사망 ${p.deaths}`,
     ];
     ctx.save(); ctx.font="600 11.5px ui-monospace,monospace"; ctx.textAlign="left";
     const wpx=Math.max(...lines.map(l=>ctx.measureText(l).width))+22;
@@ -1731,6 +2062,7 @@ function drawHUD(T){
       ["이동","←→ / A D · ↓ + 점프 = 판 통과"],
       ["점프","Space/Z (누르면 높이) · 공중 재입력 = 이단 강림 · 벽에서 = 벽점프"],
       ["대시","Shift/X (i-frame) · 공격 J (애니메이션만)"],
+      ["★창대쉬","C/V — 0.2s 체공 후 8방향 돌진 · 충전 1회 · 접지/지정 벽에서 회복"],
       ["문·이동","↑/W 문 통과 · 1~7 층 워프 · R 리스폰 · Enter 뷰어 복귀"],
       ["토글","L 라벨 · K 히트박스 · G 그리드 · P 창꽂기 · T 검증 · E JSON"],
     ] : [
@@ -1742,7 +2074,8 @@ function drawHUD(T){
     ];
     const derived=[
       ["단일점프", REACH.jump], ["이단강림", REACH.doubleJump],
-      ["창대도약", REACH.vault], ["대시점프 수평", REACH.dashX], ["창 사거리", REACH.spear],
+      ["★창대쉬 변위", REACH.sdash], ["★4단 체인 상승", REACH.chainUp],
+      ["기본 수평(dy0)", envDx(ENV.basic,0)], ["전체 수평(dy0)", envDx(ENV.full,0)],
     ];
     ctx.save();
     const px=14, py=76, pw=308;
@@ -1849,24 +2182,54 @@ const SPRITE={
 SPRITE.img.onload=()=>{ SPRITE.ready=true; };
 SPRITE.img.src=SHEET_B64;
 
-/* 행 구성 — 전 셀 알파 바운딩박스 실측으로 확정 (빈 셀 제외)
-   r1 6 대기 / r2 4 달리기 / r3 5 점프(웅크림·상승·정점·낙하·착지)
-   r4 4 공격(창 찌르기) / r5 4 피격·쓰러짐 / r6 6 무릎꿇기(사당용, 현재 미사용)
-   프레임 타이밍은 전부 여기서 튜닝한다. row/frames는 0-베이스. */
+/* ── 스프라이트 행 구성 (0-베이스). 어드바이저가 전 36셀 알파 bbox 재실측 +
+   5·6행 3배 확대 육안 확인으로 **확정**한 표다. v1.2 주석의 추정은 폐기.
+     row0  6프레임  idle    대기
+     row1  4프레임  run     걷기/달리기 (전용 달리기 행은 없다 — 재생속도로 커버)
+     row2  5프레임  jump    웅크림·상승·정점·낙하·착지
+     row3  4프레임  attack  창 찌르기
+     row4  4프레임  dash    ★대시★ (c3 49×35 / c4 48×37 — 폭>높이, 바닥선 y110 미접지
+                            = 쓰러진 게 아니라 공중으로 뻗은 돌진 자세)
+     row5  6프레임  kneel   무릎꿇기→기상 (창이 수직 유지·전 프레임 접지)
+   ⚠ 이 시트에 **피격(hurt) 애니메이션은 존재하지 않는다.** row5는 무릎꿇기다.
+     피격은 전용 프레임 없이 코드 연출(낙하 프레임 고정 + i-frame 깜빡임)로 처리한다.
+     → 「피격 스프라이트 미존재 — 외주 요청 필요」
+   ⚠ **창대쉬 전용 프레임도 아직 없다.** 임시로 체공=점프 정점, 돌진=대시 프레임.
+     TODO: 창대쉬 전용 스프라이트 도착 시 sdashHover/sdash 두 줄만 교체.        */
 const ANIM={
   idle:      {row:0, frames:[0,1,2,3,4,5], fps:8,  loop:true },
-  run:       {row:1, frames:[0,1,2,3],     fps:12, loop:true },
+  /* ★ 보행 계열은 fps를 손으로 적지 않는다 — **보폭에서 유도**한다.
+     하드코딩 fps 12는 초당 6보 × 보폭 0.35u = 화면상 2.10u/s인데 실이동은
+     runSpeed 3.92u/s여서 **1.87배 미끄러졌다**(어드바이저 실측).
+     fps = frames × speed / (strideU × stepsPerCycle)
+     현재 시트: 4 × 3.92 / (0.35 × 2) = **22.4fps** (v1.2의 12fps → 22.4fps).
+     strideU는 2행 발 벌어짐 실측(c1 39px·c2 32px·c3 23px·c4 40px → 보폭 ≈35px).
+     ⚠ walk와 run을 별도 키로 분리해 둔다. 지금은 둘 다 row1을 보지만,
+       달리기 전용 행이 오는 v3에서는 run의 row만 바꾸면 된다. */
+  walk:      {row:1, frames:[0,1,2,3], strideU:0.35, stepsPerCycle:2, speedRef:"runSpeed", loop:true},
+  run:       {row:1, frames:[0,1,2,3], strideU:0.35, stepsPerCycle:2, speedRef:"runSpeed", loop:true},
   crouch:    {row:2, frames:[0],           fps:1,  loop:false},
   rise:      {row:2, frames:[1],           fps:1,  loop:false},
   apex:      {row:2, frames:[2],           fps:1,  loop:false},
   fall:      {row:2, frames:[3],           fps:1,  loop:false},
   land:      {row:2, frames:[4],           fps:14, loop:false},
-  dash:      {row:2, frames:[3],           fps:1,  loop:false},
   wallslide: {row:2, frames:[2],           fps:1,  loop:false},
   attack:    {row:3, frames:[0,1,2,3],     fps:16, loop:false},
-  hurt:      {row:4, frames:[0,1,2,3],     fps:9,  loop:false},
+  /* 대시 0.16s에 4프레임을 균등 배분하면 25fps가 되어 준비 자세(c1·c2)가 1프레임씩
+     스치고 끝난다. 대신 c1·c2를 선행으로 짧게 깔고 **수평 돌진 최고조(c3·c4)에
+     시간을 실어** 잔상이 남게 한다 → frames 배열에 c3·c4를 중복 등록(가중치).
+     6프레임 @ 37.5fps = 0.16s. */
+  dash:      {row:4, frames:[0,1,2,3,2,3], fps:37.5, loop:false},
+  /* TODO: 창대쉬 전용 스프라이트 도착 시 이 두 줄만 교체 */
+  sdashHover:{row:2, frames:[2],           fps:1,  loop:false},  // 임시: 점프 정점
+  sdash:     {row:4, frames:[2,3],         fps:14, loop:true },  // 임시: 대시 최고조
   kneel:     {row:5, frames:[0,1,2,3,4,5], fps:8,  loop:false},
+  /* 피격 전용 프레임 없음 — 낙하 자세 + i-frame 깜빡임으로 대체 */
+  hurt:      {row:2, frames:[3],           fps:1,  loop:false},
 };
+/* 보폭 유도 fps를 한 번만 계산해 넣는다 (v3 시트가 와도 strideU만 고치면 됨) */
+for(const A of Object.values(ANIM))
+  if(A.strideU) A.fps = A.frames.length*PHYS[A.speedRef]/(A.strideU*A.stepsPerCycle);
 /* 컨트롤러 감각 상수 (PHYS에서 유도되지 않는 값만 — 물리 수치는 PHYS가 정본) */
 const CTRL={
   dt:1/120, maxSub:8,          // 고정 타임스텝
@@ -1876,15 +2239,21 @@ const CTRL={
   coyote:0.10, jumpBuf:0.12, cutJump:0.45,
   dashCool:0.34,
   wallSlideV:3.2, wallJumpPush:1.00, wallJumpLock:0.13,  // 반동 = runSpeed × push (PHYS 파생)
+  /* ★ 창대쉬 튜닝은 PHYS.sdashSpeed/sdashTime/sdashHover에 있다.
+     도달 범위를 바꾸는 값이라 CTRL이 아니라 PHYS가 정본이어야 한다
+     (REACH·포락선이 거기서 유도된다). 여기 있는 건 연출 값뿐. */
+  sdashCool:0.06,              // 착지 후 재발동까지의 최소 간격(연타 방지)
   landAnim:0.10, hurtTime:0.55,
   slipAccel:14.0,              // 첨탑캡(stand:false) 위에서 미끄러지는 가속
   camLead:0.9, camUp:0.5,
   /* ★ 공중 대시가 vy를 0으로 붙잡는가 (할로우 나이트식 부유 대시)
-     false로 둔 이유: REACH.dashX 유도식이 "대시는 체공시간의 일부를 소비한다"를
-     전제한다 — dashSpeed·dashTime + (체공−dashTime)·runSpeed·airControl.
-     vy를 붙잡으면 체공이 dashTime만큼 늘어나 실측 도달이 3.153 → 약 3.72u가 되고,
-     이는 GATE_MARGIN(0.30u)을 넘겨 검증된 게이팅을 무효화한다.
-     부유 대시를 채택하려면 REACH.dashX 식을 고치고 맵을 재검증해야 한다(어드바이저 판단). */
+     ── v1.2 주석의 근거는 틀렸다. 어드바이저 실측 정정(B-8):
+        true일 때의 실측 도달은 3.72u가 아니라 **4.18u**이고,
+        false인 현재도 이미 **5.33u**가 나온다. 즉 이 스위치는 "게이팅을 지키는
+        장치"가 아니었다 — 게이팅은 ENV 포락선과 그 계약 검사가 지킨다.
+     ── 그래서 이 값은 순수하게 **손맛 선택**이다. 최종 채택은 유저 판단이므로
+        v1.3에서는 건드리지 않고 false를 유지한다.
+        true로 바꾸면 ENV 모델(envTrace의 dash 분기)도 같이 고쳐야 한다. */
   dashFreezeY:false,
 };
 const PLAY={on:false, scale:1, acc:0, t:0};
@@ -1893,14 +2262,17 @@ const player={
   grounded:false, ground:null, slip:false, slipFrom:null,
   coyoteT:0, bufT:0, jumps:0, jumpCut:false,
   dashT:0, dashCd:0, dashUsed:false, iframe:0,
-  wall:0, wallLock:0, wallSliding:false,
+  /* ★ 창대쉬 상태 — 충전 1회. 접지 또는 wallJump:true 벽 접촉에서만 회복 */
+  sdCharge:true, sdHover:0, sdT:0, sdx:0, sdy:0, sdCd:0,
+  wall:0, wallGeo:null, lastWallUid:null, wallLock:0, wallSliding:false,
   dropT:0, dropping:false, landT:0, hurtT:0, atkT:0,
   alive:true, respawn:{x:2,y:1}, deaths:0,
   st:"idle", animI:0, animT:0,
-  tele:{apex:0, apexBase:0, lastJumpH:0, lastDashX:0, dashFrom:0, maxSpd:0},
+  tele:{apex:0, apexBase:0, lastJumpH:0, lastDashX:0, dashFrom:0, maxSpd:0,
+        lastSdashD:0, sdFromX:0, sdFromY:0, dashEndPending:false, sdEndPending:false},
 };
 const IN={left:false,right:false,up:false,down:false,jump:false,dash:false,
-          jumpEdge:false,dashEdge:false,upEdge:false,atkEdge:false};
+          jumpEdge:false,dashEdge:false,upEdge:false,atkEdge:false,sdEdge:false};
 function pollInput(){
   IN.left =!!(keys["arrowleft"] ||keys["a"]);
   IN.right=!!(keys["arrowright"]||keys["d"]);
@@ -1999,6 +2371,7 @@ function doJump(p,v){ p.vy=v; p.grounded=false; p.ground=null; p.coyoteT=0; p.bu
 function respawnPlayer(p){
   p.x=p.respawn.x; p.y=p.respawn.y;
   p.vx=0; p.vy=0; p.dashT=0; p.dashCd=0; p.dashUsed=false; p.jumps=0;
+  p.sdCharge=true; p.sdHover=0; p.sdT=0; p.sdCd=0; p.lastWallUid=null;
   p.dropT=0; p.dropping=false; p.slip=false; p.alive=true; p.hurtT=0; p.iframe=0.6;
   p.floor=floorOf(p.y); setAnim(p,"idle");
 }
@@ -2053,6 +2426,7 @@ function stepPlayer(dt){
   p.dashCd =Math.max(0,p.dashCd -dt); p.iframe=Math.max(0,p.iframe-dt);
   p.wallLock=Math.max(0,p.wallLock-dt); p.dropT=Math.max(0,p.dropT-dt);
   p.landT=Math.max(0,p.landT-dt); p.atkT=Math.max(0,p.atkT-dt);
+  p.sdCd=Math.max(0,p.sdCd-dt);
   p.dropping=p.dropT>0;
 
   if(!p.alive){ p.hurtT-=dt; if(p.hurtT<=0) respawnPlayer(p); return; }
@@ -2063,9 +2437,29 @@ function stepPlayer(dt){
   if(IN.jumpEdge){ p.bufT=CTRL.jumpBuf; IN.jumpEdge=false; }
   if(IN.upEdge){ IN.upEdge=false; tryPortal(p); }
   if(IN.atkEdge){ IN.atkEdge=false; if(p.atkT<=0) p.atkT=ANIM.attack.frames.length/ANIM.attack.fps; }
+  /* ★ 창대쉬 발동 — 대시와 완전히 별개 입력.
+     8방향(방향키 조합, 무입력 시 바라보는 방향) · 충전 1회 ·
+     발동하면 sdashHover 동안 공중에 정지했다가 그 방향으로 sdashTime 돌진.
+     대시 중/체공 중에도 이어서 나가므로 "점프 → 이단강림 → 대시 → 창대쉬" 4단 체인이 성립한다. */
+  if(IN.sdEdge){
+    IN.sdEdge=false;
+    if(p.sdCharge && p.sdT<=0 && p.sdHover<=0 && p.sdCd<=0){
+      let ax=(IN.right?1:0)-(IN.left?1:0), ay=(IN.up?1:0)-(IN.down?1:0);
+      if(!ax && !ay) ax=p.face;                       // 무입력 = 바라보는 방향
+      const L=Math.hypot(ax,ay)||1;
+      p.sdx=ax/L; p.sdy=ay/L;
+      p.sdCharge=false; p.sdHover=PHYS.sdashHover; p.sdT=PHYS.sdashTime;
+      p.tele.sdFromX=p.x; p.tele.sdFromY=p.y;
+      p.dashT=0;                                      // 진행 중인 대시는 흡수
+      p.vx=0; p.vy=0; p.jumpCut=true;                 // 체공 중 가변점프 컷 무효화
+      if(ax) p.face=Math.sign(ax);
+      p.iframe=Math.max(p.iframe, PHYS.sdashHover+PHYS.sdashTime);
+      setAnim(p,"sdash");
+    }
+  }
   if(IN.dashEdge){
     IN.dashEdge=false;
-    if(p.dashCd<=0 && p.dashT<=0 && !(p.dashUsed&&!p.grounded)){
+    if(p.sdHover<=0 && p.sdT<=0 && p.dashCd<=0 && p.dashT<=0 && !(p.dashUsed&&!p.grounded)){
       p.dashT=PHYS.dashTime; p.dashDir=dir||p.face; p.face=p.dashDir;
       p.dashCd=PHYS.dashTime+CTRL.dashCool; p.iframe=PHYS.dashTime;
       p.tele.dashFrom=p.x;
@@ -2079,16 +2473,30 @@ function stepPlayer(dt){
     p.dropT=0.16; p.dropping=true; p.bufT=0; p.grounded=false; p.y-=0.02;
   }
 
-  /* 벽 접촉 / 벽 슬라이드 */
-  p.wall = p.grounded? 0 : Q.wallContact(bodyBox(p.x,p.y));
-  p.wallSliding = !p.grounded && p.wall!==0 && dir===p.wall && p.vy<0 && p.dashT<=0;
+  /* 벽 접촉 / 벽 슬라이드 — Q.wallContact는 `wallJump:true` 표면만 돌려준다 */
+  const wc = p.grounded? 0 : Q.wallContact(bodyBox(p.x,p.y));
+  p.wall = wc? wc.dir : 0;
+  p.wallGeo = wc? wc.geo : null;
+  if(wc && p.lastWallUid && p.lastWallUid!==wc.geo.uid) p.lastWallUid=null;  // 다른 벽 = 초기화
+  p.wallSliding = !p.grounded && p.wall!==0 && dir===p.wall && p.vy<0
+                  && p.dashT<=0 && p.sdT<=0 && p.sdHover<=0;
+  /* ★ 창대쉬 충전 회복 — 접지 **또는 지정 벽 접촉**에서만.
+     경계벽이 여기 들어오면 "붙어 충전 → 창대쉬 → 다시 붙기"로 무한 상승이 된다.
+     Q.wallContact가 wallJump:true만 돌려주므로 구조적으로 차단된다. */
+  if(p.grounded || wc) p.sdCharge=true;
 
-  /* 점프 (버퍼 + 코요테 + 벽점프 + 이단 강림) */
-  if(p.bufT>0 && p.dashT<=0){
-    if(p.grounded||p.coyoteT>0){ doJump(p,PHYS.jumpV); p.jumps=1; }
-    else if(p.wall!==0){                                   // 벽점프
+  /* 점프 (버퍼 + 코요테 + 벽점프 + 이단 강림)
+     ★ 슬립(첨탑캡 stand:false) 중에는 점프 일체 봉인 — v1.0에서 고쳤다던
+       "캡을 밟고 튀어올라 게이트를 넘는" 결함이 부활했었다(어드바이저 B-2).
+     ★ 창대쉬 체공/돌진 중에도 점프 봉인. */
+  if(p.bufT>0 && p.dashT<=0 && !p.slip && p.sdHover<=0 && p.sdT<=0){
+    if(p.grounded||p.coyoteT>0){ doJump(p,PHYS.jumpV); p.jumps=1; p.lastWallUid=null; }
+    else if(p.wall!==0 && p.wallGeo && p.lastWallUid!==p.wallGeo.uid){   // 벽점프
       doJump(p,PHYS.jumpV); p.vx=-p.wall*PHYS.runSpeed*CTRL.wallJumpPush;
       p.face=-p.wall; p.wallLock=CTRL.wallJumpLock; p.jumps=1;
+      /* ★ 같은 표면 연속 벽점프 금지 — 접지하거나 다른 벽에 붙기 전까지.
+         이게 없으면 벽 하나만으로 무한히 올라가 6F가 통째로 스킵된다(B-1). */
+      p.lastWallUid=p.wallGeo.uid;
     }
     else if(p.jumps<2){ doJump(p,PHYS.airJumpV); p.jumps=2; } // 이단 강림
   }
@@ -2096,11 +2504,23 @@ function stepPlayer(dt){
   if(!IN.jump && p.vy>0 && !p.jumpCut){ p.vy*=CTRL.cutJump; p.jumpCut=true; }
 
   /* 수평 */
+  const sdashing = p.sdT>0 || p.sdHover>0;
   const dashing = p.dashT>0;
-  if(dashing){
-    p.dashT-=dt; p.vx=p.dashDir*PHYS.dashSpeed;
+  if(sdashing){
+    if(p.sdHover>0){ p.sdHover-=dt; p.vx=0; p.vy=0; }      // 체공(완전 정지)
+    else{
+      /* 마지막 스텝은 남은 시간만큼만 — 그래야 변위가 정확히 sdashSpeed·sdashTime이
+         되어 REACH.sdash 계약과 이산화 오차 없이 일치한다 */
+      const s=Math.min(dt,p.sdT)/dt; p.sdT-=dt;
+      p.vx=p.sdx*PHYS.sdashSpeed*s; p.vy=p.sdy*PHYS.sdashSpeed*s;
+    }
+  }else if(dashing){
+    const s=Math.min(dt,p.dashT)/dt; p.dashT-=dt;   // 마지막 스텝은 남은 시간만큼만
+    p.vx=p.dashDir*PHYS.dashSpeed*s;
     p.iframe=Math.max(p.iframe,p.dashT);
-    if(p.dashT<=0) p.tele.lastDashX=Math.abs(p.x-p.tele.dashFrom);
+    /* ★ 계측은 moveX **이후**에 해야 한다. v1.2는 여기서 바로 찍어 마지막 한 스텝의
+       이동분이 빠졌다(표시 1.235 / 실제 1.30 — 어드바이저 B-9). 플래그만 세운다. */
+    if(p.dashT<=0) p.tele.dashEndPending=true;
   }else{
     const acc=p.grounded?CTRL.accelGround:CTRL.accelAir;
     const fri=p.grounded?CTRL.fricGround:CTRL.fricAir;
@@ -2113,19 +2533,24 @@ function stepPlayer(dt){
       p.vx += (p.x<c?-1:1)*CTRL.slipAccel*dt;
     }
   }
-  /* ★ 공중 수평 상한 = runSpeed·airControl.
-     REACH.dashX 유도식이 "체공 중 수평속도 ≤ runSpeed·airControl"을 전제한다.
-     지상 최고속(3.92)이나 대시 종료 관성(7.80)을 그대로 들고 뜨면 실측 도달이
-     3.516u까지 늘어 유도값 3.153u를 GATE_MARGIN(0.30) 넘게 초과한다 → 게이팅 무효.
-     벽점프 반동 구간(wallLock)만 예외. */
-  if(!p.grounded && !dashing && p.wallLock<=0){
+  /* ★ 공중 수평 감쇠 — v1.2의 즉시 하드 클램프를 0.12s 접근 감쇠로 교체.
+     클램프는 감각을 죽이면서(대시 관성이 뚝 끊긴다) 게이팅 근거로는 무의미했다:
+     클램프 유무로 모델 도달이 3.12↔3.46 움직이는 동안 실측 최대는 5.33u였다
+     (어드바이저 B-8). 게이팅은 이제 ENV 포락선이 보장하므로 관성을 살린다.
+     벽점프 반동 구간(wallLock)·대시·창대쉬 중은 제외. */
+  if(!p.grounded && !dashing && !sdashing && p.wallLock<=0){
     const cap=PHYS.runSpeed*PHYS.airControl;
-    p.vx=clamp(p.vx,-cap,cap);
+    if(Math.abs(p.vx)>cap){
+      const d=(PHYS.dashSpeed-cap)/Math.max(1e-6,PHYS.airDecayT);
+      p.vx = p.vx>0 ? Math.max(cap,p.vx-d*dt) : Math.min(-cap,p.vx+d*dt);
+    }
   }
   /* 수직 — 벨로시티 베를레(반중력 → 이동 → 반중력).
      대칭 오일러로 하면 점프 정점이 1.5546u로 REACH.jump(1.592)보다 0.037u 모자라
-     "설계상 닿아야 할 곳"에 못 닿는다. 반중력 분할이면 정점이 해석해와 일치한다. */
-  if(dashing && CTRL.dashFreezeY) p.vy=0;
+     "설계상 닿아야 할 곳"에 못 닿는다. 반중력 분할이면 정점이 해석해와 일치한다.
+     ★ 창대쉬 체공·돌진 중에는 중력이 걸리지 않는다(변위가 정확히 sdashSpeed·sdashTime). */
+  const noGrav = sdashing || (dashing && CTRL.dashFreezeY);
+  if(noGrav){ /* vy는 위에서 이미 지정됨 */ }
   else{
     p.vy-=PHYS.gravity*dt*0.5;
     if(p.wallSliding && p.vy<-CTRL.wallSlideV) p.vy=-CTRL.wallSlideV;
@@ -2133,12 +2558,16 @@ function stepPlayer(dt){
   }
 
   /* 이동 — 축 분리 */
-  if(moveX(p,p.vx*dt)) p.vx=0;
+  if(moveX(p,p.vx*dt)){ p.vx=0; if(p.sdT>0){ p.sdT=0; p.vy=0; } }   // 벽에 박으면 돌진 종료
   const r=moveY(p,p.vy*dt);
-  if(r===0 && !(dashing && CTRL.dashFreezeY)){
+  if(r!==0 && p.sdT>0){ p.sdT=0; p.vy=0; }                          // 천장/바닥도 마찬가지
+  if(r===0 && !noGrav){
     p.vy-=PHYS.gravity*dt*0.5;                             // 충돌하지 않았을 때만 후반 반중력
     if(p.vy<-CTRL.maxFall) p.vy=-CTRL.maxFall;
   }
+  /* 창대쉬 종료 — 상승분은 남기지 않는다(변위형 이동기).
+     수평 관성만 남기고 위 감쇠 로직이 상한으로 되돌린다. */
+  if(sdashing && p.sdT<=0 && p.sdHover<=0){ p.vy=0; p.jumpCut=true; p.tele.sdEndPending=true; }
   const g=groundUnder(p);
   const wasGround=p.grounded;
   p.ground=g;
@@ -2147,12 +2576,19 @@ function stepPlayer(dt){
   p.slipFrom = p.slip? g : null;
   if(p.grounded){
     p.coyoteT=CTRL.coyote; p.jumps=0; p.dashUsed=false; p.jumpCut=false;
+    p.lastWallUid=null;                                    // 접지 = 벽점프 제한 해제
+    if(!p.sdCharge) p.sdCd=CTRL.sdashCool;
+    p.sdCharge=true;                                       // 창대쉬 충전 회복
     if(!wasGround && r===1){ p.landT=CTRL.landAnim; setAnim(p,"land"); }
     const cp=Q.checkpointNear(p.x,p.y,0.9);
     if(cp) p.respawn={x:cp.wx, y:cp.wy};
   }else if(wasGround && p.vy<=0){ p.coyoteT=CTRL.coyote; }
 
-  /* 계측 */
+  /* 계측 — 이동이 전부 끝난 뒤에 찍는다 (B-9) */
+  if(p.tele.dashEndPending){ p.tele.dashEndPending=false;
+    p.tele.lastDashX=Math.abs(p.x-p.tele.dashFrom); }
+  if(p.tele.sdEndPending){ p.tele.sdEndPending=false;
+    p.tele.lastSdashD=Math.hypot(p.x-p.tele.sdFromX, p.y-p.tele.sdFromY); }
   if(!p.grounded){ if(p.y>p.tele.apex) p.tele.apex=p.y; }
   else if(p.tele.apex>p.tele.apexBase){ p.tele.lastJumpH=p.tele.apex-p.tele.apexBase;
                                         p.tele.apex=p.y; p.tele.apexBase=p.y; }
@@ -2172,10 +2608,240 @@ function stepPlayer(dt){
   if(f && p.y < f.yOff-4){ killPlayer(p,null); return; }
   if(p.grounded) p.floor=floorOf(p.y);
 }
+/* ==================================================================== */
+/* 10.6 이동기 실측 — 「컨트롤러가 REACH/ENV 계약을 지키는가」 (어드바이저 B-3)  */
+/*                                                                      */
+/*  v1.2에는 이 검사가 **0줄**이었다. 그래서 CTRL을 34가지로 망가뜨려도       */
+/*  (dashFreezeY·클램프 삭제·wallJumpPush 4.0·accelAir 260·maxFall 99·      */
+/*   cutJump 1.0·coyote 9.0·베를레→오일러) 전부 12/12 PASS였다.            */
+/*  REACH는 컨트롤러가 지켜야 할 **계약**인데 이행 확인 코드가 없었다.        */
+/*                                                                      */
+/*  여기서는 실제 stepPlayer를 헤드리스로 굴려 도달 포락선을 측정하고,        */
+/*  모델(ENV)과 대조한다. 인게임 `T`에서도 그대로 돈다.                     */
+/* ==================================================================== */
+const MEAS_PAD={uid:"meas:pad", id:"pad", t:"solid", stand:true, label:"계측 발판",
+  x0:-320, x1:-80, y0:-2, y1:0, floor:1, fid:"plaza"};
+const MEAS_EPS = ENV_STEP + PHYS.dashSpeed*CTRL.dt;   // 버킷 0.1u + 1스텝 이산화
+
+function _measSnapshot(){
+  const s=Object.assign({},player);
+  s.tele=Object.assign({},player.tele); s.respawn=Object.assign({},player.respawn);
+  return {p:s, in:Object.assign({},IN)};
+}
+function _measRestore(s){
+  Object.assign(player,s.p);
+  player.tele=s.p.tele; player.respawn=s.p.respawn;
+  Object.assign(IN,s.in);
+}
+/* 한 정책을 굴려 (dx,dy) 궤적을 포락선 버킷에 적립.
+   plan: {dashMode:"ground"|"air"|"none", tDash, tAir, tSd, sdx, sdy, sdash:bool} */
+function _measRun(plan, tbl, out){
+  const p=player;
+  for(const k in IN) IN[k]=false;
+  p.x=-200; p.y=0; p.vx=0; p.vy=0; p.face=1; p.floor=1;
+  p.grounded=true; p.ground=MEAS_PAD; p.slip=false; p.slipFrom=null;
+  p.jumps=0; p.dashT=0; p.dashCd=0; p.dashUsed=false; p.iframe=0;
+  p.sdCharge=true; p.sdHover=0; p.sdT=0; p.sdCd=0; p.lastWallUid=null;
+  p.coyoteT=0; p.bufT=0; p.dropT=0; p.dropping=false; p.alive=true; p.hurtT=0;
+  p.wallLock=0; p.landT=0; p.atkT=0; p.jumpCut=false;
+  p.vx=PHYS.runSpeed; IN.right=true;                    // 이미 최고속으로 달리는 중
+  let t=0, launched=false, x0=0, y0=0, maxY=-1e9, air=0;
+  const dt=CTRL.dt;
+  if(plan.dashMode==="ground"){ IN.dashEdge=true; stepPlayer(dt); t+=dt; }
+  for(let n=0;n<600;n++){
+    if(!launched){
+      if(plan.dashMode!=="ground" || p.dashT<=0){       // 지상대시는 끝나자마자 점프
+        IN.jumpEdge=true; launched=true; x0=p.x; y0=p.y; t=0;
+      }
+    }else{
+      if(plan.dashMode==="air" && t>=plan.tDash && t<plan.tDash+dt) IN.dashEdge=true;
+      if(plan.tAir!=null && t>=plan.tAir && t<plan.tAir+dt) IN.jumpEdge=true;
+      if(plan.sdash && t>=plan.tSd && t<plan.tSd+dt) IN.sdEdge=true;
+    }
+    stepPlayer(dt); t+=dt;
+    if(launched){
+      air++;
+      const dx=p.x-x0, dy=p.y-y0;
+      if(dy>maxY) maxY=dy;
+      const i=envIdx(dy);
+      if(i>=0&&i<tbl.length&&dx>tbl[i]) tbl[i]=dx;
+      /* ★ 착지하면 비행 종료 — 여기서 안 끊으면 착지 후 계속 달린 거리가
+         dy=0 버킷에 쌓여 "포락선 초과 6.6u" 같은 허깨비가 나온다 */
+      if(air>6 && p.grounded) break;
+      if(dy<-6 || t>3.0) break;
+    }
+    if(!launched && t>1.0) break;
+  }
+  if(out && maxY>out.maxUp) out.maxUp=maxY;
+}
+/* 컨트롤러 실측 포락선 (kit: "basic" | "full") */
+function measureEnvelope(kit){
+  const tbl=new Float64Array(ENV_N).fill(-1);
+  const out={maxUp:-1e9};
+  const snap=_measSnapshot();
+  grid.insert(MEAS_PAD);
+  try{
+    const dashModes=["ground","air","none"];
+    const tAirs=[0.02,0.12,0.24,0.36,0.52,0.70,null];
+    const tSds = kit==="full"? [0.0,0.10,0.22,0.34,0.50,0.70,0.95] : [];
+    const dirs =[[1,0],[0.7071,0.7071],[0,1],[0.7071,-0.7071],[0,-1]];
+    for(const dm of dashModes) for(const tAir of tAirs){
+      _measRun({dashMode:dm,tDash:0.05,tAir,sdash:false}, tbl, out);
+      for(const tSd of tSds) for(const d of dirs)
+        _measRun({dashMode:dm,tDash:0.05,tAir,sdash:true,tSd,sdx:d[0],sdy:d[1]}, tbl, out);
+    }
+  } finally { grid.remove(MEAS_PAD); _measRestore(snap); }
+  return {tbl, maxUp:out.maxUp};
+}
+/* 스칼라 실측: 단일점프·이단강림·대시거리·창대쉬 변위 */
+function measureScalars(){
+  const snap=_measSnapshot(); grid.insert(MEAS_PAD);
+  const p=player, dt=CTRL.dt, R={};
+  const reset=()=>{ for(const k in IN) IN[k]=false;
+    p.x=-200;p.y=0;p.vx=0;p.vy=0;p.face=1;p.floor=1;p.grounded=true;p.ground=MEAS_PAD;
+    p.slip=false;p.jumps=0;p.dashT=0;p.dashCd=0;p.dashUsed=false;p.sdCharge=true;
+    p.sdHover=0;p.sdT=0;p.sdCd=0;p.coyoteT=0;p.bufT=0;p.alive=true;p.wallLock=0;
+    p.lastWallUid=null;p.jumpCut=false;p.iframe=0; };
+  try{
+    /* 단일점프 (버튼 계속 누름) */
+    reset(); IN.jump=true; IN.jumpEdge=true; let m=0;
+    for(let n=0;n<300;n++){ stepPlayer(dt); m=Math.max(m,p.y); if(n>4&&p.grounded) break; }
+    R.jump=m;
+    /* 이단강림 — 재입력 타이밍을 훑어 **최댓값**을 찾는다.
+       한 타이밍만 찍으면 "정점 전에 눌러 손해 본 값"이 나와, 컨트롤러가
+       설계 도달을 실제로 낼 수 있는지 증명하지 못한다. */
+    R.doubleJump=0;
+    for(let k=0;k<70;k+=2){
+      reset(); IN.jump=true; IN.jumpEdge=true; m=0;
+      for(let n=0;n<300;n++){ if(n===k) IN.jumpEdge=true; stepPlayer(dt); m=Math.max(m,p.y);
+                              if(n>4&&p.grounded) break; }
+      R.doubleJump=Math.max(R.doubleJump,m);
+    }
+    /* 지상 대시 순수 거리 */
+    reset(); IN.dashEdge=true; const dx0=p.x;
+    for(let n=0;n<80;n++){ stepPlayer(dt); if(p.dashT<=0) break; }
+    R.dashDist=Math.abs(p.x-dx0);
+    /* 창대쉬 수직 변위 (제자리에서 위로) */
+    reset(); IN.up=true; IN.sdEdge=true; const sy=p.y;
+    for(let n=0;n<200;n++){ stepPlayer(dt); if(p.sdT<=0&&p.sdHover<=0) break; }
+    R.sdashUp=p.y-sy;
+    /* ★ 4단 체인: 점프 → 이단강림 → 대시 → 창대쉬(위).
+       네 입력이 실제로 **연속으로 나가는지** + 최대 상승이 얼마인지 둘 다 본다.
+       타이밍을 훑어 최댓값을 취한다. */
+    R.chainUp=0; R.chainOk=false;
+    for(let ka=8;ka<=44;ka+=4) for(let ks=ka+8;ks<=ka+40;ks+=4){
+      reset(); IN.jump=true; IN.jumpEdge=true; m=0;
+      let sawDash=false, sawSd=false, jumpsSeen=0;
+      for(let n=0;n<400;n++){
+        if(n===ka) IN.jumpEdge=true;                        // 이단강림
+        if(n===ka+4) IN.dashEdge=true;                      // 대시
+        if(n===ks){ IN.up=true; IN.sdEdge=true; }           // 창대쉬(위)
+        stepPlayer(dt); m=Math.max(m,p.y);
+        if(p.dashT>0) sawDash=true;
+        if(p.sdT>0||p.sdHover>0) sawSd=true;
+        jumpsSeen=Math.max(jumpsSeen,p.jumps);
+        if(n>ks+40&&p.grounded) break;
+      }
+      if(m>R.chainUp) R.chainUp=m;
+      if(sawDash&&sawSd&&jumpsSeen>=2) R.chainOk=true;      // 4단이 전부 발동했다
+    }
+  } finally { grid.remove(MEAS_PAD); _measRestore(snap); }
+  return R;
+}
+/* ── 벽 등반 실측 ────────────────────────────────────────────────────
+   평지 포락선만 재면 **벽을 이용한 무한 상승**을 볼 수 없다. v1.2가 그랬고,
+   그래서 경계벽 76회 벽점프로 6F가 통째로 스킵되는 걸 12/12 PASS로 놓쳤다(B-1).
+   여기서는 합성 벽 옆에서 점프/창대쉬를 연타시켜 실제 상승 한계를 잰다.
+     opt.wallJump — 이 벽이 설계 지정 슈트인가
+     opt.sdash    — 창대쉬도 연타할 것인가 (충전 회복 규칙 검사) */
+function measureWallClimb(opt){
+  const WALL={uid:"meas:wall", id:"wall", t:"wall", stand:false, label:"계측 벽",
+    x0:-180, x1:-179.6, y0:0, y1:opt.wallTop, floor:1, fid:"plaza",
+    wallJump:opt.wallJump===true};
+  const snap=_measSnapshot(); grid.insert(MEAS_PAD); grid.insert(WALL);
+  const p=player, dt=CTRL.dt; let best=0;
+  try{
+    for(const period of [10,14,18,24,30,40]){
+      for(const k in IN) IN[k]=false;
+      p.x=-182; p.y=0; p.vx=0; p.vy=0; p.face=1; p.floor=1;
+      p.grounded=true; p.ground=MEAS_PAD; p.slip=false; p.jumps=0;
+      p.dashT=0; p.dashCd=0; p.dashUsed=false; p.sdCharge=true; p.sdHover=0; p.sdT=0;
+      p.sdCd=0; p.coyoteT=0; p.bufT=0; p.alive=true; p.wallLock=0; p.lastWallUid=null;
+      p.jumpCut=false; p.iframe=0;
+      IN.right=true; IN.jump=true;                 // 벽을 향해 붙어서 점프 연타
+      for(let n=0;n<1200;n++){
+        if(n%period===0) IN.jumpEdge=true;
+        if(opt.sdash && n%period===Math.floor(period/2)){ IN.up=true; IN.sdEdge=true; }
+        stepPlayer(dt);
+        if(p.y>best) best=p.y;
+        if(p.y<-6) break;
+      }
+    }
+  } finally { grid.remove(WALL); grid.remove(MEAS_PAD); _measRestore(snap); }
+  return best;
+}
+/* 계약 검사: 실측이 모델 포락선을 넘어서면 게이팅 근거가 무너진다 */
+function reachContractIssues(){
+  const bad=[];
+  const S=measureScalars();
+  const chk=(n,meas,model)=>{ if(meas>model+MEAS_EPS)
+    bad.push(`${n} 실측 ${meas.toFixed(3)} > 모델 ${model.toFixed(3)}`); };
+  chk("단일점프", S.jump, REACH.jump);
+  chk("이단강림", S.doubleJump, REACH.doubleJump);
+  chk("대시거리", S.dashDist, PHYS.dashSpeed*PHYS.dashTime);
+  chk("창대쉬 변위", S.sdashUp, REACH.sdash);
+  chk("4단 체인 상승", S.chainUp, REACH.chainUp);
+  if(!S.chainOk) bad.push("4단 체인(점프→이단강림→대시→창대쉬)이 나가지 않음");
+  /* ★ 반대 방향도 본다 — 설계가 요구하는 도달을 컨트롤러가 **실제로 낼 수 있는가**.
+     못 내면 게이트 갭이 "넘을 수 있다"고 검증된 채 실제로는 못 넘는다. */
+  const short=(n,meas,model)=>{ if(meas<model-GATE_MARGIN)
+    bad.push(`${n} 실측 ${meas.toFixed(3)} < 설계 ${model.toFixed(3)} (도달 미달)`); };
+  short("단일점프", S.jump, REACH.jump);
+  short("이단강림", S.doubleJump, REACH.doubleJump);
+  short("4단 체인 상승", S.chainUp, REACH.chainUp);
+  /* ── 벽 등반 3종 (B-1 · 창대쉬 충전 규칙) ──
+     WT는 검사용 합성 벽 높이. 실제 맵의 슈트보다 훨씬 높게 잡아야
+     "무한 상승"과 "벽 높이에 묶인 상승"이 구분된다. */
+  const WT=40, WS=8;                              // 같은 벽을 높이만 달리해 두 번 잰다
+  S.wallTall   = measureWallClimb({wallTop:WT, wallJump:true,  sdash:false});
+  S.wallShort  = measureWallClimb({wallTop:WS, wallJump:true,  sdash:false});
+  S.wallTallSd = measureWallClimb({wallTop:WT, wallJump:true,  sdash:true });
+  S.wallPlain  = measureWallClimb({wallTop:WT, wallJump:false, sdash:false});
+  S.wallPlainSd= measureWallClimb({wallTop:WT, wallJump:false, sdash:true });
+  /* ① 지정 슈트라도 **벽이 높다고 더 올라가면 안 된다** — 같은 표면 연속 벽점프가
+        금지돼 있으므로 벽점프는 1회뿐이고, 상승은 벽 높이와 무관해야 한다.
+        (연속 벽점프를 되살리면 tall이 short를 한참 앞질러 여기서 터진다) */
+  if(S.wallTall > S.wallShort+MEAS_EPS)
+    bad.push(`★같은 벽 연속 벽점프 성립 (h${WT} ${S.wallTall.toFixed(2)} > h${WS} ${S.wallShort.toFixed(2)})`);
+  /* ② 지정 슈트 + 창대쉬는 충전이 회복되므로 **벽 꼭대기까지**는 기어오를 수 있다.
+        그 위로 더 가면 안 된다(모델 wallBoostTop이 이 상한을 전제한다). */
+  if(S.wallTallSd > WT+REACH.chainUp+MEAS_EPS)
+    bad.push(`지정 벽 창대쉬 등반 ${S.wallTallSd.toFixed(2)} > 벽상단+체인 ${(WT+REACH.chainUp).toFixed(2)}`);
+  /* ③ 경계벽(비지정)은 벽점프도 창대쉬 충전도 성립하면 안 된다 */
+  if(S.wallPlain > REACH.doubleJump+MEAS_EPS)
+    bad.push(`★경계벽 벽점프 성립 ${S.wallPlain.toFixed(2)} > ${REACH.doubleJump.toFixed(2)} (무한 벽점프 부활)`);
+  if(S.wallPlainSd > REACH.chainUp+MEAS_EPS)
+    bad.push(`★경계벽 창대쉬 충전 ${S.wallPlainSd.toFixed(2)} > ${REACH.chainUp.toFixed(2)} (무한 상승 부활)`);
+  for(const kit of ["basic","full"]){
+    const M=measureEnvelope(kit), model=kit==="full"? ENV.full : ENV.basic;
+    let worst=0, at=null;
+    for(let i=0;i<M.tbl.length;i++){
+      if(M.tbl[i]<0) continue;
+      const md=model[i]<0? -Infinity : model[i];
+      const over=M.tbl[i]-md;
+      if(over>worst){ worst=over; at=ENV_LO+i*ENV_STEP; }
+    }
+    if(worst>MEAS_EPS)
+      bad.push(`${kit} 포락선 초과 ${worst.toFixed(3)}u @dy${at.toFixed(1)}`);
+  }
+  return {bad, scalars:S};
+}
 /* 애니메이션 상태 선택 + 프레임 진행 */
 function updateAnim(p,dt){
   let st;
   if(!p.alive)             st="hurt";
+  else if(p.sdHover>0)     st="sdashHover";
+  else if(p.sdT>0)         st="sdash";
   else if(p.dashT>0)       st="dash";
   else if(p.atkT>0)        st="attack";
   else if(p.wallSliding)   st="wallslide";
@@ -2342,16 +3008,19 @@ function frame(T){
 }
 focusFloor(1);
 cam.x=cam.tx; cam.y=cam.ty; cam.zoom=cam.tzoom;
+TESTS=runTests();                       // 컨트롤러 정의 완료 후 최초 1회
 requestAnimationFrame(frame);
 
 /* 헤드리스/콘솔 노출 */
 window.__MAP__={MAP,FLOORS,WORLD,WORLD_GEO,SPEAR_FACES,HAZARDS,CHECKPOINTS,PORTALS,
-  TARGETS,COLLECTIBLES,TRIGGERS,PLANS,PHYS,REACH,GATE_MARGIN,Q,grid,spear,
+  TARGETS,COLLECTIBLES,TRIGGERS,PLANS,PHYS,REACH,GATE_MARGIN,ENV,envDx,envMaxUp,ENV_LO,ENV_STEP,Q,grid,spear,
   plantSpear,recallSpear,runTests,auditGates,gateViolations,ledgeEmbedded,
   typeOverlaps,planIssues,targetGateIssues,reachFrom,standables,
-  freeClosure,spearClosure,solvability,collectableIssues,hiddenGateIssues,pointReachable,
-  occludedPair,occludedPoint,canMove,maxRise,startSurfaces,
-  standPoints,bodyFitIssues,
+  freeClosure,fullClosure,closure,spearClosure,solvability,collectableIssues,hiddenGateIssues,
+  pointReachable,pointHit,occludedPair,occludedPoint,canMove,maxRise,envFor,envSlack,
+  startSurfaces,graphNodes,finialNodes,wallBoostTop,
+  standPoints,bodyFitIssues,supportIssues,walkClearance,
+  measureEnvelope,measureScalars,reachContractIssues,
   SPRITE,ANIM,CTRL,PLAY,player,IN,togglePlay,warpFloor,respawnPlayer,stepPlayer,bodyBox,
   cam,focusFloor,overview,ui,exportJSON};
 </script>
