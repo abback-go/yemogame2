@@ -179,9 +179,15 @@ const ENV = {
   /* 도약 나브에서 출발 (창대 도약) */
   vault: buildEnvelope({vy0:PHYS.vaultV, vx0:PHYS.dashSpeed, airJump:true,  dash:true,  sdash:false}),
   vaultFull: buildEnvelope({vy0:PHYS.vaultV,vx0:PHYS.dashSpeed,airJump:true,dash:true,  sdash:true }),
-  /* 첨탑캡(stand:false) — 점프 봉인. 미끄러지며 창대쉬만 가능 */
-  finial:     buildEnvelope({vy0:0, vx0:0, airJump:false, dash:false, sdash:false}),
-  finialFull: buildEnvelope({vy0:0, vx0:0, airJump:false, dash:false, sdash:true }),
+  /* 첨탑캡(stand:false) — 착지는 되지만 설 수 없는 표면.
+     ★ 여기서 "지상 점프"는 못 한다(접지가 아니므로 coyote도 안 붙고, 슬립 중
+       점프는 컨트롤러가 봉인한다). 하지만 **미끄러져 떨어진 직후 공중 점프는 남아 있다** —
+       캡에 도착할 때 이단강림을 안 썼다면 그대로 쓸 수 있다.
+       실측이 이 사실을 잡아냈다(모델 0.00 vs 실측 1.29 = airJumpV 정확히).
+       모델은 항상 **가장 관대한 쪽**(도착 시 이단강림·대시 미사용)을 가정해야
+       게이트가 안전하다. vy0=0으로 두고 airJump/dash를 허용한다. */
+  finial:     buildEnvelope({vy0:0, vx0:PHYS.runSpeed, airJump:true, dash:true, sdash:false}),
+  finialFull: buildEnvelope({vy0:0, vx0:PHYS.runSpeed, airJump:true, dash:true, sdash:true }),
 };
 /* 포락선 조회: 높이차 dy를 벌면서 갈 수 있는 최대 수평거리. 없으면 -1 */
 function envDx(tbl,dy){
@@ -1119,6 +1125,28 @@ function riseChainIssues(){
   }
   return bad;
 }
+/* ── 벽점프 슈트 지정이 타당한가 (B-1) ────────────────────────────────
+   `wallJump:true`는 **설계가 고른 짧은 기둥**에만 붙어야 한다.
+   층 경계벽(방의 좌우 끝을 이루는 큰 벽)에 붙으면 그 벽 하나로 층을 세로로
+   관통할 수 있게 되어 게이트가 의미를 잃는다.
+   "경계벽"은 리터럴이 아니라 형상에서 판정한다: 방의 x 양끝에 붙어 있고
+   방 높이의 절반 이상을 차지하는 벽. */
+function wallJumpSuiteIssues(){
+  const bad=[];
+  for(const f of FLOORS){
+    for(const g of WORLD_GEO){
+      if(g.floor!==f.n || g.wallJump!==true) continue;
+      const atEdge = g.x0<=0.001 || g.x1>=f.w-0.001;
+      const tall   = (g.y1-g.y0) >= f.h*0.5;
+      if(atEdge && tall) bad.push({g, why:"경계벽에 벽점프 슈트 지정"});
+      /* 슈트가 너무 길면 창대쉬 충전 회복과 맞물려 벽 하나로 계속 기어오른다.
+         한 번의 상승 체인(REACH.chainUp)보다 길면 안 된다. */
+      if((g.y1-g.y0) > REACH.chainUp*2)
+        bad.push({g, why:`슈트 길이 ${(g.y1-g.y0).toFixed(1)}u > ${(REACH.chainUp*2).toFixed(1)}u`});
+    }
+  }
+  return bad;
+}
 /* ── B-5 ① 보행 천장 여유 ────────────────────────────────────────────
    전 `stand` 표면 상단을 실제로 걸어가며(x를 잘게 훑으며) 머리 위 여유를 잰다.
    그 x에 기둥이 서 있으면(발밑에서 솟은 지형) 걸을 수 없는 자리이므로 건너뛴다.
@@ -1220,6 +1248,8 @@ function runTests(){
   ok(`보행 천장 여유 ≥ bodyH(${PHYS.bodyH}u)`, wc.length===0,
      wc.length? wc.slice(0,3).map(x=>`${x.uid}@x${x.x}(${x.clear})`).join(", ")
               : (wcMin? `최소 ${wcMin.clear===Infinity?"∞":wcMin.clear}u @${wcMin.uid} x${wcMin.x}` : ""));
+  const ws=wallJumpSuiteIssues();
+  ok("벽점프 슈트가 경계벽이 아님", ws.length===0, ws.map(x=>`${x.g.uid}(${x.why})`).join(", "));
   /* ── v1.3 신규: 화면 시야 제약 (PLAY.scale에서 유도) ── */
   const V=viewSpec(), vi=visibilityIssues(), rc2=riseChainIssues();
   ok(`게이트가 출발 시점 시야 안(≤${V.gateDx.toFixed(2)}×${V.gateDy.toFixed(2)}u)`, vi.length===0,
@@ -1236,7 +1266,8 @@ function runTests(){
         +` · 대시 ${(S.dashDist||0).toFixed(3)} · 창대쉬 ${(S.sdashUp||0).toFixed(3)}`
         +` · 체인 ${(S.chainUp||0).toFixed(3)}`
         +` · 벽(지정 h40 ${(S.wallTall||0).toFixed(2)} / h8 ${(S.wallShort||0).toFixed(2)}`
-        +` / 경계 ${(S.wallPlain||0).toFixed(2)} / 경계+창대쉬 ${(S.wallPlainSd||0).toFixed(2)})`);
+        +` / 경계 ${(S.wallPlain||0).toFixed(2)} / 경계+창대쉬 ${(S.wallPlainSd||0).toFixed(2)})`
+        +` · 첨탑캡 ${(S.finialJump||0).toFixed(2)} · 최대체공vx ${(S.maxAirVx||0).toFixed(2)}`);
   return R;
 }
 function portalPairsOk(){
@@ -2741,6 +2772,13 @@ function stepPlayer(dt){
 const MEAS_PAD={uid:"meas:pad", id:"pad", t:"solid", stand:true, label:"계측 발판",
   x0:-320, x1:-80, y0:-2, y1:0, floor:1, fid:"plaza"};
 const MEAS_EPS = ENV_STEP + PHYS.dashSpeed*CTRL.dt;   // 버킷 0.1u + 1스텝 이산화
+/* ★ 체공 중 수평속도 상한 불변식.
+   ENV 모델은 "공중 수평속도가 대시속도(창대쉬 중엔 창대쉬속도)를 넘지 않는다"를
+   전제로 궤적을 만든다. 이걸 넘는 순간 모델은 근거를 잃는다.
+   벽점프 반동(wallJumpPush)처럼 평지 포락선 측정으로는 안 보이는 결함이
+   여기서 잡힌다 — push를 4.0으로 올리면 runSpeed×4 = 15.68u/s가 나온다. */
+const MEAS_VX_CAP = Math.max(PHYS.dashSpeed, PHYS.sdashSpeed);
+let _measMaxVx=0, _measSlipJump=false;
 
 function _measSnapshot(){
   const s=Object.assign({},player);
@@ -2763,7 +2801,10 @@ function _measRun(plan, tbl, out){
   p.sdCharge=true; p.sdHover=0; p.sdT=0; p.sdCd=0; p.lastWallUid=null;
   p.coyoteT=0; p.bufT=0; p.dropT=0; p.dropping=false; p.alive=true; p.hurtT=0;
   p.wallLock=0; p.landT=0; p.atkT=0; p.jumpCut=false;
-  p.vx=PHYS.runSpeed; IN.right=true;                    // 이미 최고속으로 달리는 중
+  /* ★ IN.jump을 반드시 눌러둔다. 안 누르면 가변점프 컷(cutJump 0.45)이 즉시 걸려
+     모든 비행이 45% 높이로 줄고, 포락선 계약 검사가 통째로 공허해진다.
+     (실제로 이 한 줄이 빠져 실측 2.62u / 모델 5.89u로 항상 통과하고 있었다) */
+  p.vx=PHYS.runSpeed; IN.right=true; IN.jump=true;      // 이미 최고속으로 달리는 중
   let t=0, launched=false, x0=0, y0=0, maxY=-1e9, air=0;
   const dt=CTRL.dt;
   if(plan.dashMode==="ground"){ IN.dashEdge=true; stepPlayer(dt); t+=dt; }
@@ -2771,6 +2812,11 @@ function _measRun(plan, tbl, out){
     if(!launched){
       if(plan.dashMode!=="ground" || p.dashT<=0){       // 지상대시는 끝나자마자 점프
         IN.jumpEdge=true; launched=true; x0=p.x; y0=p.y; t=0;
+        /* ★ 방향키를 놓는 정책도 반드시 굴린다. 방향을 쥐고 있으면 accelAir의
+           approach()가 알아서 상한까지 끌어내려 감쇠 결함이 드러나지 않는다.
+           놓으면 fricAir(4.0/s)만 남아 대시 관성이 오래 유지된다 — 여기가 진짜
+           위험 구간이고, v1.2 검증이 못 보던 곳이다. */
+        if(!plan.hold) IN.right=false;
       }
     }else{
       if(plan.dashMode==="air" && t>=plan.tDash && t<plan.tDash+dt) IN.dashEdge=true;
@@ -2778,6 +2824,7 @@ function _measRun(plan, tbl, out){
       if(plan.sdash && t>=plan.tSd && t<plan.tSd+dt) IN.sdEdge=true;
     }
     stepPlayer(dt); t+=dt;
+    if(!p.grounded && Math.abs(p.vx)>_measMaxVx) _measMaxVx=Math.abs(p.vx);
     if(launched){
       air++;
       const dx=p.x-x0, dy=p.y-y0;
@@ -2804,10 +2851,10 @@ function measureEnvelope(kit){
     const tAirs=[0.02,0.12,0.24,0.36,0.52,0.70,null];
     const tSds = kit==="full"? [0.0,0.10,0.22,0.34,0.50,0.70,0.95] : [];
     const dirs =[[1,0],[0.7071,0.7071],[0,1],[0.7071,-0.7071],[0,-1]];
-    for(const dm of dashModes) for(const tAir of tAirs){
-      _measRun({dashMode:dm,tDash:0.05,tAir,sdash:false}, tbl, out);
+    for(const hold of [true,false]) for(const dm of dashModes) for(const tAir of tAirs){
+      _measRun({dashMode:dm,tDash:0.05,tAir,sdash:false,hold}, tbl, out);
       for(const tSd of tSds) for(const d of dirs)
-        _measRun({dashMode:dm,tDash:0.05,tAir,sdash:true,tSd,sdx:d[0],sdy:d[1]}, tbl, out);
+        _measRun({dashMode:dm,tDash:0.05,tAir,sdash:true,tSd,sdx:d[0],sdy:d[1],hold}, tbl, out);
     }
   } finally { grid.remove(MEAS_PAD); _measRestore(snap); }
   return {tbl, maxUp:out.maxUp};
@@ -2892,6 +2939,7 @@ function measureWallClimb(opt){
         if(n%period===0) IN.jumpEdge=true;
         if(opt.sdash && n%period===Math.floor(period/2)){ IN.up=true; IN.sdEdge=true; }
         stepPlayer(dt);
+        if(!p.grounded && Math.abs(p.vx)>_measMaxVx) _measMaxVx=Math.abs(p.vx);
         if(p.y>best) best=p.y;
         if(p.y<-6) break;
       }
@@ -2899,9 +2947,45 @@ function measureWallClimb(opt){
   } finally { grid.remove(WALL); grid.remove(MEAS_PAD); _measRestore(snap); }
   return best;
 }
+/* ── 첨탑캡 실측 (B-2) ───────────────────────────────────────────────
+   모델은 `cap:"finial"`을 "점프 못 하는 경유 지점"(ENV.finial 상승 0)으로 본다.
+   컨트롤러가 슬립 중 점프를 허용하면 그 전제가 깨지고, 4F 출구 게이트를
+   캡에서 튀어올라 넘는 v1.0 결함이 되살아난다. 지형과 무관하게 직접 잰다. */
+function measureFinialJump(useSdash){
+  const CAP={uid:"meas:cap", id:"cap", t:"solid", stand:false, cap:"finial", label:"계측 첨탑캡",
+    x0:-260, x1:-250, y0:0, y1:3, floor:1, fid:"plaza"};
+  const snap=_measSnapshot(); grid.insert(MEAS_PAD); grid.insert(CAP);
+  const p=player, dt=CTRL.dt; let best=0;
+  try{
+    for(const period of [12,20,30]){
+      for(const k in IN) IN[k]=false;
+      p.x=-255; p.y=3; p.vx=0; p.vy=0; p.face=1; p.floor=1;
+      p.grounded=false; p.ground=CAP; p.slip=true; p.slipFrom=CAP; p.jumps=0;
+      p.dashT=0; p.dashCd=0; p.dashUsed=false; p.sdCharge=true; p.sdHover=0; p.sdT=0;
+      p.sdCd=0; p.coyoteT=0; p.bufT=0; p.alive=true; p.wallLock=0; p.lastWallUid=null;
+      p.jumpCut=false; p.iframe=0;
+      IN.jump=true;
+      for(let n=0;n<240;n++){
+        if(n%period===0) IN.jumpEdge=true;
+        if(useSdash && n===2){ IN.up=true; IN.sdEdge=true; }
+        /* ★ 슬립 중 점프가 봉인돼 있는가를 **직접** 본다.
+           도달 높이만 보면 이 결함이 안 드러난다 — 캡에서 미끄러져 떨어진 뒤의
+           이단강림과 높이가 같기 때문이다. 그래서 "슬립 상태에서 점프 입력이
+           vy를 올렸는가"라는 상태 계약으로 검사한다. */
+        const wasSlip=p.slip, vy0=p.vy;
+        stepPlayer(dt);
+        if(wasSlip && !useSdash && p.vy>vy0+1e-6 && p.vy>0) _measSlipJump=true;
+        best=Math.max(best, p.y-3);
+        if(p.y<-3) break;
+      }
+    }
+  } finally { grid.remove(CAP); grid.remove(MEAS_PAD); _measRestore(snap); }
+  return best;
+}
 /* 계약 검사: 실측이 모델 포락선을 넘어서면 게이팅 근거가 무너진다 */
 function reachContractIssues(){
   const bad=[];
+  _measMaxVx=0; _measSlipJump=false;
   const S=measureScalars();
   const chk=(n,meas,model)=>{ if(meas>model+MEAS_EPS)
     bad.push(`${n} 실측 ${meas.toFixed(3)} > 모델 ${model.toFixed(3)}`); };
@@ -2941,6 +3025,15 @@ function reachContractIssues(){
     bad.push(`★경계벽 벽점프 성립 ${S.wallPlain.toFixed(2)} > ${REACH.doubleJump.toFixed(2)} (무한 벽점프 부활)`);
   if(S.wallPlainSd > REACH.chainUp+MEAS_EPS)
     bad.push(`★경계벽 창대쉬 충전 ${S.wallPlainSd.toFixed(2)} > ${REACH.chainUp.toFixed(2)} (무한 상승 부활)`);
+  /* ── 첨탑캡: 점프 봉인 확인 (B-2) ── */
+  S.finialJump  = measureFinialJump(false);
+  S.finialSdash = measureFinialJump(true);
+  if(S.finialJump > envMaxUp(ENV.finial)+MEAS_EPS)
+    bad.push(`★첨탑캡에서 점프 성립 ${S.finialJump.toFixed(2)} > ${envMaxUp(ENV.finial).toFixed(2)}`
+            +` (슬립 점프 봉인 해제)`);
+  if(S.finialSdash > envMaxUp(ENV.finialFull)+MEAS_EPS)
+    bad.push(`첨탑캡 창대쉬 상승 ${S.finialSdash.toFixed(2)} > ${envMaxUp(ENV.finialFull).toFixed(2)}`);
+  if(_measSlipJump) bad.push("★첨탑캡 슬립 중 점프가 발동함 (봉인 해제)");
   for(const kit of ["basic","full"]){
     const M=measureEnvelope(kit), model=kit==="full"? ENV.full : ENV.basic;
     let worst=0, at=null;
@@ -2953,6 +3046,10 @@ function reachContractIssues(){
     if(worst>MEAS_EPS)
       bad.push(`${kit} 포락선 초과 ${worst.toFixed(3)}u @dy${at.toFixed(1)}`);
   }
+  /* 전 측정 구간을 통틀어 체공 수평속도 상한을 넘은 적이 있는가 */
+  S.maxAirVx=_measMaxVx;
+  if(_measMaxVx > MEAS_VX_CAP+MEAS_EPS)
+    bad.push(`★체공 수평속도 ${_measMaxVx.toFixed(2)} > 상한 ${MEAS_VX_CAP.toFixed(2)}u/s`);
   return {bad, scalars:S};
 }
 /* 애니메이션 상태 선택 + 프레임 진행 */
@@ -3135,7 +3232,7 @@ function frame(T){
   }
   for(const f of vis) drawFloorBadge(f);
   drawVignette();
-  drawMinimap();
+  if(!(PLAY.on&&!ui.help)) drawMinimap();     // 2배 확대에서는 미니맵도 시야를 먹는다
   drawHUD(T);
   requestAnimationFrame(frame);
 }
