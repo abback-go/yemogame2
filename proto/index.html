@@ -2470,14 +2470,24 @@ const FX={
      여기서 1u = 화면 높이의 28%다 — 2u짜리 링/선은 화면을 통째로 덮는다. */
   sdMotes:12,               // 충전 중 바깥→안으로 빨려드는 금색 알갱이 (8~14)
   sdMoteR:[0.72,1.15],      // 알갱이 생성 반경(u)
-  sdMoteSize:0.026,         // 알갱이 반변(u) — 도트 감각을 위해 사각형으로 그린다
-  sdRing:[0.85,0.26],       // 감싸는 금색 링: 축소하며 밝아진다 (u)
-  sdRingLW:2.0,             // 링 두께(CSS px) — 1~2px
+  sdMoteSize:0.030,         // 알갱이 반지름(u) — 원형 발광으로 그린다(A-4)
+  /* ★ 링은 **선이 아니라 발광 덩어리**다 (A-2). 1px 정원 2개를 겹치면 HUD 조준경으로
+     읽힌다 — 오리 레퍼런스는 부드러운 빛무리다. 링 1개 · 도넛 그라디언트 · 수축하며
+     굵어짐 · 반지름에 ±sdRingWob의 미세 흔들림(완벽한 원은 기계적이다). */
+  sdRing:[0.85,0.26],       // 감싸는 금색 링 반지름: 축소하며 밝아진다 (u)
+  sdRingTh:[0.045,0.155],   // 링 두께(u): 수축할수록 굵어진다
+  sdRingWob:0.02,           // 반지름 흔들림 비율(±2%)
+  sdRingWobHz:7.5,
   sdVignette:0.07,          // 충전 비네트 최대 알파 (5~8%)
   sdAimLen:1.20,            // ★조준 지향선 길이(u) — 연출이자 **정보**다
   sdAimW:0.055,             // 지향선 뿌리 두께(u)
   sdBeamLen:1.85,           // 발사 빛줄기 길이(u)
   sdBeamW:0.34,             // 빛줄기 최대 폭(u)
+  /* ★ 빛줄기의 **가까운 끝을 캐릭터 앞에서 시작**시킨다 (A-3).
+     0에서 시작하면 0.15초 동안 캐릭터가 빛에 묻혀 자기 위치를 놓친다 —
+     8방향 이동기에서 위치 상실은 치명적이다. */
+  sdBeamNear:0.20,          // 빛줄기 시작점 = 전체 길이의 이 비율
+  sdBeamPeak:0.46,          // 최대 폭이 나오는 지점(비율)
   sdBeamLife:0.19,
   sdBurstRing:[0.20,1.05],  // 출발 지점 충격파 링(u)
   sdBurstLife:0.28,
@@ -2487,15 +2497,32 @@ const FX={
 
   /* ── ③ 공격 = 실크송 참격 아크 ──────────────────────────────────────
      가운데가 굵고 양 끝이 뾰족한 초승달. 붓으로 한 번 그은 형태.
+     ★ 기하는 **눈대중이 아니라 v3 시트 attack 4프레임 실측**이다 (A-1).
+       art/temple_maiden_sheet_v3.png 절대 인덱스 18~21(행3), 셀 144×148, 피벗(51,111).
+       프레임별 창끝(어깨 오른쪽 반원의 최원점):
+         f0 (91, 2)  f1 (110,25)  f2 (119,48)  f3 (105,95)
+       회전 중심을 셀 좌표 (60,58)로 잡으면 네 프레임의 반경이
+         0.640 / 0.599 / 0.598 / 0.583u — **거의 일정**하다. 여기가 스윙 축(어깨)이다.
+         피벗 기준으로 (+9px, +53px) = (+0.09u, +0.53u).
+       각도는 +61.0° → +33.4° → +9.6° → −39.4° (총 100.4° = 1.752rad,
+         중심 +10.8° = +0.188rad)로 **위에서 아래로 내리긋는** 스윙이다.
+     ⇒ 아크 중심선 반경 atkR을 창끝(0.60u)보다 조금 크게 잡고 두께 절반이
+       창끝을 덮게 하면 호가 **무기에서 이어져 나온다**. 0.72−0.30/2 = 0.57u.
      ★ 강화 단계에서는 atkR·atkThick·atkSpan만 키우면 된다. */
-  atkR:0.86,                // 반지름(u) — 캐릭터 키의 0.8~1.2배
-  atkThick:0.28,            // 중앙 두께(u)
-  atkSpan:2.05,             // 호가 덮는 각도(rad)
+  atkCx:0.09, atkCy:0.53,   // 스윙 축(어깨) — 캐릭터 피벗(발) 기준 오프셋(u)
+  atkR:0.72,                // 아크 중심선 반경(u) — 안쪽 가장자리 0.57u가 창끝 0.60u에 맞물린다
+  atkThick:0.30,            // 중앙 두께(u)
+  atkSpan:1.752,            // 호가 덮는 각도(rad) — 실측 100.4°
+  atkBias:0.188,            // 스윙 중심 각도(rad, 위가 +) — 실측 +10.8°
   atkGrow:0.18,             // 사라질 때 바깥으로 커지는 비율
   atkLife:0.10,             // s (0.08~0.12)
+  /* attack은 16fps 4프레임 = 프레임당 62.5ms. 타격은 f1~f2 구간이다.
+     입력 즉시 그리면 창이 아직 머리 위에 있는데 호만 먼저 지나간다. */
+  atkDelay:0.055,           // s — 발화 후 이만큼 뒤에 나타난다
   atkSparks:3,
 
   /* ── 기본 이동 ─────────────────────────────────────────────────── */
+  dustBlock:1.10,           // 먼지 사각형 한 변 = 반지름 × 이 값 (각진 도트 퍼프)
   runDustEvery:0.085,       // 달리기 발밑 퍼프 간격(s) — 2~3프레임마다 1개
   jumpPuff:7,               // 점프 발밑 링 퍼프
   airRingR:[0.14,0.62],     // 이단강림 금색 링(u)
@@ -2515,10 +2542,34 @@ const FX={
   shakeFreq:46,             // Hz
 };
 const FXP=[];               // 파티클 풀 (길이 ≤ FX.max)
-const fxs={ runT:0, slideT:0, trailT:0, moteT:0, spawned:0,
+const fxs={ runT:0, slideT:0, trailT:0, moteT:0, spawned:0, time:0,
             shT:0, shDur:0, shAmp:0, shDX:0, shDY:0, rnd:mulberry(20260808) };
 const fxR=()=>fxs.rnd();
 const fxRR=(a,b)=>a+(b-a)*fxs.rnd();
+/* #RRGGBB → rgba() — 그라디언트에는 "같은 색의 알파 0" 정지점이 필요하다 */
+const hexRGBA=(h,a)=>{ const v=parseInt(h.slice(1),16);
+  return `rgba(${(v>>16)&255},${(v>>8)&255},${v&255},${a})`; };
+/* ★ 빛 알갱이 스프라이트 캐시 (어드바이저 A-4)
+   2배 배율에서 1px 사각형은 2px 블록으로 또렷하게 보여 "빛"이 아니라 "파편"으로 읽힌다.
+   빛 계열은 **원형 + 가장자리 페이드**로 그린다. 파티클마다 그라디언트를 만들면
+   비싸므로 색당 한 번만 굽고 drawImage로 스케일한다(파티클당 draw call 1).
+   먼지(dust)는 반대로 **각지게** 그린다 — 도트 감성에 맞고 빛과 구분된다. */
+const fxGlowCache=new Map();
+function fxGlow(col){
+  let g=fxGlowCache.get(col);
+  if(!g){
+    const S=64, cc=document.createElement("canvas"); cc.width=S; cc.height=S;
+    const c=cc.getContext("2d");
+    const rg=c.createRadialGradient(S/2,S/2,0,S/2,S/2,S/2);
+    rg.addColorStop(0.00,hexRGBA(col,1.00));
+    rg.addColorStop(0.28,hexRGBA(col,0.95));
+    rg.addColorStop(0.58,hexRGBA(col,0.38));
+    rg.addColorStop(1.00,hexRGBA(col,0.00));
+    c.fillStyle=rg; c.fillRect(0,0,S,S);
+    g=cc; fxGlowCache.set(col,g);
+  }
+  return g;
+}
 function fxOff(){ return !FX.enabled || FX.suppress>0; }
 function fxClear(){
   if(FX.suppress>0) return;                  // 계측 중에는 화면 상태를 건드리지 않는다
@@ -2554,9 +2605,9 @@ function fxSpark(x,y,vx,vy,ttl,col,r){
 /* ★ 링·먼지는 **일반 합성**이 기본이다. 밝은 대리석/하늘 배경에서 가산 합성을 쓰면
    금색이 전부 흰색으로 날아가 "신성한 금빛"이 아니라 그냥 흰 원이 된다.
    가산은 진짜 뜨거운 것(빛줄기 코어·속도선·불똥)에만 쓴다. */
-function fxRing(x,y,r0,r1,ttl,col,lw,a0,layer,add){
+function fxRing(x,y,r0,r1,ttl,col,lw,a0,layer,add,glow){
   fxPush({k:"ring",x,y,vx:0,vy:0,r0,r1,ttl,c:col||FX.goldMid,
-          lw:lw||2.0,a0:a0==null?0.9:a0,L:layer==null?0:layer,add:!!add});
+          lw:lw||2.0,a0:a0==null?0.9:a0,L:layer==null?0:layer,add:!!add,glow:!!glow});
 }
 /* 달리기 — 발밑 작은 먼지, 진행 반대로 흘러감. 진동 없음. */
 function fxRunDust(p){
@@ -2576,8 +2627,8 @@ function fxJump(p){
 /* 이단강림 — 공중 금색 링 + 작은 빛 알갱이(깃털). 아주 미세한 진동. */
 function fxAirJump(p){
   if(fxOff()) return;
-  fxRing(p.x, fxChest(p), FX.airRingR[0], FX.airRingR[1], 0.26, FX.goldMid, 2.4, 0.95, 0);
-  fxRing(p.x, fxChest(p), FX.airRingR[0]*0.6, FX.airRingR[1]*0.66, 0.20, FX.whiteHot, 1.4, 0.70, 0, true);
+  fxRing(p.x, fxChest(p), FX.airRingR[0], FX.airRingR[1], 0.26, FX.goldHi, 2.6, 0.95, 0, false, true);
+  fxRing(p.x, fxChest(p), FX.airRingR[0]*0.6, FX.airRingR[1]*0.66, 0.20, FX.whiteHot, 1.6, 0.60, 0, true, true);
   for(let i=0;i<FX.airMotes;i++){
     const a=fxRR(0,Math.PI*2), s=fxRR(0.8,2.0);
     fxSpark(p.x+Math.cos(a)*0.14, fxChest(p)+Math.sin(a)*0.14,
@@ -2639,7 +2690,8 @@ function fxDash(p,dir){
             ttl:FX.dashLife*fxRR(0.82,1.15), c:fxR()<0.25? FX.pale : FX.whiteHot,
             L:0, add:true});
   }
-  fxPush({k:"flash", x:ox, y:oy, vx:0, vy:0, r0:FX.dashCoreR, r1:FX.dashCoreR*0.35,
+  fxPush({k:"flash", x:ox, y:oy, vx:0, vy:0, ang:base,
+          r0:FX.dashCoreR, r1:FX.dashCoreR*0.45,
           ttl:FX.dashLife*0.9, c:FX.whiteHot, L:1, add:true});
   for(let i=0;i<FX.dashSparks;i++)
     fxSpark(ox, oy+fxRR(-0.14,0.14), -dir*fxRR(1.0,3.4), fxRR(-0.8,0.8),
@@ -2650,7 +2702,7 @@ function fxDash(p,dir){
 function fxSdCharge(p){
   if(fxOff()) return;
   fxs.moteT=0;
-  fxRing(p.x, fxChest(p), FX.sdRing[0]*1.20, FX.sdRing[0]*0.95, 0.16, FX.goldMid, 1.6, 0.65, 0);
+  fxRing(p.x, fxChest(p), FX.sdRing[0]*1.22, FX.sdRing[0]*0.98, 0.16, FX.goldHi, 2.2, 0.60, 0, false, true);
 }
 /* ★② 창대쉬 발사 — 금색 빛줄기 + 불똥 + 출발 지점 충격파 링 */
 function fxSdLaunch(p){
@@ -2659,9 +2711,9 @@ function fxSdLaunch(p){
   const ang=Math.atan2(-p.sdy, p.sdx);                 // 월드→화면(+y 아래)
   fxPush({k:"beam", x:ox, y:oy, vx:0, vy:0, ang,
           len:FX.sdBeamLen, w:FX.sdBeamW, ttl:FX.sdBeamLife, L:0, add:true});
-  fxRing(ox, oy, FX.sdBurstRing[0], FX.sdBurstRing[1], FX.sdBurstLife, FX.goldMid, 3.0, 0.90, 0);
+  fxRing(ox, oy, FX.sdBurstRing[0], FX.sdBurstRing[1], FX.sdBurstLife, FX.goldHi, 3.4, 0.90, 0, false, true);
   fxRing(ox, oy, FX.sdBurstRing[0]*0.5, FX.sdBurstRing[1]*0.55, FX.sdBurstLife*0.7,
-         FX.whiteHot, 1.5, 0.65, 0, true);
+         FX.whiteHot, 2.0, 0.60, 0, true, true);
   for(let i=0;i<FX.sdSparks;i++){
     const a=ang+fxRR(-0.55,0.55), s=fxRR(1.4,5.0);
     fxSpark(ox, oy, Math.cos(a)*s, -Math.sin(a)*s, fxRR(0.16,0.34),
@@ -2672,17 +2724,20 @@ function fxSdLaunch(p){
 /* ★③ 공격 — 초승달 참격 아크 하나. (적이 없으므로 적중 진동은 없다) */
 function fxAttack(p){
   if(fxOff()) return;
-  const half=FX.atkSpan/2;
-  /* ang0/ang1은 **화면 각도**(+y 아래)다. dust/ring의 a0(알파)와 이름이 겹치지 않게 분리. */
-  const a0 = p.face>0 ? -half : Math.PI+half;
-  const a1 = p.face>0 ?  half : Math.PI-half;
-  fxPush({k:"arc", x:p.x+p.face*0.10, y:fxChest(p), vx:0, vy:0,
+  /* 스윙 축 = 어깨(실측). 월드 각도 → 화면 각도는 y부호가 뒤집힌다. */
+  const cx=p.x+p.face*FX.atkCx, cy=p.y+FX.atkCy;
+  const w0=FX.atkBias+FX.atkSpan/2, w1=FX.atkBias-FX.atkSpan/2;   // 월드(위가 +)
+  const s0=-w0, s1=-w1;                                           // 화면(아래가 +)
+  /* ang0/ang1은 **화면 각도**다. dust/ring의 a0(알파)와 이름이 겹치지 않게 분리했다. */
+  const a0 = p.face>0 ? s0 : Math.PI-s0;
+  const a1 = p.face>0 ? s1 : Math.PI-s1;
+  fxPush({k:"arc", x:cx, y:cy, vx:0, vy:0, delay:FX.atkDelay,
           r:FX.atkR, thick:FX.atkThick, ang0:a0, ang1:a1, ttl:FX.atkLife, L:1, add:false});
-  /* a는 **화면 각도**(+y 아래)다 — 월드 오프셋으로 되돌릴 때 y부호를 뒤집는다 */
   for(let i=0;i<FX.atkSparks;i++){
     const a=lerp(a0,a1,fxR()), s=fxRR(0.6,1.8);
-    fxSpark(p.x+p.face*0.10+Math.cos(a)*FX.atkR, fxChest(p)-Math.sin(a)*FX.atkR,
-            Math.cos(a)*s, -Math.sin(a)*s, fxRR(0.08,0.18), FX.cream, 0.024);
+    fxPush({k:"spark", x:cx+Math.cos(a)*FX.atkR, y:cy-Math.sin(a)*FX.atkR,
+            vx:Math.cos(a)*s, vy:-Math.sin(a)*s, delay:FX.atkDelay,
+            ttl:fxRR(0.08,0.18), c:FX.cream, r:0.028, g:6.0, dr:1.2, L:1, add:true});
   }
 }
 
@@ -2734,9 +2789,12 @@ function fxTick(dtFx){
       }
     } else fxs.trailT=0;
   }
+  fxs.time+=dtFx;                          // 링 흔들림 등 주기 연출용 시계
   /* 파티클 적분 */
   for(let i=FXP.length-1;i>=0;i--){
     const q=FXP[i];
+    /* 지연 발화 — 참격 아크를 스프라이트의 타격 프레임에 맞춘다(A-1) */
+    if(q.delay>0){ q.delay-=dtFx; continue; }
     q.t+=dtFx;
     if(q.t>=q.ttl){ FXP.splice(i,1); continue; }
     if(q.k==="conv"){                      // 캐릭터 쪽으로 빨려 들어간다(읽기만)
@@ -2761,29 +2819,49 @@ function fxDrawPass(layer,add){
   const z=cam.zoom;
   let any=false;
   for(const q of FXP){
-    if((q.L|0)!==layer || !!q.add!==add) continue;
+    if((q.L|0)!==layer || !!q.add!==add || q.delay>0) continue;
     const u=q.t/q.ttl, iu=1-u;
     if(!any){ ctx.save(); if(add) ctx.globalCompositeOperation="lighter"; any=true; }
     const X=sx(q.x), Y=sy(q.y);
     if(q.k==="dust"){
+      /* ★ 먼지는 **각지게** — 빛과 확실히 구분되고 도트 감성에 맞는다(A-4).
+         변 길이를 정수 픽셀로 스냅해 2배 배율에서 블록이 또렷하게 떨어지도록. */
       ctx.globalAlpha=iu*iu*q.a0; ctx.fillStyle=q.c;
-      ctx.beginPath(); ctx.arc(X,Y,Math.max(0.6,lerp(q.r0,q.r1,u)*z),0,7); ctx.fill();
+      /* 사각형은 같은 반지름의 원보다 면적이 4/π배라 무겁게 읽힌다 — 계수로 보정 */
+      const s=Math.max(2,Math.round(lerp(q.r0,q.r1,u)*z*FX.dustBlock));
+      ctx.fillRect(Math.round(X-s/2),Math.round(Y-s/2),s,s);
     }else if(q.k==="spark"){
-      ctx.globalAlpha=iu*(0.55+0.45*iu); ctx.fillStyle=q.c;
-      const r=Math.max(0.7,q.r*z*(1-0.4*u));
-      ctx.fillRect(X-r,Y-r,r*2,r*2);
+      /* ★ 빛은 **원형 + 가장자리 페이드**(A-4) */
+      ctx.globalAlpha=iu*(0.55+0.45*iu);
+      const r=Math.max(1.2,q.r*z*(1-0.4*u))*2.1;
+      ctx.drawImage(fxGlow(q.c),X-r,Y-r,r*2,r*2);
     }else if(q.k==="conv"){
       /* 빨려 들어오면서 **밝아진다** — 충전이 모이는 감각 */
-      ctx.globalAlpha=Math.min(1,0.35+u*1.1); ctx.fillStyle=q.c;
-      const r=Math.max(1,q.r*z*(0.6+0.5*u));
-      ctx.fillRect(X-r,Y-r,r*2,r*2);
+      ctx.globalAlpha=Math.min(1,0.35+u*1.1);
+      const r=Math.max(1.5,q.r*z*(0.6+0.5*u))*2.1;
+      ctx.drawImage(fxGlow(q.c),X-r,Y-r,r*2,r*2);
     }else if(q.k==="flash"){
-      ctx.globalAlpha=iu*iu; ctx.fillStyle=q.c;
-      ctx.beginPath(); ctx.arc(X,Y,Math.max(0.8,lerp(q.r0,q.r1,u)*z),0,7); ctx.fill();
+      /* ★ 수렴점은 **번지는 섬광**이지 원반이 아니다(A-5).
+         부챗살 축(q.ang)으로 늘린 타원형 글로우로 그린다. */
+      ctx.globalAlpha=iu*iu;
+      const r=Math.max(1,lerp(q.r0,q.r1,u)*z)*2.6;
+      ctx.save(); ctx.translate(X,Y); ctx.rotate(q.ang||0); ctx.scale(1.9,0.78);
+      ctx.drawImage(fxGlow(q.c),-r,-r,r*2,r*2);
+      ctx.restore();
     }else if(q.k==="ring"){
-      ctx.globalAlpha=iu*iu*q.a0; ctx.strokeStyle=q.c;
-      ctx.lineWidth=Math.max(1,q.lw*(1-0.45*u));
-      ctx.beginPath(); ctx.arc(X,Y,Math.max(0.6,lerp(q.r0,q.r1,u)*z),0,7); ctx.stroke();
+      const R=Math.max(0.6,lerp(q.r0,q.r1,u)*z);
+      if(q.glow){                       // 발광 도넛 (금색 충격파)
+        const th=Math.max(2,q.lw*z*0.02*(1+1.4*u));
+        const g2=ctx.createRadialGradient(X,Y,Math.max(0,R-th),X,Y,R+th);
+        g2.addColorStop(0,hexRGBA(q.c,0)); g2.addColorStop(0.5,hexRGBA(q.c,1));
+        g2.addColorStop(1,hexRGBA(q.c,0));
+        ctx.globalAlpha=iu*iu*q.a0; ctx.fillStyle=g2;
+        ctx.beginPath(); ctx.arc(X,Y,R+th,0,7); ctx.fill();
+      }else{                            // 먼지 링 (착지·점프) — 선으로 남긴다
+        ctx.globalAlpha=iu*iu*q.a0; ctx.strokeStyle=q.c;
+        ctx.lineWidth=Math.max(1,q.lw*(1-0.45*u));
+        ctx.beginPath(); ctx.arc(X,Y,R,0,7); ctx.stroke();
+      }
     }else if(q.k==="line"){
       /* 끝이 뾰족한 바늘 — 뿌리 폭 w, 끝 폭 0 */
       const L=q.len*z*(0.40+0.60*Math.min(1,u*4));
@@ -2803,20 +2881,25 @@ function fxDrawPass(layer,add){
   }
   if(any) ctx.restore();
 }
-/* 창대쉬 빛줄기 — 중심 흰색, 가장자리로 갈수록 금색. 끝으로 갈수록 흩어진다. */
+/* 창대쉬 빛줄기 — 중심 흰색, 가장자리로 갈수록 금색. 끝으로 갈수록 흩어진다.
+   ★ 양 끝이 뾰족한 **렌즈 형태**이고 가까운 끝이 sdBeamNear에서 시작한다 —
+     0에서 시작하면 캐릭터를 덮어 0.15초 동안 자기 위치를 놓친다(A-3). */
 function fxBeamPath(X,Y,q,z,u){
   const grow=Math.min(1,u*5.0);
   const L=q.len*z*(0.35+0.65*grow)*(1+0.35*u);
   const ca=Math.cos(q.ang), sa=Math.sin(q.ang);
   const nx=-sa, ny=ca;
   const a=(1-u)*(1-u);
+  const t0=L*FX.sdBeamNear, tp=L*FX.sdBeamPeak;     // 가까운 뾰족끝 · 최대폭 지점
   const leaf=(w,col,al)=>{
     const hw=w*z*0.5;
+    const P=(t,o)=>[X+ca*t+nx*o, Y+sa*t+ny*o];
+    const n0=P(t0,0), n1=P(L,0), m1=P(tp,hw), m2=P(tp,-hw);
     ctx.globalAlpha=a*al; ctx.fillStyle=col;
     ctx.beginPath();
-    ctx.moveTo(X-ca*hw*0.9, Y-sa*hw*0.9);
-    ctx.quadraticCurveTo(X+ca*L*0.24+nx*hw, Y+sa*L*0.24+ny*hw, X+ca*L, Y+sa*L);
-    ctx.quadraticCurveTo(X+ca*L*0.24-nx*hw, Y+sa*L*0.24-ny*hw, X-ca*hw*0.9, Y-sa*hw*0.9);
+    ctx.moveTo(n0[0],n0[1]);
+    ctx.quadraticCurveTo(m1[0],m1[1],n1[0],n1[1]);
+    ctx.quadraticCurveTo(m2[0],m2[1],n0[0],n0[1]);
     ctx.closePath(); ctx.fill();
   };
   leaf(q.w,        FX.goldLo, 0.55);
@@ -2854,7 +2937,11 @@ function fxAura(){
   const ang=Math.atan2(-p.sdy,p.sdx);
   const ca=Math.cos(ang), sa=Math.sin(ang);
   const L=FX.sdAimLen*z*(0.45+0.55*k), hw=FX.sdAimW*z*0.5;
-  const R=lerp(FX.sdRing[0],FX.sdRing[1],k*k)*z;
+  /* ★ 링은 **선이 아니라 발광 덩어리**다(A-2). 1px 정원 두 개는 HUD 조준경으로 읽힌다.
+     하나만 · 도넛 그라디언트 · 수축할수록 굵어짐 · 반지름에 ±2% 흔들림. */
+  const wob=1+FX.sdRingWob*Math.sin(fxs.time*FX.sdRingWobHz*Math.PI*2);
+  const R =lerp(FX.sdRing[0],FX.sdRing[1],k*k)*z*wob;
+  const th=lerp(FX.sdRingTh[0],FX.sdRingTh[1],k)*z;
   /* ── 1패스: 일반 합성 = **금색이 금색으로 보이는** 층 ── */
   ctx.save();
   ctx.globalAlpha=0.35+0.55*k; ctx.fillStyle=FX.goldMid;   // 조준 지향선(정보)
@@ -2863,20 +2950,24 @@ function fxAura(){
   ctx.lineTo(X-sa*hw, Y+ca*hw);
   ctx.lineTo(X+sa*hw, Y-ca*hw);
   ctx.closePath(); ctx.fill();
-  ctx.globalAlpha=0.40+0.55*k; ctx.strokeStyle=FX.goldMid; // 감싸는 링(축소·증광)
-  ctx.lineWidth=FX.sdRingLW;
-  ctx.beginPath(); ctx.arc(X,Y,Math.max(1,R),0,7); ctx.stroke();
+  const g=ctx.createRadialGradient(X,Y,Math.max(0,R-th),X,Y,R+th);
+  g.addColorStop(0.00,hexRGBA(FX.goldLo,0));
+  g.addColorStop(0.42,hexRGBA(FX.gold,0.85));
+  g.addColorStop(0.56,hexRGBA(FX.goldHi,1));
+  g.addColorStop(1.00,hexRGBA(FX.goldLo,0));
+  ctx.globalAlpha=0.35+0.55*k; ctx.fillStyle=g;
+  ctx.beginPath(); ctx.arc(X,Y,R+th,0,7); ctx.fill();
   ctx.restore();
   /* ── 2패스: 가산 합성 = 하이라이트만 ── */
   ctx.save(); ctx.globalCompositeOperation="lighter";
-  ctx.globalAlpha=0.45+0.45*k; ctx.fillStyle=FX.whiteHot;
+  ctx.globalAlpha=0.45+0.45*k;
   for(let i=1;i<=3;i++){                                 // 지향선 방향 눈금
-    const d=L*(i/4), r=Math.max(1,z*0.016*(1-i*0.15));
-    ctx.beginPath(); ctx.arc(X+ca*d, Y+sa*d, r, 0, 7); ctx.fill();
+    const d=L*(i/4), r=Math.max(1.5,z*0.016*(1-i*0.15))*2.2;
+    ctx.drawImage(fxGlow(FX.whiteHot), X+ca*d-r, Y+sa*d-r, r*2, r*2);
   }
-  ctx.globalAlpha=0.18+0.40*k; ctx.strokeStyle=FX.whiteHot;
-  ctx.lineWidth=Math.max(1,FX.sdRingLW*0.5);
-  ctx.beginPath(); ctx.arc(X,Y,Math.max(1,R*0.70),0,7); ctx.stroke();
+  const cr=Math.max(3,z*0.16*(0.5+0.6*k));               // 캐릭터 중심의 응축 발광
+  ctx.globalAlpha=0.15+0.45*k*k;
+  ctx.drawImage(fxGlow(FX.goldHi), X-cr, Y-cr, cr*2, cr*2);
   ctx.restore();
 }
 /* 충전 비네트 — 화면이 아주 미세하게 어두워지고 캐릭터만 밝게 남는다(시선 집중) */
@@ -2906,6 +2997,8 @@ const player={
   sdCharge:true, sdHover:0, sdT:0, sdx:0, sdy:0, sdCd:0,
   wall:0, wallGeo:null, lastWallUid:null, wallLock:0, wallSliding:false,
   dropT:0, dropping:false, landT:0, hurtT:0, atkT:0,
+  /* 착지 감지 전용 — "직전 스텝에 moveY가 수직 충돌을 해소했는가". 연출에만 쓴다. */
+  groundHit:false,
   alive:true, respawn:{x:2,y:1}, deaths:0,
   st:"idle", animI:0, animT:0, animFlip:false,
   tele:{apex:0, apexBase:0, lastJumpH:0, lastDashX:0, dashFrom:0, maxSpd:0,
@@ -3013,6 +3106,7 @@ function respawnPlayer(p){
   p.vx=0; p.vy=0; p.dashT=0; p.dashCd=0; p.dashUsed=false; p.jumps=0;
   p.sdCharge=true; p.sdHover=0; p.sdT=0; p.sdCd=0; p.lastWallUid=null;
   p.dropT=0; p.dropping=false; p.slip=false; p.alive=true; p.hurtT=0; p.iframe=0.6;
+  p.groundHit=false; p.landT=0;
   p.floor=floorOf(p.y); setAnim(p,"idle");
   fxClear();                                   // FX: 순간이동으로 남은 잔여물 제거
 }
@@ -3211,7 +3305,7 @@ function stepPlayer(dt){
   }
 
   /* 이동 — 축 분리 */
-  const vyImpact=p.vy;                     // FX 전용 읽기 사본 (moveY가 vy를 0으로 만든다)
+  const vyImpact=p.vy;                     // 충돌 해소 **직전** 하강속도 (moveY가 vy를 0으로 만든다)
   if(moveX(p,p.vx*dt)){ p.vx=0; if(p.sdT>0){ p.sdT=0; p.vy=0; } }   // 벽에 박으면 돌진 종료
   const r=moveY(p,p.vy*dt);
   if(r!==0 && p.sdT>0){ p.sdT=0; p.vy=0; }                          // 천장/바닥도 마찬가지
@@ -3222,6 +3316,23 @@ function stepPlayer(dt){
   /* 창대쉬 종료 — 상승분은 남기지 않는다(변위형 이동기).
      수평 관성만 남기고 위 감쇠 로직이 상한으로 되돌린다. */
   if(sdashing && p.sdT<=0 && p.sdHover<=0){ p.vy=0; p.jumpCut=true; p.tele.sdEndPending=true; }
+
+  /* ★ 착지 감지 — `p.grounded`로 잡으면 안 된다.
+     `groundUnder`는 발밑 0.03u 이내를 접지로 인정하는데(런타임 관대함), 낙하 중
+     그 띠를 지나는 스텝에서 `p.grounded`가 먼저 켜져 버린다. 그러면 다음 스텝의
+     실제 착지에서 `!wasGround`가 성립하지 않아 이벤트가 통째로 사라진다.
+     낙하속도 8u/s에서 한 스텝 이동이 0.067u이므로 유실 확률이 0.03/0.067 ≈ 45%였고,
+     **기존 land 애니메이션(프레임 16)도 같은 이유로 절반쯤 안 나오고 있었다.**
+
+     대신 "이 스텝에 moveY가 **수직 충돌을 실제로 해소했는가**"(r===1)를 쓴다.
+     허용오차가 개입하지 않는 결정론적 신호다. 다만 지면에 서 있으면 중력분 때문에
+     매 스텝 r===1이 나오므로, **직전 스텝에도 해소했는가**(p.groundHit)로 정지 상태를
+     걸러낸다. 공중 → 접촉 전이에서만 정확히 한 번 발화한다.
+     ★ p.groundHit은 순수 연출용 플래그다 — 물리 적분·도달 수치에 어떤 영향도 없다. */
+  const landed = (r===1) && !p.groundHit;
+  p.groundHit = (r===1);
+  if(landed){ p.landT=CTRL.landAnim; setAnim(p,"land"); fxLand(p,vyImpact); }
+
   const g=groundUnder(p);
   const wasGround=p.grounded;
   p.ground=g;
@@ -3233,15 +3344,7 @@ function stepPlayer(dt){
     p.lastWallUid=null;                                    // 접지 = 벽점프 제한 해제
     if(!p.sdCharge) p.sdCd=CTRL.sdashCool;
     p.sdCharge=true;                                       // 창대쉬 충전 회복
-    if(!wasGround && r===1){ p.landT=CTRL.landAnim; setAnim(p,"land"); }
-    /* ★ FX 착지는 위 훅에 걸지 않는다. `p.grounded`는 발밑 0.03u 이내면 이미 true라서
-       (groundUnder의 허용오차) 착지 **직전** 스텝에서 켜지는 경우가 있고, 그러면
-       `!wasGround`가 성립하지 않아 이벤트가 산발적으로 유실된다 — 낙하속도 8u/s에서
-       실측 유실률 약 45%였다. (기존 land 애니메이션도 같은 이유로 잘 안 나온다.
-        컨트롤러 결함이지만 물리·애니 동작 변경은 이번 작업 범위 밖이라 손대지 않는다.)
-       FX는 "이 스텝에 바닥을 뚫고 들어왔다(r===1) + 직전 하강속도가 유의미하다"는
-       **자기 조건**으로 판정한다. 평지에 서 있을 때의 vy(-0.22u/s)는 FX.landMinV가 거른다. */
-    if(r===1) fxLand(p,vyImpact);                                          // FX
+    /* 착지 이벤트는 위 `landed`에서 이미 처리했다 (grounded 훅은 유실률 45%였다) */
     const cp=Q.checkpointNear(p.x,p.y,0.9);
     if(cp) p.respawn={x:cp.wx, y:cp.wy};
   }else if(wasGround && p.vy<=0){ p.coyoteT=CTRL.coyote; }
@@ -3614,7 +3717,13 @@ function drawPlayer(T){
      창대쉬 중에는 돌진 방향이 반전을 결정하고, 그 외엔 바라보는 방향이 결정한다. */
   const flip = (p.sdT>0) ? p.animFlip : (p.face<0);
   if(flip) ctx.scale(-1,1);                      // 피벗 기준 반전 — 발 위치 불변
-  if(p.iframe>0) ctx.globalAlpha=0.35+0.65*Math.abs(Math.sin(T*0.03));
+  /* ★ 무적 점멸 — **창대쉬 중에는 끄다**(A-3).
+     창대쉬는 hover 0.2s + 돌진 0.15s 내내 iframe이 걸려 있어서, 뒤에 금색 빛줄기가
+     깔린 채로 캐릭터가 35%까지 투명해진다 → 0.35초 동안 자기 위치를 놓친다.
+     8방향 이동기에서 위치 상실은 치명적이다. 무적 정보는 금색 오라가 이미 전달한다.
+     (대시 0.16s의 점멸은 짧고 배경이 어두워 문제되지 않으므로 유지) */
+  if(p.iframe>0 && p.sdT<=0 && p.sdHover<=0)
+    ctx.globalAlpha=0.35+0.65*Math.abs(Math.sin(T*0.03));
   if(SPRITE.ready){
     /* 셀 전체를 그린다 — sdash_down은 피벗보다 31px 아래로 창끝이 뻗으므로
        셀 하단을 잘라내면 창이 잘린다 */
