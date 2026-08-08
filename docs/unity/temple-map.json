@@ -1,0 +1,1920 @@
+{
+ "schema": "temple-map/1.1",
+ "units": "u",
+ "ppu": 100,
+ "origin": "bottom-left",
+ "yUp": true,
+ "name": "신전 수련장",
+ "phys": {
+  "gravity": 26,
+  "runSpeed": 3.92,
+  "airControl": 0.9,
+  "jumpV": 9.1,
+  "airJumpV": 8.2,
+  "dashSpeed": 7.8,
+  "dashTime": 0.16,
+  "vaultV": 13.3,
+  "spearRange": 5,
+  "attackUpReach": 0.8,
+  "ledgeSnap": 0.08,
+  "simDt": 0.008333333333333333,
+  "sdashSpeed": 11,
+  "sdashTime": 0.15,
+  "sdashHover": 0.2,
+  "airDecayT": 0.12,
+  "bodyW": 0.3,
+  "bodyH": 0.82
+ },
+ "spear": {
+  "enabled": false,
+  "ledgeLen": 0.8,
+  "ledgeThick": 0.12,
+  "maxPlanted": 1,
+  "recallDamages": true
+ },
+ "floors": [
+  {
+   "n": 1,
+   "id": "plaza",
+   "name": "입구 대광장",
+   "sub": "Entry Grand Plaza",
+   "yOff": 0,
+   "w": 34,
+   "h": 6,
+   "concept": "달리기·점프·대시·기본 3타 콤보. 창 꽂기 의도적 미등장.",
+   "camera": {
+    "padY": 1.2
+   },
+   "geo": [
+    {
+     "id": "plaza_floor",
+     "t": "solid",
+     "rect": [
+      0,
+      0,
+      34,
+      1
+     ],
+     "stand": true,
+     "label": "대광장 바닥"
+    },
+    {
+     "id": "wall_l",
+     "t": "wall",
+     "rect": [
+      0,
+      1,
+      0.4,
+      5
+     ],
+     "stand": false,
+     "label": "좌 경계벽"
+    },
+    {
+     "id": "wall_r",
+     "t": "wall",
+     "rect": [
+      33.6,
+      1,
+      0.4,
+      5
+     ],
+     "stand": false,
+     "label": "우 경계벽"
+    },
+    {
+     "id": "step_p1",
+     "t": "solid",
+     "rect": [
+      24,
+      2.2,
+      3,
+      0.2
+     ],
+     "stand": true,
+     "label": "계단 P1"
+    },
+    {
+     "id": "step_p2",
+     "t": "solid",
+     "rect": [
+      29,
+      3.4,
+      2,
+      0.2
+     ],
+     "stand": true,
+     "label": "계단 P2"
+    },
+    {
+     "id": "exit_ledge",
+     "t": "solid",
+     "rect": [
+      31,
+      4.8,
+      2.6,
+      0.2
+     ],
+     "stand": true,
+     "label": "출구 렛지 P3"
+    },
+    {
+     "id": "deco_col1",
+     "t": "deco",
+     "rect": [
+      5.45,
+      1,
+      1.1,
+      4.4
+     ],
+     "label": "대열주"
+    },
+    {
+     "id": "deco_col2",
+     "t": "deco",
+     "rect": [
+      10.45,
+      1,
+      1.1,
+      4.4
+     ],
+     "label": "대열주"
+    },
+    {
+     "id": "deco_col3",
+     "t": "deco",
+     "rect": [
+      15.45,
+      1,
+      1.1,
+      4.4
+     ],
+     "label": "대열주"
+    },
+    {
+     "id": "deco_col4",
+     "t": "deco",
+     "rect": [
+      20.45,
+      1,
+      1.1,
+      4.4
+     ],
+     "label": "대열주"
+    }
+   ],
+   "spearFaces": [],
+   "hazards": [],
+   "checkpoints": [
+    {
+     "id": "cp1",
+     "pos": [
+      4.5,
+      1
+     ],
+     "kind": "shrine",
+     "display": "사당1"
+    }
+   ],
+   "portals": [
+    {
+     "id": "exit",
+     "pos": [
+      32.5,
+      5
+     ],
+     "mode": "door",
+     "to": "corridor",
+     "toPortal": "entry"
+    }
+   ],
+   "spawn": [
+    2,
+    1
+   ],
+   "targets": [
+    {
+     "id": "t1a",
+     "pos": [
+      8,
+      1
+     ],
+     "kind": "ground"
+    },
+    {
+     "id": "t1b",
+     "pos": [
+      13,
+      1
+     ],
+     "kind": "ground"
+    },
+    {
+     "id": "t1c",
+     "pos": [
+      18,
+      1
+     ],
+     "kind": "ground"
+    }
+   ],
+   "collectibles": [],
+   "spearPlan": [],
+   "bbox": {
+    "x0": 0,
+    "x1": 34,
+    "y0": 0,
+    "y1": 6
+   },
+   "spawnW": [
+    2,
+    1
+   ]
+  },
+  {
+   "n": 2,
+   "id": "corridor",
+   "name": "부서진 회랑",
+   "sub": "Broken Corridor",
+   "yOff": 6,
+   "w": 28,
+   "h": 7,
+   "concept": "동일 2.5u 갭 반복 대시점프 + 기둥머리 위 공중 허수아비 에어콤보.",
+   "camera": {
+    "padY": 1.2
+   },
+   "geo": [
+    {
+     "id": "safe_floor",
+     "t": "solid",
+     "rect": [
+      0.4,
+      0,
+      25.6,
+      1
+     ],
+     "stand": true,
+     "label": "회복 바닥(세이프티)"
+    },
+    {
+     "id": "wall_l",
+     "t": "wall",
+     "rect": [
+      0,
+      0,
+      0.4,
+      7
+     ],
+     "stand": false,
+     "label": "좌 경계벽"
+    },
+    {
+     "id": "wall_r",
+     "t": "wall",
+     "rect": [
+      27.6,
+      0,
+      0.4,
+      7
+     ],
+     "stand": false,
+     "label": "우 경계벽"
+    },
+    {
+     "id": "colA_body",
+     "t": "wall",
+     "rect": [
+      5,
+      1,
+      1,
+      1
+     ],
+     "stand": false,
+     "label": "기둥 A 몸통"
+    },
+    {
+     "id": "capA",
+     "t": "oneway",
+     "rect": [
+      4.5,
+      2,
+      2,
+      0.2
+     ],
+     "stand": true,
+     "dropThrough": true,
+     "label": "기둥머리 A"
+    },
+    {
+     "id": "colB_body",
+     "t": "wall",
+     "rect": [
+      9.5,
+      1,
+      1,
+      1.6
+     ],
+     "stand": false,
+     "label": "기둥 B 몸통"
+    },
+    {
+     "id": "capB",
+     "t": "oneway",
+     "rect": [
+      9,
+      2.6,
+      2,
+      0.2
+     ],
+     "stand": true,
+     "dropThrough": true,
+     "label": "기둥머리 B"
+    },
+    {
+     "id": "colC_body",
+     "t": "wall",
+     "rect": [
+      14,
+      1,
+      1,
+      2.2
+     ],
+     "stand": false,
+     "label": "기둥 C 몸통"
+    },
+    {
+     "id": "capC",
+     "t": "oneway",
+     "rect": [
+      13.5,
+      3.2,
+      2,
+      0.2
+     ],
+     "stand": true,
+     "dropThrough": true,
+     "label": "기둥머리 C"
+    },
+    {
+     "id": "colD_body",
+     "t": "wall",
+     "rect": [
+      18.5,
+      1,
+      1,
+      3.1
+     ],
+     "stand": false,
+     "label": "기둥 D 몸통"
+    },
+    {
+     "id": "capD",
+     "t": "oneway",
+     "rect": [
+      18,
+      4.1,
+      2,
+      0.2
+     ],
+     "stand": true,
+     "dropThrough": true,
+     "label": "기둥머리 D"
+    },
+    {
+     "id": "exit_ledge",
+     "t": "solid",
+     "rect": [
+      22.5,
+      4.6,
+      5.1,
+      0.2
+     ],
+     "stand": true,
+     "label": "출구 렛지"
+    },
+    {
+     "id": "stump1",
+     "t": "deco",
+     "rect": [
+      7.5,
+      1,
+      0.7,
+      0.6
+     ],
+     "label": "그루터기"
+    },
+    {
+     "id": "stump2",
+     "t": "deco",
+     "rect": [
+      16.5,
+      1,
+      0.7,
+      0.6
+     ],
+     "label": "그루터기"
+    }
+   ],
+   "spearFaces": [],
+   "hazards": [],
+   "checkpoints": [],
+   "portals": [
+    {
+     "id": "entry",
+     "pos": [
+      2,
+      1
+     ],
+     "mode": "door",
+     "to": "plaza",
+     "toPortal": "exit"
+    },
+    {
+     "id": "exit",
+     "pos": [
+      26.5,
+      4.8
+     ],
+     "mode": "door",
+     "to": "shaft",
+     "toPortal": "entry"
+    }
+   ],
+   "targets": [
+    {
+     "id": "t2g",
+     "pos": [
+      3.5,
+      1
+     ],
+     "kind": "ground"
+    },
+    {
+     "id": "t2a1",
+     "pos": [
+      10,
+      4.2
+     ],
+     "kind": "air"
+    },
+    {
+     "id": "t2a2",
+     "pos": [
+      14.5,
+      4.9
+     ],
+     "kind": "air"
+    },
+    {
+     "id": "t2a3",
+     "pos": [
+      19,
+      5.6
+     ],
+     "kind": "air"
+    }
+   ],
+   "collectibles": [],
+   "spearPlan": [],
+   "bbox": {
+    "x0": 0,
+    "x1": 28,
+    "y0": 0,
+    "y1": 7
+   }
+  },
+  {
+   "n": 3,
+   "id": "shaft",
+   "name": "첫 벽등반 샤프트",
+   "sub": "First Ascent Shaft",
+   "yOff": 13,
+   "w": 7,
+   "h": 16,
+   "concept": "★창 꽂기 발판 첫 공개★ 필수 갭 3.6·4.4u > 이단강림 → 창 없이는 불가.",
+   "camera": {
+    "padY": 2
+   },
+   "geo": [
+    {
+     "id": "wall_l",
+     "t": "wall",
+     "rect": [
+      0,
+      0,
+      0.5,
+      16
+     ],
+     "stand": false,
+     "label": "좌 경계벽"
+    },
+    {
+     "id": "wall_r",
+     "t": "wall",
+     "rect": [
+      6.5,
+      0,
+      0.5,
+      16
+     ],
+     "stand": false,
+     "label": "우 경계벽"
+    },
+    {
+     "id": "safe_floor",
+     "t": "solid",
+     "rect": [
+      0.5,
+      0,
+      6,
+      1
+     ],
+     "stand": true,
+     "label": "바닥 안전지대"
+    },
+    {
+     "id": "warm_col",
+     "t": "wall",
+     "rect": [
+      2.5,
+      1,
+      0.5,
+      4
+     ],
+     "stand": false,
+     "wallJump": true,
+     "label": "워밍업 기둥(벽점프 슈트)"
+    },
+    {
+     "id": "r1",
+     "t": "solid",
+     "rect": [
+      2.3,
+      5,
+      1.2,
+      0.2
+     ],
+     "stand": true,
+     "reachVia": [
+      "walljump"
+     ],
+     "label": "기둥머리 R1"
+    },
+    {
+     "id": "r2",
+     "t": "solid",
+     "rect": [
+      0.5,
+      8.4,
+      2.3,
+      0.2
+     ],
+     "stand": true,
+     "gate": "sdash",
+     "label": "좌벽 렛지 R2"
+    },
+    {
+     "id": "r3",
+     "t": "solid",
+     "rect": [
+      0.5,
+      11.8,
+      2,
+      0.2
+     ],
+     "stand": true,
+     "gate": "sdash",
+     "label": "좌벽 렛지 R3"
+    },
+    {
+     "id": "niche_floor",
+     "t": "solid",
+     "rect": [
+      5.9,
+      11.8,
+      0.6,
+      0.2
+     ],
+     "stand": true,
+     "gate": "sdash",
+     "label": "히든 니치 바닥"
+    },
+    {
+     "id": "niche_roof",
+     "t": "wall",
+     "rect": [
+      5.9,
+      13.4,
+      0.6,
+      0.3
+     ],
+     "stand": false,
+     "label": "히든 니치 천장(낙하 차단)"
+    },
+    {
+     "id": "exit_ledge",
+     "t": "solid",
+     "rect": [
+      4.5,
+      14.3,
+      2,
+      0.2
+     ],
+     "stand": true,
+     "label": "출구 렛지"
+    }
+   ],
+   "spearFaces": [
+    {
+     "id": "face_l",
+     "rect": [
+      0.4,
+      6,
+      0.1,
+      7.5
+     ],
+     "normal": [
+      1,
+      0
+     ],
+     "role": "climb",
+     "label": "좌벽 창꽂기면"
+    },
+    {
+     "id": "face_r",
+     "rect": [
+      6.5,
+      9,
+      0.1,
+      2
+     ],
+     "normal": [
+      -1,
+      0
+     ],
+     "role": "hidden",
+     "label": "우벽 창꽂기면(히든)"
+    }
+   ],
+   "hazards": [
+    {
+     "id": "well",
+     "rect": [
+      0.5,
+      1,
+      6,
+      12
+     ],
+     "kind": "fall",
+     "catch": "safe_floor",
+     "respawn": "cp3",
+     "label": "중앙 우물(낙하)"
+    }
+   ],
+   "checkpoints": [
+    {
+     "id": "cp3",
+     "pos": [
+      1.5,
+      1
+     ],
+     "kind": "checkpoint",
+     "display": "임시 강림점"
+    }
+   ],
+   "portals": [
+    {
+     "id": "entry",
+     "pos": [
+      1.5,
+      1
+     ],
+     "mode": "door",
+     "to": "corridor",
+     "toPortal": "exit"
+    },
+    {
+     "id": "exit",
+     "pos": [
+      6,
+      14.5
+     ],
+     "mode": "door",
+     "to": "fissure",
+     "toPortal": "entry"
+    }
+   ],
+   "targets": [
+    {
+     "id": "t3w",
+     "pos": [
+      6.25,
+      6.55
+     ],
+     "kind": "wall"
+    },
+    {
+     "id": "t3a",
+     "pos": [
+      4.6,
+      10.6
+     ],
+     "kind": "air"
+    }
+   ],
+   "collectibles": [
+    {
+     "id": "cr3",
+     "pos": [
+      6.2,
+      12.5
+     ],
+     "gate": "sdash",
+     "note": "R3에서 수평 창대쉬로 니치 진입"
+    }
+   ],
+   "spearPlan": [
+    {
+     "id": "sp3a",
+     "from": [
+      2.9,
+      5.2
+     ],
+     "face": "face_l",
+     "at": [
+      0.5,
+      6.5
+     ],
+     "note": "창① 좌벽 y6.5 → 발판 6.62"
+    },
+    {
+     "id": "sp3b",
+     "from": [
+      1.2,
+      8.8
+     ],
+     "face": "face_l",
+     "at": [
+      0.5,
+      10.1
+     ],
+     "note": "창② 좌벽 y10.1 → 발판 10.22 → 창대도약 R3"
+    },
+    {
+     "id": "sp3c",
+     "from": [
+      2.8,
+      8.8
+     ],
+     "face": "face_r",
+     "at": [
+      6.5,
+      9.8
+     ],
+     "note": "창③ 우벽(히든) → 발판 9.92 → 니치"
+    }
+   ],
+   "bbox": {
+    "x0": 0,
+    "x1": 7,
+    "y0": 0,
+    "y1": 16
+   }
+  },
+  {
+   "n": 4,
+   "id": "fissure",
+   "name": "큰 균열 갭",
+   "sub": "The Great Fissure",
+   "yOff": 29,
+   "w": 16,
+   "h": 9,
+   "concept": "대시점프 → 이단강림 → 수평형 창꽂기+창대도약 3비트 체이닝.",
+   "camera": {
+    "padY": 1.4
+   },
+   "geo": [
+    {
+     "id": "wall_l",
+     "t": "wall",
+     "rect": [
+      0,
+      0,
+      0.5,
+      9
+     ],
+     "stand": false,
+     "label": "좌 경계벽"
+    },
+    {
+     "id": "wall_r",
+     "t": "wall",
+     "rect": [
+      15.5,
+      0,
+      0.5,
+      9
+     ],
+     "stand": false,
+     "label": "우 경계벽"
+    },
+    {
+     "id": "entry_ledge",
+     "t": "solid",
+     "rect": [
+      0.5,
+      0,
+      2.1,
+      1.5
+     ],
+     "stand": true,
+     "label": "진입 렛지"
+    },
+    {
+     "id": "p1_body",
+     "t": "wall",
+     "rect": [
+      5.3,
+      0,
+      0.6,
+      1.6
+     ],
+     "stand": false,
+     "label": "P1 몸통"
+    },
+    {
+     "id": "cap_p1",
+     "t": "oneway",
+     "rect": [
+      5,
+      1.6,
+      1.2,
+      0.2
+     ],
+     "stand": true,
+     "dropThrough": true,
+     "label": "기둥머리 P1"
+    },
+    {
+     "id": "p2",
+     "t": "solid",
+     "rect": [
+      8.6,
+      3.4,
+      1,
+      0.2
+     ],
+     "stand": true,
+     "label": "좁은 렛지 P2"
+    },
+    {
+     "id": "far_pillar",
+     "t": "wall",
+     "rect": [
+      11.5,
+      0,
+      0.8,
+      3
+     ],
+     "stand": false,
+     "cap": "finial",
+     "label": "먼 기둥(첨탑캡)"
+    },
+    {
+     "id": "exit_ledge",
+     "t": "solid",
+     "rect": [
+      13,
+      0,
+      2.5,
+      7
+     ],
+     "stand": true,
+     "gate": "sdash",
+     "label": "출구 렛지"
+    }
+   ],
+   "spearFaces": [
+    {
+     "id": "far_face",
+     "rect": [
+      11.5,
+      0.5,
+      0.1,
+      2.4
+     ],
+     "normal": [
+      -1,
+      0
+     ],
+     "role": "cross",
+     "label": "먼 기둥 좌면"
+    }
+   ],
+   "hazards": [
+    {
+     "id": "fissure",
+     "rect": [
+      2.6,
+      0,
+      10.4,
+      1.2
+     ],
+     "kind": "fall",
+     "respawn": "cp4",
+     "label": "대균열 낙하존"
+    }
+   ],
+   "checkpoints": [
+    {
+     "id": "cp4",
+     "pos": [
+      1.5,
+      1.5
+     ],
+     "kind": "checkpoint",
+     "display": "진입 리스폰"
+    }
+   ],
+   "portals": [
+    {
+     "id": "entry",
+     "pos": [
+      1.5,
+      1.5
+     ],
+     "mode": "door",
+     "to": "shaft",
+     "toPortal": "exit"
+    },
+    {
+     "id": "exit",
+     "pos": [
+      14.5,
+      7
+     ],
+     "mode": "door",
+     "to": "arena",
+     "toPortal": "entry"
+    }
+   ],
+   "targets": [
+    {
+     "id": "t4a",
+     "pos": [
+      6,
+      1.8
+     ],
+     "kind": "ground"
+    },
+    {
+     "id": "t4b",
+     "pos": [
+      7.4,
+      4.6
+     ],
+     "kind": "air"
+    },
+    {
+     "id": "t4c",
+     "pos": [
+      11.9,
+      4.4
+     ],
+     "kind": "air"
+    }
+   ],
+   "collectibles": [
+    {
+     "id": "cr4",
+     "pos": [
+      12.6,
+      8.6
+     ],
+     "gate": "sdash",
+     "note": "출구 렛지에서 위로 창대쉬 → 균열 위 공중"
+    }
+   ],
+   "spearPlan": [
+    {
+     "id": "sp4",
+     "from": [
+      9.6,
+      3.6
+     ],
+     "face": "far_face",
+     "at": [
+      11.5,
+      4.5
+     ],
+     "note": "발판 4.62 → 창대도약 정점 8.02 → 출구 6.5"
+    }
+   ],
+   "bbox": {
+    "x0": 0,
+    "x1": 16,
+    "y0": 0,
+    "y1": 9
+   }
+  },
+  {
+   "n": 5,
+   "id": "arena",
+   "name": "수련 아레나",
+   "sub": "The Trial Arena",
+   "yOff": 38,
+   "w": 18,
+   "h": 10,
+   "concept": "전투 종합 — i-frame 회피·창강화 게이지·전투용 창꽂기 발판 위 에어콤보.",
+   "camera": {
+    "padY": 1.2
+   },
+   "geo": [
+    {
+     "id": "wall_l",
+     "t": "wall",
+     "rect": [
+      0,
+      0,
+      0.5,
+      10
+     ],
+     "stand": false,
+     "label": "좌 경계벽"
+    },
+    {
+     "id": "wall_r",
+     "t": "wall",
+     "rect": [
+      17.5,
+      0,
+      0.5,
+      10
+     ],
+     "stand": false,
+     "label": "우 경계벽"
+    },
+    {
+     "id": "arena_floor",
+     "t": "solid",
+     "rect": [
+      0.5,
+      0,
+      17,
+      1
+     ],
+     "stand": true,
+     "label": "아레나 바닥(연속)"
+    },
+    {
+     "id": "center_dais",
+     "t": "solid",
+     "rect": [
+      6,
+      0,
+      1.8,
+      2.4
+     ],
+     "stand": true,
+     "label": "중앙 대리석 단"
+    },
+    {
+     "id": "trial_pillar",
+     "t": "wall",
+     "rect": [
+      11.6,
+      2,
+      0.6,
+      4.4
+     ],
+     "stand": false,
+     "cap": "finial",
+     "label": "★수련 기둥(부유·첨탑캡)"
+    },
+    {
+     "id": "cap_air1",
+     "t": "oneway",
+     "rect": [
+      4,
+      3.1,
+      1.2,
+      0.1
+     ],
+     "stand": true,
+     "dropThrough": true,
+     "label": "기둥머리 P-air1"
+    },
+    {
+     "id": "cornice",
+     "t": "solid",
+     "rect": [
+      13,
+      2.4,
+      1.5,
+      0.2
+     ],
+     "stand": true,
+     "label": "코니스(중단 렛지)"
+    },
+    {
+     "id": "relic_pillar",
+     "t": "wall",
+     "rect": [
+      14.5,
+      1,
+      0.5,
+      5.5
+     ],
+     "stand": false,
+     "cap": "finial",
+     "label": "성물 기둥(첨탑캡)"
+    },
+    {
+     "id": "exit_ledge",
+     "t": "solid",
+     "rect": [
+      15.3,
+      5.9,
+      2.2,
+      0.1
+     ],
+     "stand": true,
+     "gate": "sdash",
+     "label": "출구 렛지"
+    }
+   ],
+   "spearFaces": [
+    {
+     "id": "dais_face",
+     "rect": [
+      6,
+      1,
+      0.1,
+      1.4
+     ],
+     "normal": [
+      -1,
+      0
+     ],
+     "role": "aux",
+     "label": "중앙 단 좌면(보조)"
+    },
+    {
+     "id": "trial_face",
+     "rect": [
+      11.6,
+      2,
+      0.1,
+      3
+     ],
+     "normal": [
+      -1,
+      0
+     ],
+     "role": "combat",
+     "label": "수련 기둥 좌면(시그니처)"
+    },
+    {
+     "id": "relic_face",
+     "rect": [
+      14.5,
+      1,
+      0.1,
+      5.5
+     ],
+     "normal": [
+      -1,
+      0
+     ],
+     "role": "exit",
+     "label": "성물 기둥 좌면(출구용)"
+    }
+   ],
+   "hazards": [],
+   "checkpoints": [
+    {
+     "id": "cp2",
+     "pos": [
+      2.5,
+      1
+     ],
+     "kind": "shrine",
+     "display": "사당2"
+    }
+   ],
+   "portals": [
+    {
+     "id": "entry",
+     "pos": [
+      1.5,
+      1
+     ],
+     "mode": "door",
+     "to": "fissure",
+     "toPortal": "exit"
+    },
+    {
+     "id": "exit",
+     "pos": [
+      16.5,
+      6
+     ],
+     "mode": "door",
+     "to": "spire",
+     "toPortal": "entry"
+    }
+   ],
+   "targets": [
+    {
+     "id": "dg1",
+     "pos": [
+      4.5,
+      1
+     ],
+     "kind": "ground"
+    },
+    {
+     "id": "dg2",
+     "pos": [
+      6.9,
+      2.4
+     ],
+     "kind": "ground"
+    },
+    {
+     "id": "dg3",
+     "pos": [
+      10,
+      1
+     ],
+     "kind": "ground"
+    },
+    {
+     "id": "da1",
+     "pos": [
+      4.6,
+      3.9
+     ],
+     "kind": "air"
+    },
+    {
+     "id": "da2",
+     "pos": [
+      11.9,
+      8
+     ],
+     "kind": "air",
+     "gate": "sdash",
+     "note": "수련 기둥 위 — 창대쉬로 올라야 타격 가능(공격 리치 포함 판정)"
+    },
+    {
+     "id": "da3",
+     "pos": [
+      14,
+      5.4
+     ],
+     "kind": "air"
+    },
+    {
+     "id": "dw1",
+     "pos": [
+      0.65,
+      3.2
+     ],
+     "kind": "wall"
+    },
+    {
+     "id": "dw2",
+     "pos": [
+      11.5,
+      3
+     ],
+     "kind": "wall"
+    },
+    {
+     "id": "ct1",
+     "pos": [
+      8.5,
+      1
+     ],
+     "kind": "counter",
+     "note": "근접 예고"
+    },
+    {
+     "id": "ct2",
+     "pos": [
+      13.3,
+      2.6
+     ],
+     "kind": "counter",
+     "note": "투사체 예고"
+    }
+   ],
+   "collectibles": [],
+   "spearPlan": [
+    {
+     "id": "sp5a",
+     "from": [
+      10.6,
+      1
+     ],
+     "face": "trial_face",
+     "at": [
+      11.6,
+      3.2
+     ],
+     "note": "시그니처: 발판 3.32 → 단일점프 4.91 +위공격 → D-A2(5.6)"
+    },
+    {
+     "id": "sp5b",
+     "from": [
+      14.3,
+      2.6
+     ],
+     "face": "relic_face",
+     "at": [
+      14.5,
+      4.4
+     ],
+     "note": "출구용: 발판 4.52 → 창대도약 7.92 → 출구 6.0"
+    }
+   ],
+   "bbox": {
+    "x0": 0,
+    "x1": 18,
+    "y0": 0,
+    "y1": 10
+   }
+  },
+  {
+   "n": 6,
+   "id": "spire",
+   "name": "첨탑 상승",
+   "sub": "The Spire Ascent",
+   "yOff": 48,
+   "w": 9,
+   "h": 20,
+   "concept": "벽점프→창꽂기→창대도약→이단강림 4대 이동기 연쇄. 전 구간 낙하존.",
+   "camera": {
+    "padY": 2.2
+   },
+   "geo": [
+    {
+     "id": "wall_l",
+     "t": "wall",
+     "rect": [
+      0,
+      0,
+      0.3,
+      21
+     ],
+     "stand": false,
+     "label": "좌벽"
+    },
+    {
+     "id": "wall_r",
+     "t": "wall",
+     "rect": [
+      8.7,
+      0,
+      0.3,
+      21
+     ],
+     "stand": false,
+     "label": "우벽"
+    },
+    {
+     "id": "e",
+     "t": "solid",
+     "rect": [
+      0.3,
+      0.2,
+      2.2,
+      0.3
+     ],
+     "stand": true,
+     "label": "진입 단 E"
+    },
+    {
+     "id": "pa",
+     "t": "wall",
+     "rect": [
+      2.6,
+      0.8,
+      0.4,
+      3.7
+     ],
+     "stand": false,
+     "wallJump": true,
+     "label": "기둥 PA(벽점프 슈트)"
+    },
+    {
+     "id": "l1",
+     "t": "solid",
+     "rect": [
+      0.3,
+      4.2,
+      1.7,
+      0.3
+     ],
+     "stand": true,
+     "reachVia": [
+      "walljump"
+     ],
+     "label": "착지 단 L1"
+    },
+    {
+     "id": "pb",
+     "t": "wall",
+     "rect": [
+      5.5,
+      4,
+      0.4,
+      5
+     ],
+     "stand": false,
+     "cap": "finial",
+     "label": "수련 성구 PB"
+    },
+    {
+     "id": "l2",
+     "t": "solid",
+     "rect": [
+      0.3,
+      7.5,
+      1.9,
+      0.3
+     ],
+     "stand": true,
+     "gate": "sdash",
+     "label": "착지 단 L2"
+    },
+    {
+     "id": "l3",
+     "t": "solid",
+     "rect": [
+      3,
+      10.9,
+      2.5,
+      0.3
+     ],
+     "stand": true,
+     "gate": "sdash",
+     "label": "착지 단 L3(사당4)"
+    },
+    {
+     "id": "l4",
+     "t": "solid",
+     "rect": [
+      6,
+      14.3,
+      1.4,
+      0.3
+     ],
+     "stand": true,
+     "gate": "sdash",
+     "label": "착지 단 L4"
+    },
+    {
+     "id": "l5",
+     "t": "solid",
+     "rect": [
+      3.5,
+      17.7,
+      2.5,
+      0.3
+     ],
+     "stand": true,
+     "gate": "sdash",
+     "label": "착지 단 L5"
+    },
+    {
+     "id": "hc",
+     "t": "solid",
+     "rect": [
+      0.3,
+      14.3,
+      1.5,
+      0.3
+     ],
+     "stand": true,
+     "gate": "sdash",
+     "label": "히든 단 HC"
+    },
+    {
+     "id": "xe",
+     "t": "oneway",
+     "rect": [
+      3.5,
+      19.4,
+      3,
+      0.2
+     ],
+     "stand": true,
+     "dropThrough": false,
+     "label": "출구 단 XE(통과)"
+    }
+   ],
+   "spearFaces": [
+    {
+     "id": "pb_face",
+     "rect": [
+      5.4,
+      4,
+      0.1,
+      5
+     ],
+     "normal": [
+      -1,
+      0
+     ],
+     "role": "climb",
+     "label": "PB 좌면(창표적)"
+    },
+    {
+     "id": "rw_face",
+     "rect": [
+      8.6,
+      10,
+      0.1,
+      5
+     ],
+     "normal": [
+      -1,
+      0
+     ],
+     "role": "climb",
+     "label": "우벽 창표적"
+    },
+    {
+     "id": "lw_face",
+     "rect": [
+      0.6,
+      13,
+      0.1,
+      5
+     ],
+     "normal": [
+      1,
+      0
+     ],
+     "role": "hidden",
+     "label": "좌벽 창표적(히든)"
+    }
+   ],
+   "hazards": [
+    {
+     "id": "abyss",
+     "rect": [
+      0.3,
+      -2,
+      8.4,
+      2.2
+     ],
+     "kind": "fall",
+     "respawn": "auto",
+     "label": "최하단 낙하존"
+    }
+   ],
+   "checkpoints": [
+    {
+     "id": "cp5",
+     "pos": [
+      0.9,
+      0.5
+     ],
+     "kind": "shrine",
+     "display": "사당3"
+    },
+    {
+     "id": "cp6",
+     "pos": [
+      3.3,
+      11.2
+     ],
+     "kind": "shrine",
+     "display": "사당4"
+    }
+   ],
+   "portals": [
+    {
+     "id": "entry",
+     "pos": [
+      1.2,
+      0.5
+     ],
+     "mode": "door",
+     "to": "arena",
+     "toPortal": "exit"
+    },
+    {
+     "id": "exit",
+     "pos": [
+      5,
+      19.6
+     ],
+     "mode": "physical",
+     "to": "summit",
+     "toPortal": "entry"
+    }
+   ],
+   "targets": [],
+   "collectibles": [
+    {
+     "id": "cr6",
+     "pos": [
+      1,
+      15
+     ],
+     "gate": "sdash",
+     "stand": "hc",
+     "note": "L3에서 좌상향 창대쉬 → HC"
+    }
+   ],
+   "spearPlan": [
+    {
+     "id": "sp6a",
+     "from": [
+      2,
+      4.5
+     ],
+     "face": "pb_face",
+     "at": [
+      5.5,
+      5.5
+     ],
+     "note": "B2 시그니처 → 발판 5.62 → L2(7.8)"
+    },
+    {
+     "id": "sp6b",
+     "from": [
+      5.5,
+      11
+     ],
+     "face": "rw_face",
+     "at": [
+      8.6,
+      11.9
+     ],
+     "note": "B4 → 발판 12.02 → 이단강림 L4(14.3)"
+    },
+    {
+     "id": "sp6c",
+     "from": [
+      3.5,
+      17.6
+     ],
+     "face": "lw_face",
+     "at": [
+      0.6,
+      16.5
+     ],
+     "note": "히든 → 발판 16.62 → HC(15.5) 왕복"
+    }
+   ],
+   "bbox": {
+    "x0": 0,
+    "x1": 9,
+    "y0": 0,
+    "y1": 20
+   }
+  },
+  {
+   "n": 7,
+   "id": "summit",
+   "name": "정상 성종",
+   "sub": "The Summit Bell",
+   "yOff": 68,
+   "w": 16,
+   "h": 9,
+   "concept": "좁음→넓음 반전의 승리의 랩. 성종 타격 = 클리어.",
+   "camera": {
+    "padY": 1.4,
+    "forceZoomOut": true
+   },
+   "geo": [
+    {
+     "id": "terrace_l",
+     "t": "solid",
+     "rect": [
+      0,
+      0.2,
+      4,
+      0.3
+     ],
+     "stand": true,
+     "label": "성종 테라스 바닥 L"
+    },
+    {
+     "id": "spire_gap",
+     "t": "oneway",
+     "rect": [
+      4,
+      0.2,
+      2,
+      0.3
+     ],
+     "stand": true,
+     "dropThrough": false,
+     "label": "첨탑 개구(진입)"
+    },
+    {
+     "id": "terrace_r",
+     "t": "solid",
+     "rect": [
+      6,
+      0.2,
+      10,
+      0.3
+     ],
+     "stand": true,
+     "label": "성종 테라스 바닥 R"
+    },
+    {
+     "id": "rail_l",
+     "t": "wall",
+     "rect": [
+      -0.2,
+      0.5,
+      0.2,
+      8.5
+     ],
+     "stand": false,
+     "label": "좌 난간(경계벽)"
+    },
+    {
+     "id": "rail_r",
+     "t": "wall",
+     "rect": [
+      16,
+      0.5,
+      0.2,
+      8.5
+     ],
+     "stand": false,
+     "label": "우 난간(경계벽)"
+    },
+    {
+     "id": "balcony",
+     "t": "solid",
+     "rect": [
+      0.6,
+      1.6,
+      2.2,
+      0.3
+     ],
+     "stand": true,
+     "label": "좌측 전망 발코니"
+    },
+    {
+     "id": "step_a",
+     "t": "solid",
+     "rect": [
+      10,
+      1.7,
+      2.5,
+      0.3
+     ],
+     "stand": true,
+     "label": "스텝 A"
+    },
+    {
+     "id": "plinth",
+     "t": "solid",
+     "rect": [
+      12.5,
+      3.2,
+      3,
+      0.3
+     ],
+     "stand": true,
+     "label": "종 대(플린스)"
+    },
+    {
+     "id": "arch_l",
+     "t": "wall",
+     "rect": [
+      12.6,
+      3.5,
+      0.3,
+      3.7
+     ],
+     "stand": false,
+     "label": "아치 좌기둥"
+    },
+    {
+     "id": "arch_r",
+     "t": "wall",
+     "rect": [
+      15.1,
+      3.5,
+      0.3,
+      3.7
+     ],
+     "stand": false,
+     "label": "아치 우기둥"
+    },
+    {
+     "id": "beam",
+     "t": "solid",
+     "rect": [
+      12.9,
+      6.5,
+      2.2,
+      0.1
+     ],
+     "stand": true,
+     "label": "종탑 대들보(플로리시)"
+    }
+   ],
+   "spearFaces": [
+    {
+     "id": "beam_face",
+     "rect": [
+      12.9,
+      6.5,
+      2.2,
+      0.1
+     ],
+     "normal": [
+      0,
+      -1
+     ],
+     "role": "flourish",
+     "label": "대들보 하면(플로리시)"
+    }
+   ],
+   "hazards": [],
+   "checkpoints": [
+    {
+     "id": "cp7",
+     "pos": [
+      2.5,
+      0.5
+     ],
+     "kind": "shrine",
+     "display": "사당5"
+    }
+   ],
+   "portals": [
+    {
+     "id": "entry",
+     "pos": [
+      5,
+      0.5
+     ],
+     "mode": "physical",
+     "to": "spire",
+     "toPortal": "exit"
+    }
+   ],
+   "triggers": [
+    {
+     "id": "bell",
+     "rect": [
+      13.3,
+      4.8,
+      1.4,
+      1.4
+     ],
+     "kind": "goal-strike",
+     "label": "성종(목표)"
+    }
+   ],
+   "targets": [
+    {
+     "id": "t7a",
+     "pos": [
+      7,
+      0.5
+     ],
+     "kind": "ground"
+    },
+    {
+     "id": "t7b",
+     "pos": [
+      8.5,
+      0.5
+     ],
+     "kind": "ground"
+    },
+    {
+     "id": "t7c",
+     "pos": [
+      11,
+      3.4
+     ],
+     "kind": "air"
+    }
+   ],
+   "collectibles": [],
+   "spearPlan": [],
+   "bbox": {
+    "x0": 0,
+    "x1": 16,
+    "y0": 0,
+    "y1": 9
+   }
+  }
+ ]
+}
