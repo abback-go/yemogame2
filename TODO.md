@@ -1,7 +1,14 @@
 # TODO — 프로젝트 현황과 다음 액션
 
-> **새 세션 시작 가이드**: 이 파일 → **`docs/game-design-theory.md`(기획 이론 기준선 — 어떻게 기획하는가)**
+> ## ★ 새 세션 시작 가이드
+>
+> **읽는 순서**: 이 파일(현황) → **`docs/agent-team.md`(개발 방식 — 어떻게 일하는가 · 맨 앞 절만 읽어도 된다)**
+> → **`docs/game-design-theory.md`(기획 이론 — 어떻게 기획하는가)**
 > → **`docs/game-design.md`(기획 정본 — 무엇을 만드는가)**
+>
+> ⚠ **개발 방식은 이미 정해져 있다 `[유저 승인 08-09]` — 다시 설계하지 말고 그대로 따른다.**
+> **에이전트 5인**(`.claude/agents/`)에게 위임하고, **`design-critic`의 검토를 거치고**(반려권 있음), **재검증 후 커밋**한다.
+> 혼자 다 쓰지 않는다. 상세·라우팅 표는 `CLAUDE.md` 「작업 프로토콜」과 `agent-team.md`.
 > → 스토리 작업 전 `docs/story-track.md` §3·§3.5(취향·기각 이력 — 영구 유효)
 > → 프로토 작업 시 `docs/shadow-dagger-CLAUDE.md`(개발 원칙 7조) · `docs/handoff-2026-08-08-session3.md`(검증 이력·오측 사례)
 > 작업 규칙·저장소 규칙은 `CLAUDE.md`.
