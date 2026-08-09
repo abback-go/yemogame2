@@ -1,7 +1,7 @@
 # 성창(聖槍) — 잊힌 성물 · 개발 지침 (Claude 필독)
 
 > **`proto/` 작업의 개발 원칙 정본.** 프로토 맥락 복원은 이 문서 → [`docs/handoff-2026-08-08-session3.md`](handoff-2026-08-08-session3.md) 순.
-> (구 1·2차 인계 문서는 삭제 — git 이력에 보존. 기획·세계관 정본은 `docs/specs/2026-08-08-temple-route-spine.md`.)
+> (구 1·2차 인계 문서는 삭제 — git 이력에 보존. 기획·세계관 정본은 `docs/game-design.md` v2.)
 
 ## 1. 프로젝트 한 줄
 
@@ -54,7 +54,7 @@
 
 ```
 docs/
-  specs/2026-08-08-temple-route-spine.md     ★ 기획·세계관 정본 (신전 노선 등뼈)
+  game-design.md                             ★ 기획·세계관 정본 (신전 노선 v2)
   specs/2026-08-07-temple-training-map.md    ★ 맵 설계 (끝의 「개정」 절들이 구현 정본)
   handoff-2026-08-08-session3.md             프로토 인계 (검증 이력·오측 사례)
   unity/                                     Unity 이식 인계 패키지
