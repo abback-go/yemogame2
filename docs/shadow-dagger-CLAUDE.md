@@ -1,6 +1,7 @@
 # 성창(聖槍) — 잊힌 성물 · 개발 지침 (Claude 필독)
 
-> 이 파일은 새 세션에서 자동으로 읽힙니다. **먼저 이 문서 → 그다음 [`docs/handoff-2026-08-08.md`](docs/handoff-2026-08-08.md)** 순으로 보면 맥락이 복원됩니다.
+> **`proto/` 작업의 개발 원칙 정본.** 프로토 맥락 복원은 이 문서 → [`docs/handoff-2026-08-08-session3.md`](handoff-2026-08-08-session3.md) 순.
+> (구 1·2차 인계 문서는 삭제 — git 이력에 보존. 기획·세계관 정본은 `docs/specs/2026-08-08-temple-route-spine.md`.)
 
 ## 1. 프로젝트 한 줄
 
@@ -52,19 +53,15 @@
 ## 5. 저장소 구조
 
 ```
-CLAUDE.md                         ← 지금 이 문서
 docs/
-  handoff-2026-08-08.md           ★ 세션 인계 문서 (먼저 읽을 것)
-  specs/2026-08-07-holy-spear-design.md      ★ 게임 기획 정본
-  specs/2026-08-07-temple-training-map.md    ★ 맵 설계 (끝의 「개정 v1.1」이 구현 정본)
-  unity-vertical-slice-spec.md               Unity 이식/필 검증 스펙
+  specs/2026-08-08-temple-route-spine.md     ★ 기획·세계관 정본 (신전 노선 등뼈)
+  specs/2026-08-07-temple-training-map.md    ★ 맵 설계 (끝의 「개정」 절들이 구현 정본)
+  handoff-2026-08-08-session3.md             프로토 인계 (검증 이력·오측 사례)
+  unity/                                     Unity 이식 인계 패키지
 proto/
-  index.html                      ★ 맵 프로토타입 v1.1 (단일 파일, 의존성 0)
+  index.html                      ★ 맵 프로토타입 (단일 파일, 의존성 0)
   verify-map.mjs                  CI 래퍼 (인게임 runTests() 호출)
---- 아래는 폐기(legacy). 참고만, 수정하지 말 것 ---
-index.html, arcane/               구 프로토타입
-docs/specs/2026-07-11-arcane-academy-design.md   구 마법학교 기획서(폐기)
-docs/specs/2026-05-25-shadow-dagger-eclipse-design.md
+--- 구 산출물: archive/shadow-dagger-legacy/ (수정 금지) · 그 외 폐기 문서는 git 이력 ---
 ```
 
 ## 6. `proto/index.html` 구조 (v1.1)

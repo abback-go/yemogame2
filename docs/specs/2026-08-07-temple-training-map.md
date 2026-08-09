@@ -6,7 +6,7 @@
 구현: [`proto/index.html`](../../proto/index.html) · 검증: 인게임 `T`키 11항목 / `node proto/verify-map.mjs`
 
 > 웹 프로토타입 "손맛 검증" 무대. 창+신성력, 실크송 템포, 시간의 신전 리마스터 룩. 좌표 = 유닛(PPU100), 좌하단 원점, +y 위.
-> 게임 정본 기획서: [`2026-08-07-holy-spear-design.md`](2026-08-07-holy-spear-design.md) · Unity 이식 필 스펙: [`../unity-vertical-slice-spec.md`](../unity-vertical-slice-spec.md)
+> 게임 정본 기획서: [`2026-08-08-temple-route-spine.md`](2026-08-08-temple-route-spine.md)(등뼈) · Unity 이식 = [`../unity/`](../unity/) 패키지 (구 vertical-slice-spec은 삭제 — git 이력)
 
 ## 검토 이력 (층별 승인 점수)
 - 1층 검토 R1: score 85, approved true

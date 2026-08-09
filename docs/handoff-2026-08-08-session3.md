@@ -1,6 +1,6 @@
 # 인계 — 2026-08-08 세션 3 (창대쉬 → FX → 경계 봉쇄)
 
-> 앞 문서: `handoff-2026-08-08.md`(1차) → `handoff-2026-08-08-session2.md`(2차) → **이 문서**
+> 앞 문서(1차·2차 인계)는 **삭제됨** — 내용이 이 문서·`docs/specs/2026-08-07-temple-training-map.md` 개정절에 흡수됐다. 원문은 git 이력(`~d6909f5` 이전).
 > 개발 원칙은 `docs/shadow-dagger-CLAUDE.md`가 정본.
 
 **현재 상태** — `proto/index.html` v1.4 · `node proto/verify-map.mjs` **19/19 PASS** · `FX.enabled` on/off 양쪽 동일
