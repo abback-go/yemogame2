@@ -133,7 +133,7 @@ proto/index.html   신전 수련장 7층 · 단일 파일 · 의존성 0 · 검�
 | **이동 수치 정본** | `docs/unity/tuning.json` `PHYS` | proto 19/19 검증. **불가침**(맵 게이팅 전체가 걸림) |
 | 구 바람 이동 5종 | `docs/movement-spec.md` v2.3 | 구 노선 수치 — 신전 이동기 설계 시 참고 재료 |
 | 전투 손맛·주스 | `game/combat.html`(불 시전자 유저 "손맛 죽인다") · `docs/combat-spec.md`(Godot 검증 수치) | 시작값으로 재사용 |
-| 대사 기준선 | `docs/tutorial-conti.md` **§0**(산나비 급 원칙) | **스토리 무관 영구 유효** |
+| 대사 기준선 | `story-design.md` 부록(대사 원칙)(산나비 급 원칙) | **스토리 무관 영구 유효** |
 | 유저 취향·기각 이력 | `docs/story-track.md` **§3** · 서사 운영 원칙 **§3.5** | **영구 유효 — 스토리 작업 전 필독** |
 | 구 월드 295방 | `docs/world/regions/*.json` (+`tools/worldmap_build.py`) | **재료 창고** — 지형·기믹 참조용만 |
 | 구 학교 공간 초안 | `docs/world/draft-school-map.md` | 신전 골격 재료 |
