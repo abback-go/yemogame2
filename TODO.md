@@ -1,6 +1,7 @@
 # TODO — 프로젝트 현황과 다음 액션
 
-> **새 세션 시작 가이드**: 이 파일 → **`docs/game-design.md`(기획 정본 v2 — 세계·주인공·시스템·미결·기각 전부)**
+> **새 세션 시작 가이드**: 이 파일 → **`docs/game-design-theory.md`(기획 이론 기준선 — 어떻게 기획하는가)**
+> → **`docs/game-design.md`(기획 정본 — 무엇을 만드는가)**
 > → 스토리 작업 전 `docs/story-track.md` §3·§3.5(취향·기각 이력 — 영구 유효)
 > → 프로토 작업 시 `docs/shadow-dagger-CLAUDE.md`(개발 원칙 7조) · `docs/handoff-2026-08-08-session3.md`(검증 이력·오측 사례)
 > 작업 규칙·저장소 규칙은 `CLAUDE.md`.
