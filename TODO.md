@@ -2,7 +2,7 @@
 
 > ## ★ 새 세션 시작 가이드
 >
-> **읽는 순서**: 이 파일(현황) → **`docs/agent-team.md`(개발 방식 — 어떻게 일하는가 · 맨 앞 절만 읽어도 된다)**
+> **읽는 순서**: 이 파일(현황) → **`docs/agent-team.md`(누가 — 팀·반려권)** → **`docs/loop-engineering.md`(어떻게 굴리는가 — 루프 GOAL·종료·예산)**
 > → **`docs/game-design-theory.md`(기획 이론 — 어떻게 기획하는가)**
 > → **`docs/game-design.md`(기획 정본 — 무엇을 만드는가)**
 >
