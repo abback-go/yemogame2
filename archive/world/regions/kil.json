@@ -1,0 +1,25 @@
+{
+  "region_id": "kil",
+  "name_kr": "가마 마을",
+  "element": "없음(불 테마)",
+  "identity": "불의 본고장 — 광산 심장부의 열기가 데우는 큰 가마들의 도공 마을. 고급 화염술사가 은거하는 불 전공의 성지.",
+  "palette": "붉은 벽돌 + 가마 불빛의 진홍과 주황 + 재의 회백색",
+  "music": "장작 튀는 소리와 낮은 풀무 리듬 — 열기가 음악의 밀도로 느껴진다",
+  "region_magic": [],
+  "boss_key_story": "보스 없음. 로컬 스토리 — 식어가던 가마들이 광산 심장의 안정과 함께 되살아난다: 마을의 감사가 곧 문이다.",
+  "region_state_change": "열기 통로 개통 후 모든 가마에 불이 들어오고, 도공들의 야시장이 열린다.",
+  "unique_enemy": "재도깨비 — 가마 재 속에서 뭉쳐 일어나는 장난꾸러기. 물 기초 한 방이면 얌전해진다.",
+  "local_loops": [
+    "광산 심장부(열기 통로)→가마 마을→남쪽 가도→거울의 도시로 이어지는 월드 루프 ⑤의 모서리"
+  ],
+  "rooms": [
+    {"id":"kil_heat_gate","name_kr":"열기 통로 어귀","concept":"광산 쪽에서 뜨거운 바람이 올라오는 문 — 마을의 가마들이 이 열기로 산다.","type":"transit","subzone":"외곽","gx":4,"gy":0,"size":"M","flags":[],"exits":[{"to":"min_heart_pass","gate":"none","dir":"U"},{"to":"kil_court","gate":"none","dir":"D"}]},
+    {"id":"kil_court","name_kr":"가마 앞마당","concept":"마을의 중심 — 지역 지도 입수처. 갓 구운 도기가 식는 냄새와 잔불의 온기.","type":"town","subzone":"마을","gx":4,"gy":1,"size":"L","flags":["map","shop"],"exits":[{"to":"kil_heat_gate","gate":"none","dir":"U"},{"to":"kil_great_kiln","gate":"none","dir":"R"},{"to":"kil_glaze_lane","gate":"none","dir":"L"},{"to":"kil_south_gate","gate":"none","dir":"D"}]},
+    {"id":"kil_great_kiln","name_kr":"큰가마 홀","concept":"마을에서 가장 오래된 가마 — 안에 들어가 몸을 말릴 수 있을 만큼 크다. 도공들의 자부심.","type":"event","subzone":"마을","gx":5,"gy":1,"size":"L","flags":["warm"],"exits":[{"to":"kil_court","gate":"none","dir":"L"}]},
+    {"id":"kil_glaze_lane","name_kr":"유약 골목","concept":"유약 단지가 무지개처럼 늘어선 골목 — 내열 소품과 도기 상점.","type":"town","subzone":"마을","gx":3,"gy":1,"size":"M","flags":["shop"],"exits":[{"to":"kil_court","gate":"none","dir":"R"},{"to":"kil_kiln_maze","gate":"none","dir":"D"}]},
+    {"id":"kil_kiln_maze","name_kr":"가마 사잇길","concept":"열기가 벽처럼 서는 가마 사이 미로 — 물 기초로 김을 세워 길을 여는 짧은 퍼즐.","type":"field","subzone":"안마을","gx":3,"gy":2,"size":"M","flags":[],"exits":[{"to":"kil_glaze_lane","gate":"none","dir":"U"},{"to":"kil_master_door","gate":"기초:물","dir":"D"}]},
+    {"id":"kil_master_door","name_kr":"가장 뜨거운 가마 뒤","concept":"마을 사람들도 잘 가지 않는 막다른 골목 — 문패 없는 문 하나가 붉게 달아 있다.","type":"field","subzone":"안마을","gx":3,"gy":3,"size":"S","flags":[],"exits":[{"to":"kil_kiln_maze","gate":"none","dir":"U"},{"to":"kil_fire_master","gate":"none","dir":"R"}]},
+    {"id":"kil_fire_master","name_kr":"화염술사의 방","concept":"고급 화염술사의 은거처 — 찾아온 것 자체가 입학 시험이었다는 듯 웃는다. 불 전공 오의 교습처.","type":"bench","subzone":"안마을","gx":4,"gy":3,"size":"M","flags":["bench","teacher","warm"],"exits":[{"to":"kil_master_door","gate":"none","dir":"L"}]},
+    {"id":"kil_south_gate","name_kr":"남녘 가도 문","concept":"절벽 가도로 나가는 남문 — 도기 수레가 거울의 도시로 오르는 길의 시작.","type":"transit","subzone":"외곽","gx":4,"gy":2,"size":"S","flags":[],"exits":[{"to":"kil_court","gate":"none","dir":"U"},{"to":"roa_south_low","gate":"none","dir":"D"}]}
+  ]
+}

@@ -1,0 +1,594 @@
+{
+  "region_id": "bel",
+  "name_kr": "종의 계곡",
+  "element": "얼음",
+  "identity": "소리를 내면 눈사태가 오는 설곡 — 수화(手話)로 말하는 마을. 침묵의 지역. ※컷 후보(여유 시 제작).",
+  "palette": "눈의 청백색 + 침엽수의 먹녹색 + 언 종탑의 창백한 은색",
+  "music": "거의 무음 — 눈 밟는 소리와 멀리서 우는 바람뿐. 마을에서만 아주 작은 오르골",
+  "region_magic": [
+    {
+      "name": "얼음 묶기(가칭)",
+      "effect": "적의 발을 얼려 그 자리에 묶는다 — 소리 없이 상황을 정지시키는 지역 마법"
+    }
+  ],
+  "boss_key_story": "수화 마을 아이들에게 수화를 배우고, 눈 속에서 잃어버린 종지기의 장갑을 되찾아 주면 — 언 종탑의 문이 조용히 열린다.",
+  "region_state_change": "종을 울리든(눈사태로 옛길이 무너지고 새 길이 열림) 침묵을 지키든(계곡이 그대로 남음) — 선택이 지형에 남는다.",
+  "unique_enemy": "눈밑의 것 — 소리에 반응해 눈 밑에서 솟구치는 놈. 조용히 걸으면 지나칠 수 있다.",
+  "local_loops": [
+    "언 갱도의 얼음을 깨면 광산 상부로 떨어지는 지름길 개통(월드 루프 ④의 닫힘)",
+    "흰 숲을 관통하는 사냥꾼의 우회로 — 설원을 건너뛰는 조용한 길"
+  ],
+  "rooms": [
+    {
+      "id": "bel_pass_west",
+      "name_kr": "서쪽 고개",
+      "concept": "목장의 소음이 끊기고 눈이 시작되는 고개 — 첫 소음 게이지 표지가 서 있다.",
+      "type": "transit",
+      "subzone": "고개",
+      "gx": 0,
+      "gy": 2,
+      "size": "M",
+      "flags": [],
+      "exits": [
+        {
+          "to": "lig_pass_east",
+          "gate": "none",
+          "dir": "L"
+        },
+        {
+          "to": "bel_snow_road",
+          "gate": "none",
+          "dir": "R"
+        }
+      ]
+    },
+    {
+      "id": "bel_snow_road",
+      "name_kr": "눈길",
+      "concept": "소음 게이지 도입 구간 — 달리면 게이지가 차고, 차면 눈처마가 운다.",
+      "type": "field",
+      "subzone": "고개",
+      "gx": 1,
+      "gy": 2,
+      "size": "M",
+      "flags": [],
+      "exits": [
+        {
+          "to": "bel_pass_west",
+          "gate": "none",
+          "dir": "L"
+        },
+        {
+          "to": "bel_sign_village",
+          "gate": "none",
+          "dir": "R"
+        },
+        {
+          "to": "bel_watch_cairn",
+          "gate": "비밀",
+          "dir": "U"
+        }
+      ]
+    },
+    {
+      "id": "bel_watch_cairn",
+      "name_kr": "돌무더기 망대",
+      "concept": "옛 파수꾼의 돌탑 — 계곡 전체가 내려다보이는 숨은 자리. 언 망원경이 남아 있다.",
+      "type": "secret",
+      "subzone": "고개",
+      "gx": 1,
+      "gy": 1,
+      "size": "S",
+      "flags": [
+        "warm"
+      ],
+      "exits": [
+        {
+          "to": "bel_snow_road",
+          "gate": "none",
+          "dir": "D"
+        }
+      ]
+    },
+    {
+      "id": "bel_sign_village",
+      "name_kr": "수화 마을",
+      "concept": "모두가 손으로 말하는 마을 — 지역 지도 입수처. 간판도 그림, 인사도 손짓.",
+      "type": "town",
+      "subzone": "마을",
+      "gx": 3,
+      "gy": 2,
+      "size": "L",
+      "flags": [
+        "bench",
+        "map",
+        "shop"
+      ],
+      "exits": [
+        {
+          "to": "bel_snow_road",
+          "gate": "none",
+          "dir": "L"
+        },
+        {
+          "to": "bel_mute_inn",
+          "gate": "none",
+          "dir": "U"
+        },
+        {
+          "to": "bel_sign_school",
+          "gate": "none",
+          "dir": "R"
+        },
+        {
+          "to": "bel_snowfield_1",
+          "gate": "none",
+          "dir": "D"
+        }
+      ]
+    },
+    {
+      "id": "bel_mute_inn",
+      "name_kr": "고요한 여관",
+      "concept": "말소리 대신 난롯불 소리만 있는 여관 — 계곡에서 유일하게 '따뜻한 소리'가 허락된 곳.",
+      "type": "town",
+      "subzone": "마을",
+      "gx": 3,
+      "gy": 1,
+      "size": "S",
+      "flags": [
+        "warm"
+      ],
+      "exits": [
+        {
+          "to": "bel_sign_village",
+          "gate": "none",
+          "dir": "D"
+        }
+      ]
+    },
+    {
+      "id": "bel_sign_school",
+      "name_kr": "수화 배움방",
+      "concept": "아이들에게 수화를 배우는 방 — 로컬 스토리의 입구. 손짓 하나에 웃음이 터진다.",
+      "type": "event",
+      "subzone": "마을",
+      "gx": 4,
+      "gy": 1,
+      "size": "S",
+      "flags": [],
+      "exits": [
+        {
+          "to": "bel_sign_village",
+          "gate": "none",
+          "dir": "L"
+        }
+      ]
+    },
+    {
+      "id": "bel_snowfield_1",
+      "name_kr": "첫 설원",
+      "concept": "정적 걷기의 응용 구간 — 발자국 깊이가 곧 소음이다. 뛰고 싶은 만큼 위험해진다.",
+      "type": "field",
+      "subzone": "설원",
+      "gx": 3,
+      "gy": 3,
+      "size": "L",
+      "flags": [],
+      "exits": [
+        {
+          "to": "bel_sign_village",
+          "gate": "none",
+          "dir": "U"
+        },
+        {
+          "to": "bel_snowfield_2",
+          "gate": "none",
+          "dir": "D"
+        },
+        {
+          "to": "bel_white_maze",
+          "gate": "none",
+          "dir": "R"
+        }
+      ]
+    },
+    {
+      "id": "bel_snowfield_2",
+      "name_kr": "숨죽인 설원",
+      "concept": "미니보스 — 눈밑의 것 어미. 설원 한가운데서 소리를 미끼로 낚아 올려야 한다.",
+      "type": "miniboss",
+      "subzone": "설원",
+      "gx": 3,
+      "gy": 4,
+      "size": "L",
+      "flags": [],
+      "exits": [
+        {
+          "to": "bel_snowfield_1",
+          "gate": "none",
+          "dir": "U"
+        },
+        {
+          "to": "bel_avalanche_slope",
+          "gate": "none",
+          "dir": "D"
+        }
+      ]
+    },
+    {
+      "id": "bel_avalanche_slope",
+      "name_kr": "눈사태 비탈",
+      "concept": "게이지가 가득 차면 실제로 눈사태가 쏟아지는 비탈 — 소음 관리의 조합 시험.",
+      "type": "field",
+      "subzone": "설원",
+      "gx": 3,
+      "gy": 5,
+      "size": "L",
+      "flags": [],
+      "exits": [
+        {
+          "to": "bel_snowfield_2",
+          "gate": "none",
+          "dir": "U"
+        },
+        {
+          "to": "bel_cornice_1",
+          "gate": "none",
+          "dir": "R"
+        },
+        {
+          "to": "bel_frost_spring",
+          "gate": "비밀",
+          "dir": "L"
+        }
+      ]
+    },
+    {
+      "id": "bel_frost_spring",
+      "name_kr": "얼지 않는 샘",
+      "concept": "영하의 계곡에서 유일하게 얼지 않는 샘 — 김이 오르는 물가에 오래된 공물이 잠겨 있다.",
+      "type": "secret",
+      "subzone": "설원",
+      "gx": 2,
+      "gy": 5,
+      "size": "S",
+      "flags": [
+        "warm"
+      ],
+      "exits": [
+        {
+          "to": "bel_avalanche_slope",
+          "gate": "none",
+          "dir": "R"
+        }
+      ]
+    },
+    {
+      "id": "bel_white_maze",
+      "name_kr": "흰 숲",
+      "concept": "눈을 뒤집어쓴 침엽수의 미로 — 모든 나무가 똑같이 하얗다. 발자국이 유일한 지도.",
+      "type": "field",
+      "subzone": "설원",
+      "gx": 6,
+      "gy": 2,
+      "size": "L",
+      "flags": [],
+      "exits": [
+        {
+          "to": "bel_snowfield_1",
+          "gate": "none",
+          "dir": "L"
+        },
+        {
+          "to": "bel_hunter_hut",
+          "gate": "none",
+          "dir": "U"
+        },
+        {
+          "to": "bel_echo_vale",
+          "gate": "none",
+          "dir": "R"
+        }
+      ]
+    },
+    {
+      "id": "bel_hunter_hut",
+      "name_kr": "사냥꾼 오두막",
+      "concept": "두 번째 거점 — 말 없는 사냥꾼의 오두막. 벽의 가죽 지도에 계곡의 지름길들이 바늘로 표시돼 있다.",
+      "type": "bench",
+      "subzone": "설원",
+      "gx": 6,
+      "gy": 1,
+      "size": "S",
+      "flags": [
+        "bench"
+      ],
+      "exits": [
+        {
+          "to": "bel_white_maze",
+          "gate": "none",
+          "dir": "D"
+        }
+      ]
+    },
+    {
+      "id": "bel_echo_vale",
+      "name_kr": "메아리 골",
+      "concept": "소리가 여덟 배로 돌아오는 골짜기 — 이 지역에서 가장 위험한 지형. 걷기조차 시험이 된다.",
+      "type": "field",
+      "subzone": "언 갱도",
+      "gx": 7,
+      "gy": 2,
+      "size": "M",
+      "flags": [],
+      "exits": [
+        {
+          "to": "bel_white_maze",
+          "gate": "none",
+          "dir": "L"
+        },
+        {
+          "to": "bel_adit_gate",
+          "gate": "none",
+          "dir": "D"
+        },
+        {
+          "to": "bel_deep_drift",
+          "gate": "비밀",
+          "dir": "R"
+        }
+      ]
+    },
+    {
+      "id": "bel_deep_drift",
+      "name_kr": "깊은 눈더미",
+      "concept": "수십 년 치 눈이 쌓인 구덩이 — 파고들면 옛 상단의 얼어붙은 짐수레와 마력석.",
+      "type": "secret",
+      "subzone": "언 갱도",
+      "gx": 8,
+      "gy": 2,
+      "size": "S",
+      "flags": [],
+      "exits": [
+        {
+          "to": "bel_echo_vale",
+          "gate": "none",
+          "dir": "L"
+        }
+      ]
+    },
+    {
+      "id": "bel_adit_gate",
+      "name_kr": "언 갱도 어귀",
+      "concept": "광산으로 통하던 옛 갱도의 입구 — 두꺼운 얼음이 문을 봉하고 있다.",
+      "type": "field",
+      "subzone": "언 갱도",
+      "gx": 7,
+      "gy": 3,
+      "size": "M",
+      "flags": [],
+      "exits": [
+        {
+          "to": "bel_echo_vale",
+          "gate": "none",
+          "dir": "U"
+        },
+        {
+          "to": "bel_adit_south",
+          "gate": "기초:불",
+          "dir": "D",
+          "note": "얼음을 불 기초로 녹여 연다"
+        }
+      ]
+    },
+    {
+      "id": "bel_adit_south",
+      "name_kr": "언 갱도",
+      "concept": "얼음을 깬 갱도 — 아래로 광산 상부까지 미끄러져 내려가는 지름길이 된다.",
+      "type": "transit",
+      "subzone": "언 갱도",
+      "gx": 7,
+      "gy": 4,
+      "size": "M",
+      "flags": [],
+      "exits": [
+        {
+          "to": "bel_adit_gate",
+          "gate": "none",
+          "dir": "U"
+        },
+        {
+          "to": "min_frozen_adit",
+          "gate": "none",
+          "dir": "D",
+          "oneway": true,
+          "note": "일방 하강 — 개통 후 광산 쪽 상태 게이트가 열린다"
+        }
+      ]
+    },
+    {
+      "id": "bel_bell_road",
+      "name_kr": "종탑 가는 길",
+      "concept": "언 종탑으로 오르는 마지막 길 — 눈처마가 머리 위로 처마처럼 이어진다.",
+      "type": "field",
+      "subzone": "종탑",
+      "gx": 6,
+      "gy": 6,
+      "size": "M",
+      "flags": [],
+      "exits": [
+        {
+          "to": "bel_cornice_2",
+          "gate": "none",
+          "dir": "L"
+        },
+        {
+          "to": "bel_bell_ante",
+          "gate": "none",
+          "dir": "U"
+        },
+        {
+          "to": "bel_bell_challenge",
+          "gate": "none",
+          "dir": "R"
+        }
+      ]
+    },
+    {
+      "id": "bel_cornice_1",
+      "name_kr": "눈처마 벼랑",
+      "concept": "발밑이 전부 눈처마인 벼랑 — 무게와 소리, 둘 다 관리해야 하는 조합 구간.",
+      "type": "field",
+      "subzone": "종탑",
+      "gx": 4,
+      "gy": 6,
+      "size": "L",
+      "flags": [],
+      "exits": [
+        {
+          "to": "bel_avalanche_slope",
+          "gate": "none",
+          "dir": "L"
+        },
+        {
+          "to": "bel_cornice_2",
+          "gate": "none",
+          "dir": "U"
+        },
+        {
+          "to": "bel_ice_cave",
+          "gate": "비밀",
+          "dir": "D"
+        }
+      ]
+    },
+    {
+      "id": "bel_ice_cave",
+      "name_kr": "얼음 굴",
+      "concept": "벼랑 아래 숨은 푸른 얼음 굴 — 얼음 속에 마력석이 별처럼 박혀 있다.",
+      "type": "secret",
+      "subzone": "종탑",
+      "gx": 4,
+      "gy": 7,
+      "size": "S",
+      "flags": [],
+      "exits": [
+        {
+          "to": "bel_cornice_1",
+          "gate": "none",
+          "dir": "U"
+        }
+      ]
+    },
+    {
+      "id": "bel_cornice_2",
+      "name_kr": "처마 끝 능선",
+      "concept": "종탑이 처음 온전히 보이는 능선 — 언 종이 바람에도 울지 않고 매달려 있다.",
+      "type": "field",
+      "subzone": "종탑",
+      "gx": 5,
+      "gy": 6,
+      "size": "M",
+      "flags": [],
+      "exits": [
+        {
+          "to": "bel_cornice_1",
+          "gate": "none",
+          "dir": "D"
+        },
+        {
+          "to": "bel_bell_road",
+          "gate": "none",
+          "dir": "R"
+        }
+      ]
+    },
+    {
+      "id": "bel_bell_challenge",
+      "name_kr": "침묵 질주",
+      "concept": "격리된 챌린지 — 소음 게이지 0으로 완주하는 빙판 코스. 계곡 사냥꾼들의 전설이 걸려 있다.",
+      "type": "challenge",
+      "subzone": "종탑",
+      "gx": 7,
+      "gy": 6,
+      "size": "L",
+      "flags": [],
+      "exits": [
+        {
+          "to": "bel_bell_road",
+          "gate": "none",
+          "dir": "L"
+        }
+      ]
+    },
+    {
+      "id": "bel_bell_ante",
+      "name_kr": "종탑 앞 제단",
+      "concept": "보스 앞 거점 — 종지기들이 대대로 기도하던 눈 덮인 제단.",
+      "type": "bench",
+      "subzone": "종탑",
+      "gx": 6,
+      "gy": 5,
+      "size": "M",
+      "flags": [
+        "bench"
+      ],
+      "exits": [
+        {
+          "to": "bel_bell_road",
+          "gate": "none",
+          "dir": "D"
+        },
+        {
+          "to": "bel_bell_tower",
+          "gate": "열쇠:종지기의 장갑",
+          "dir": "U"
+        }
+      ]
+    },
+    {
+      "id": "bel_bell_tower",
+      "name_kr": "언 종탑",
+      "concept": "보스전 — 얼어붙은 종탑의 주인. 완전한 침묵 속의 전투, 그리고 마지막에 종을 울릴 것인가의 선택.",
+      "type": "boss",
+      "subzone": "종탑",
+      "gx": 6,
+      "gy": 4,
+      "size": "XL",
+      "flags": [],
+      "exits": [
+        {
+          "to": "bel_bell_ante",
+          "gate": "none",
+          "dir": "D"
+        },
+        {
+          "to": "bel_bell_top",
+          "gate": "상태:종탑의 결말",
+          "dir": "U"
+        }
+      ]
+    },
+    {
+      "id": "bel_bell_top",
+      "name_kr": "종탑 꼭대기",
+      "concept": "보스 후 — 선택의 결과가 계곡에 내려앉는 것을 지켜보는 자리. 울렸다면 눈사태의 새 길이, 침묵했다면 그대로의 설경이.",
+      "type": "event",
+      "subzone": "종탑",
+      "gx": 6,
+      "gy": 3,
+      "size": "M",
+      "flags": [
+        "warm"
+      ],
+      "exits": [
+        {
+          "to": "bel_bell_tower",
+          "gate": "none",
+          "dir": "D"
+        }
+      ]
+    }
+  ]
+}

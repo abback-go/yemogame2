@@ -1,0 +1,23 @@
+{
+  "region_id": "spr",
+  "name_kr": "온천 마을",
+  "element": "없음",
+  "identity": "무장해제 중립지 — 전투가 없는 김 서린 완충 마을. 지친 모험가와 강자들이 무장을 풀고 어깨를 나란히 담그는 곳.",
+  "palette": "유황의 유백색 김 + 등롱의 다홍 + 젖은 돌의 짙은 회색",
+  "music": "물소리와 풍경(風磬) — 템포가 반으로 느려지는 지역",
+  "region_magic": [],
+  "boss_key_story": "보스 없음 — 규칙의 장소. '탕에서는 지팡이를 내려놓는다'가 이 마을의 유일한 법이다.",
+  "region_state_change": "의뢰 평판이 쌓이면 전세탕이 열리고, 탕에 몸을 담근 유명 인사들의 소문이 갱신된다.",
+  "unique_enemy": "없음(중립지 — 적 배치 금지)",
+  "local_loops": [
+    "학교 뒷숲과 조수 도시를 잇는 강변 완충로 (월드 루프 ③의 허리)"
+  ],
+  "rooms": [
+    {"id":"spr_forest_path","name_kr":"숲길 어귀","concept":"실습림의 나무가 옅어지고 유황 냄새가 먼저 마중 나오는 길.","type":"transit","subzone":"어귀","gx":0,"gy":2,"size":"M","flags":[],"exits":[{"to":"sch_backwoods_east","gate":"none","dir":"L"},{"to":"spr_village","gate":"none","dir":"R"}]},
+    {"id":"spr_village","name_kr":"온천 마을 어귀","concept":"김이 골목마다 피어오르는 마을 — 지도 파는 가게와 수건 대여점이 나란히 있다.","type":"town","subzone":"마을","gx":2,"gy":2,"size":"L","flags":["map","shop"],"exits":[{"to":"spr_forest_path","gate":"none","dir":"L"},{"to":"spr_bath","gate":"none","dir":"U"},{"to":"spr_inn","gate":"none","dir":"D"},{"to":"spr_gossip_deck","gate":"none","dir":"R"}]},
+    {"id":"spr_bath","name_kr":"노천탕","concept":"거점 — 협곡이 내려다보이는 노천탕. 지팡이는 입구의 우산꽂이에. 여기서의 회복은 유난히 깊다.","type":"bench","subzone":"마을","gx":2,"gy":1,"size":"L","flags":["bench","warm"],"exits":[{"to":"spr_village","gate":"none","dir":"D"}]},
+    {"id":"spr_inn","name_kr":"수건 여관","concept":"수건을 머리에 얹은 간판의 여관 — 늦은 밤에도 국물 요리가 나온다.","type":"town","subzone":"마을","gx":2,"gy":3,"size":"S","flags":["warm","shop"],"exits":[{"to":"spr_village","gate":"none","dir":"U"}]},
+    {"id":"spr_gossip_deck","name_kr":"소문 평상","concept":"탕에서 나온 사람들이 몸을 말리며 세상 이야기를 흘리는 평상 — 세계의 소문이 모이는 곳.","type":"event","subzone":"마을","gx":3,"gy":2,"size":"M","flags":[],"exits":[{"to":"spr_village","gate":"none","dir":"L"},{"to":"spr_river_east","gate":"none","dir":"R"}]},
+    {"id":"spr_river_east","name_kr":"강가 나루","concept":"온천물이 섞여 김이 오르는 강 — 나룻배가 조수 도시까지 오간다.","type":"transit","subzone":"강가","gx":5,"gy":2,"size":"M","flags":[],"exits":[{"to":"spr_gossip_deck","gate":"none","dir":"L"},{"to":"tid_river_west","gate":"none","dir":"R"}]}
+  ]
+}

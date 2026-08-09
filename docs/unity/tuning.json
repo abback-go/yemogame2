@@ -1,0 +1,349 @@
+{
+ "_comment": "성창 프로토타입 v1.4 — 웹에서 검증 완료된 수치. Unity 이식 시 그대로 쓸 것.",
+ "units": {
+  "u": "1u = 100px @PPU100 = Unity 1 world unit",
+  "origin": "bottom-left, y-up",
+  "rect": "[x,y,w,h] → Unity Rect 1:1"
+ },
+ "PHYS": {
+  "gravity": 26,
+  "runSpeed": 3.92,
+  "airControl": 0.9,
+  "jumpV": 9.1,
+  "airJumpV": 8.2,
+  "dashSpeed": 7.8,
+  "dashTime": 0.16,
+  "vaultV": 13.3,
+  "spearRange": 5,
+  "attackUpReach": 0.8,
+  "ledgeSnap": 0.08,
+  "simDt": 0.008333333333333333,
+  "sdashSpeed": 11,
+  "sdashTime": 0.15,
+  "sdashHover": 0.2,
+  "airDecayT": 0.12,
+  "bodyW": 0.3,
+  "bodyH": 0.82
+ },
+ "REACH_derived": {
+  "jump": 1.5924999999999998,
+  "doubleJump": 2.885576923076923,
+  "vault": 3.4017307692307694,
+  "sdash": 1.65,
+  "chainUp": 4.535576923076922,
+  "dashX": 3.2051199999999995,
+  "spear": 5,
+  "atkUp": 0.8
+ },
+ "GATE_MARGIN": 0.3,
+ "CTRL": {
+  "dt": 0.008333333333333333,
+  "maxSub": 8,
+  "accelGround": 42,
+  "accelAir": 26,
+  "fricGround": 46,
+  "fricAir": 4,
+  "maxFall": 22,
+  "coyote": 0.1,
+  "jumpBuf": 0.12,
+  "cutJump": 0.45,
+  "dashCool": 0.34,
+  "wallSlideV": 3.2,
+  "wallJumpPush": 1,
+  "wallJumpLock": 0.13,
+  "sdashCool": 0.06,
+  "landAnim": 0.1,
+  "hurtTime": 0.55,
+  "slipAccel": 14,
+  "camLead": 0.9,
+  "camUp": 0.5,
+  "dashFreezeY": false
+ },
+ "FX": {
+  "enabled": true,
+  "suppress": 0,
+  "max": 220,
+  "perFrameCap": 24,
+  "dtMax": 0.05,
+  "white": "#FCFDFC",
+  "whiteHot": "#FFFFFD",
+  "cream": "#F6EEDC",
+  "pale": "#E8F2FF",
+  "gold": "#FBD034",
+  "goldHi": "#FDEA84",
+  "goldMid": "#F2B826",
+  "goldLo": "#E19C2F",
+  "dustHi": "#E6D6B4",
+  "dust": "#A08A6C",
+  "dashLines": 9,
+  "dashLenU": [
+   0.55,
+   2.05
+  ],
+  "dashRootW": 0.052,
+  "dashSpread": 0.6,
+  "dashLife": 0.13,
+  "dashCoreR": 0.075,
+  "dashSparks": 5,
+  "dashShake": 0.2,
+  "sdMotes": 12,
+  "sdMoteR": [
+   0.72,
+   1.15
+  ],
+  "sdMoteSize": 0.03,
+  "sdRing": [
+   0.85,
+   0.26
+  ],
+  "sdRingTh": [
+   0.045,
+   0.155
+  ],
+  "sdRingWob": 0.02,
+  "sdRingWobHz": 7.5,
+  "sdVignette": 0.07,
+  "sdAimLen": 1.2,
+  "sdAimW": 0.055,
+  "sdBeamLen": 1.85,
+  "sdBeamW": 0.34,
+  "sdBeamNear": 0.2,
+  "sdBeamPeak": 0.46,
+  "sdBeamLife": 0.19,
+  "sdBurstRing": [
+   0.2,
+   1.05
+  ],
+  "sdBurstLife": 0.28,
+  "sdSparks": 14,
+  "sdTrailEvery": 0.022,
+  "sdShake": 0.55,
+  "atkCx": 0.09,
+  "atkCy": 0.53,
+  "atkR": 0.72,
+  "atkThick": 0.3,
+  "atkSpan": 1.752,
+  "atkBias": 0.188,
+  "atkGrow": 0.18,
+  "atkLife": 0.1,
+  "atkDelay": 0.055,
+  "atkSparks": 3,
+  "dustBlock": 1.1,
+  "runDustEvery": 0.085,
+  "jumpPuff": 7,
+  "airRingR": [
+   0.14,
+   0.62
+  ],
+  "airMotes": 7,
+  "airShake": 0.1,
+  "landMinV": 3.2,
+  "landVref": 15,
+  "landPuff": [
+   3,
+   9
+  ],
+  "landRing": [
+   0.42,
+   0.5
+  ],
+  "landShake": 0.55,
+  "wallDust": 7,
+  "wallLines": 3,
+  "wallLineLife": 0.17,
+  "wallShake": 0.16,
+  "slideEvery": 0.055,
+  "shakeMaxFrac": 0.005,
+  "shakeDur": 0.13,
+  "shakeFreq": 46
+ },
+ "ANIM": {
+  "idle": {
+   "i": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5
+   ],
+   "fps": 8,
+   "loop": true
+  },
+  "walk": {
+   "i": [
+    6,
+    7,
+    8,
+    9
+   ],
+   "strideU": 0.7,
+   "speedRef": "runSpeed",
+   "loop": true,
+   "fps": 22.400000000000002
+  },
+  "run": {
+   "i": [
+    36,
+    37,
+    38
+   ],
+   "strideU": 0.784,
+   "speedRef": "runSpeed",
+   "loop": true,
+   "fps": 15
+  },
+  "crouch": {
+   "i": [
+    12
+   ],
+   "fps": 1,
+   "loop": false
+  },
+  "rise": {
+   "i": [
+    13
+   ],
+   "fps": 1,
+   "loop": false
+  },
+  "apex": {
+   "i": [
+    14
+   ],
+   "fps": 1,
+   "loop": false
+  },
+  "fall": {
+   "i": [
+    15
+   ],
+   "fps": 1,
+   "loop": false
+  },
+  "land": {
+   "i": [
+    16
+   ],
+   "fps": 14,
+   "loop": false
+  },
+  "wallslide": {
+   "i": [
+    14
+   ],
+   "fps": 1,
+   "loop": false
+  },
+  "attack": {
+   "i": [
+    18,
+    19,
+    20,
+    21
+   ],
+   "fps": 16,
+   "loop": false
+  },
+  "dash": {
+   "i": [
+    24,
+    25,
+    26,
+    27,
+    26,
+    27
+   ],
+   "fps": 37.5,
+   "loop": false
+  },
+  "hurt": {
+   "i": [
+    30,
+    31,
+    32,
+    33,
+    34,
+    35
+   ],
+   "fps": 10,
+   "loop": false
+  },
+  "charge": {
+   "i": [
+    42,
+    43,
+    44
+   ],
+   "fps": 14,
+   "loop": false
+  },
+  "sdashRight": {
+   "i": [
+    48,
+    49
+   ],
+   "fps": 20,
+   "loop": true
+  },
+  "sdashUpRight": {
+   "i": [
+    54,
+    55
+   ],
+   "fps": 20,
+   "loop": true
+  },
+  "sdashDownRight": {
+   "i": [
+    60,
+    61
+   ],
+   "fps": 20,
+   "loop": true
+  },
+  "sdashUp": {
+   "i": [
+    66,
+    67
+   ],
+   "fps": 20,
+   "loop": true
+  },
+  "sdashDown": {
+   "i": [
+    72,
+    73
+   ],
+   "fps": 20,
+   "loop": true
+  }
+ },
+ "world": {
+  "x0": -0.2,
+  "x1": 34,
+  "y0": 0,
+  "y1": 77
+ },
+ "verification_items": [
+  "충돌 타입 겹침 없음",
+  "창 계획 전부 유효(면·사거리) — 창 꽂기 비활성, skip",
+  "창 발판이 기존 지형에 파묻히지 않음 — skip",
+  "게이트 표면 = 창대쉬 없이 불가 / 창대쉬로 가능",
+  "게이트 표적 = 공격리치 포함해도 창대쉬 필수",
+  "게이트 갭 여유 ≥0.30u",
+  "층간 포탈 양방향 정합",
+  "체크포인트 참조 유효",
+  "모든 층 클리어 가능(창대쉬 포함 도달)",
+  "히든 수집물 전부 도달 가능",
+  "히든 게이트 성립(창대쉬 양면 검사)",
+  "필수 지점 신체 여유(0.3×0.82u)",
+  "필수 지점 발밑 지지면 존재",
+  "보행 천장 여유 ≥ bodyH(0.82u)",
+  "벽점프 슈트가 경계벽이 아님",
+  "게이트가 출발 시점 시야 안(≤3.55×3.55u)",
+  "연속 상승 ≤4.34u (중간 착지 필수)",
+  "이동기 실측 ≤ 유도 도달(REACH·ENV 계약)",
+  "층 경계 밖으로 나갈 수 없음(전 층 실주행)"
+ ]
+}
