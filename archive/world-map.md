@@ -1,6 +1,6 @@
 # 월드맵 마스터 문서 — 대협곡 세계
 
-> 생성원: `docs/world/overview.md`(원칙 — 손으로 관리) + `docs/world/regions/*.json`(지역별 원본) → `tools/worldmap_build.py`가 검증·병합.
+> 생성원: `archive/world/overview.md`(원칙 — 손으로 관리) + `archive/world/regions/*.json`(지역별 원본) → `tools/worldmap_build.py`가 검증·병합.
 > 수정은 원본에서 하고 스크립트를 다시 돌릴 것. 이 문서와 `godot/data/world_map.json`은 산출물.
 
 # 월드 설계 원칙 (기획서 §5에서 이관 — 손으로 관리하는 부분)

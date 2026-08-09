@@ -1083,7 +1083,7 @@ flowchart TD
 # 6. 데이터 차트
 
 > **저작 8테이블**(사람이 채운다 — rev.2에서 `grant` 추가) + **산출 4테이블**(도구가 채운다 — 손으로 쓰면 FAIL).
-> 기존 `docs/world/regions/*.json`(구 월드 295방 — 재료 창고)의 컬럼과 **의도적으로 이름을 맞췄다**: `id` · `name_kr` · `concept` · `type` · `subzone` · `gx` · `gy` · `size` · `exits{to,gate,dir}`. 그 창고의 방을 옮겨 담을 때 변환 비용이 거의 없다(DRY).
+> 기존 `archive/world/regions/*.json`(구 월드 295방 — 재료 창고)의 컬럼과 **의도적으로 이름을 맞췄다**: `id` · `name_kr` · `concept` · `type` · `subzone` · `gx` · `gy` · `size` · `exits{to,gate,dir}`. 그 창고의 방을 옮겨 담을 때 변환 비용이 거의 없다(DRY).
 
 ## 표 1 — `room` (방)
 

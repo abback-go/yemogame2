@@ -6,7 +6,7 @@
 import json, os, sys, html
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-REG_DIR = os.path.join(ROOT, 'docs', 'world', 'regions')
+REG_DIR = os.path.join(ROOT, 'archive', 'world', 'regions')
 REGION_ORDER = ['sch','gon','cyn','min','for','mir','lig','bel','sky','old','spr','tid','sun','kni','kil','mkt','roa']
 
 REGION_COLORS = {
@@ -267,12 +267,12 @@ def main():
         json.dump(out, f, ensure_ascii=False, indent=1)
     print('생성:', os.path.relpath(gd_path, ROOT))
 
-    # ---------- docs/world-map.md ----------
+    # ---------- archive/world-map.md ----------
     md = []
     md.append('# 월드맵 마스터 문서 — 대협곡 세계\n')
-    md.append('> 생성원: `docs/world/overview.md`(원칙 — 손으로 관리) + `docs/world/regions/*.json`(지역별 원본) → `tools/worldmap_build.py`가 검증·병합.')
+    md.append('> 생성원: `archive/world/overview.md`(원칙 — 손으로 관리) + `archive/world/regions/*.json`(지역별 원본) → `tools/worldmap_build.py`가 검증·병합.')
     md.append('> 수정은 원본에서 하고 스크립트를 다시 돌릴 것. 이 문서와 `godot/data/world_map.json`은 산출물.\n')
-    ov_path = os.path.join(ROOT, 'docs', 'world', 'overview.md')
+    ov_path = os.path.join(ROOT, 'archive', 'world', 'overview.md')
     if os.path.isfile(ov_path):
         with open(ov_path, encoding='utf-8') as f:
             md.append(f.read())
@@ -307,7 +307,7 @@ def main():
             fl = (' `' + ','.join(r['flags']) + '`') if r.get('flags') else ''
             md.append(f"| {r['id']} | **{r['name_kr']}**{fl} | {r['type']} | {r.get('subzone','')} | {r['concept']} | {exits} |")
         md.append('')
-    md_path = os.path.join(ROOT, 'docs', 'world-map.md')
+    md_path = os.path.join(ROOT, 'archive', 'world-map.md')
     with open(md_path, 'w', encoding='utf-8') as f:
         f.write('\n'.join(md))
     print('생성:', os.path.relpath(md_path, ROOT))
@@ -318,7 +318,7 @@ def main():
     with open(tpl_path, encoding='utf-8') as f:
         tpl = f.read()
     html_out = tpl.replace('/*__DATA__*/null', data_js)
-    map_path = os.path.join(ROOT, 'docs', 'world', 'map.html')
+    map_path = os.path.join(ROOT, 'archive', 'world', 'map.html')
     with open(map_path, 'w', encoding='utf-8') as f:
         f.write(html_out)
     print('생성:', os.path.relpath(map_path, ROOT))

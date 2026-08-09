@@ -66,7 +66,7 @@
 
 - 구 「치환해서 읽기」 규칙은 **종료** — 문서가 신전 명사로 다시 쓰였다. 구 마법학교판·등뼈 판정 기록
   (`specs/2026-08-08-temple-route-spine.md`)은 **v2로 병합 후 삭제**(git 이력 커밋 `591f761` 참조).
-- `docs/story-track.md` — 구 뼈대 「징표와 용사」. **인물·플롯은 폐기, 진행 방법론(§2.1·§2.5·§2.7·§2.8)은 이관 완료**
+- `archive/story-track.md` — 구 뼈대 「징표와 용사」. **인물·플롯은 폐기, 진행 방법론(§2.1·§2.5·§2.7·§2.8)은 이관 완료**
   `[08-09 · §11-10 해소]` ⇒ **방법론 참조처.** **§3 취향 프로필·기각 이력과 §3.5 서사 운영 원칙은 영구 유효** — 스토리 작업 전 필독.
 - ★ **콘텐츠 3정본 체제** `[유저 지시 08-09 — 문서 일원화]`: **`game-design.md`(게임 디자인) · `story-design.md`(스토리 = 진행 골격+인물·사건) · `world-design.md`(월드 = 동선+신전 골격)**. 시스템 명세는 **`systems.md` 원장에 장(章)으로만 쌓는다.**
   ⚠ **specs/에 새 문서를 만들지 마라** — 파일 남발 방식은 종료. 새 내용은 위 정본에 장·절로 추가한다. (specs/ 잔여 = proto 맵 설계 등 소수)
@@ -106,7 +106,7 @@ Unity 이식은 별도 세션 — `docs/unity/PROMPT.md`를 붙여넣고 ZIP을 
 `TODO.md`(현황·다음 액션) → **`docs/agent-team.md`(개발 방식 — 어떻게 일하는가)**
 → **`docs/game-design-theory.md`(기획 이론 — 어떻게 기획하는가)**
 → **`docs/game-design.md`(기획 정본 — 무엇을 만드는가)**
-→ 스토리 작업 전 `docs/story-track.md` **§3·§3.5**(취향·기각 이력 — 영구 유효)
+→ 스토리 작업 전 `archive/story-track.md` **§3·§3.5**(취향·기각 이력 — 영구 유효)
 → 프로토 작업 시 `docs/shadow-dagger-CLAUDE.md`(원칙 7조)·`docs/handoff-2026-08-08-session3.md`(검증 이력·오측 기록)
 → Unity 인계 시 `docs/unity/README.md`·`docs/unity/RENDERING.md`
 
@@ -147,7 +147,7 @@ Unity 이식은 별도 세션 — `docs/unity/PROMPT.md`를 붙여넣고 ZIP을 
 - 커밋 트레일러: `Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>` + `Claude-Session: https://claude.ai/code/session_014hyj4wWQoEhcGguowFrsY6`. 커밋 전 `git config user.email noreply@anthropic.com`, `git config user.name Claude`. 모델 ID를 저장소 산출물에 넣지 않음.
 - **`godot/` = 동결 아카이브 (수정 금지)** — 그레이박스 프로토타입의 검증 자산 참조용. **다른 캐릭터(불 마법사)라 현재 노선에 못 쓴다.** 검증된 지식의 정본은 docs/ 문서.
 - 유저 빌드/파일 전달: ZIP 전송 대신 **GitHub 브랜치 Code → Download ZIP** (유저가 직접 최신을 받음). 유저 커밋은 GitHub 웹 업로드 또는 github.dev(`.` 키).
-- `gh-pages` = 배포 전용 유지. **`proto/index.html`이 현재 주력 배포물.** (구 `prototype/index.html`·`map.html` 미러도 유지). 월드 데이터: `docs/world/regions/*.json` 원본 → `python3 tools/worldmap_build.py` (산출물 직접 수정 금지).
+- `gh-pages` = 배포 전용 유지. **`proto/index.html`이 현재 주력 배포물.** (구 `prototype/index.html`·`map.html` 미러도 유지). 월드 데이터: `archive/world/regions/*.json` 원본 → `python3 tools/worldmap_build.py` (산출물 직접 수정 금지).
 
 ## 프로토타입 작업 규칙 (`proto/`)
 
